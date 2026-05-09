@@ -11,7 +11,10 @@
 
 use std::collections::HashSet;
 
-use crate::{ProviderName, ProviderRegistryError};
+use crate::{
+    ProviderName,
+    ProviderRegistryError,
+};
 
 /// Stable provider metadata used for registration and selection.
 #[derive(Debug, Clone, PartialEq, Eq)]

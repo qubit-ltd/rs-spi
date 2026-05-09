@@ -2,12 +2,21 @@ mod support;
 
 use std::error::Error;
 use std::io;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Once;
 
-use qubit_spi::{ProviderCreateError, ProviderRegistryError, ProviderSelection};
+use qubit_spi::{
+    ProviderCreateError,
+    ProviderRegistryError,
+    ProviderSelection,
+};
 
-use crate::support::test_services::{GreetingProvider, GreetingRegistry, TestConfig};
+use crate::support::test_services::{
+    GreetingProvider,
+    GreetingRegistry,
+    TestConfig,
+};
 
 /// No-op logger used to exercise diagnostic logging paths.
 struct TestLogger;
@@ -371,6 +380,38 @@ fn test_create_auto_tie_breaks_by_provider_id() {
         .expect("auto selection should create first provider by id");
 
     assert_eq!("a", service.greet());
+}
+
+/// Test Arc and Rc creation variants preserve registry selection behavior.
+#[test]
+fn test_create_shared_variants_preserve_selection_behavior() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("low", "low").with_priority(1))
+        .expect("low provider should register");
+    registry
+        .register(GreetingProvider::new("high", "high").with_priority(10))
+        .expect("high provider should register");
+    let selection = ProviderSelection::from_names("missing", &["low"])
+        .expect("selection names should be valid");
+
+    let auto_arc: Arc<_> = registry
+        .create_auto_arc(&TestConfig::new(""))
+        .expect("auto arc selection should create highest priority provider");
+    let auto_rc: Rc<_> = registry
+        .create_auto_rc(&TestConfig::new(""))
+        .expect("auto rc selection should create highest priority provider");
+    let selected_arc: Arc<_> = registry
+        .create_selected_arc(&selection, &TestConfig::new(""))
+        .expect("selected arc fallback should create fallback provider");
+    let selected_rc: Rc<_> = registry
+        .create_selected_rc(&selection, &TestConfig::new(""))
+        .expect("selected rc fallback should create fallback provider");
+
+    assert_eq!("high", auto_arc.greet());
+    assert_eq!("high", auto_rc.greet());
+    assert_eq!("low", selected_arc.greet());
+    assert_eq!("low", selected_rc.greet());
 }
 
 /// Test explicit fallback chains continue after unavailable and failing providers.

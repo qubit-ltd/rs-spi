@@ -9,16 +9,29 @@
  ******************************************************************************/
 //! Typed registry for pluggable service providers.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use log::{debug, trace};
+use log::{
+    debug,
+    trace,
+};
 
 use crate::{
-    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderFailure, ProviderName,
-    ProviderRegistryError, ProviderSelection, ServiceProvider, ServiceSpec,
+    ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
+    ProviderFailure,
+    ProviderName,
+    ProviderRegistryError,
+    ProviderSelection,
+    ServiceProvider,
+    ServiceSpec,
 };
 
 /// Registry of providers for one service specification.

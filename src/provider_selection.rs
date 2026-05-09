@@ -9,7 +9,10 @@
  ******************************************************************************/
 //! Selection policy for provider resolution.
 
-use crate::{ProviderName, ProviderRegistryError};
+use crate::{
+    ProviderName,
+    ProviderRegistryError,
+};
 
 /// Provider candidates used by registry selection.
 #[derive(Debug, Clone, PartialEq, Eq)]

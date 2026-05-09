@@ -9,7 +9,11 @@
  ******************************************************************************/
 //! Strongly typed provider names.
 
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 use std::str::FromStr;
 
 use crate::ProviderRegistryError;

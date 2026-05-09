@@ -10,9 +10,17 @@
 //! Candidate failure details collected during fallback selection.
 
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{ProviderCreateError, ProviderName, ProviderRegistryError};
+use crate::{
+    ProviderCreateError,
+    ProviderName,
+    ProviderRegistryError,
+};
 
 /// Failure recorded for one provider candidate.
 #[derive(Debug, Clone)]

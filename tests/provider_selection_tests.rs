@@ -1,4 +1,8 @@
-use qubit_spi::{ProviderName, ProviderRegistryError, ProviderSelection};
+use qubit_spi::{
+    ProviderName,
+    ProviderRegistryError,
+    ProviderSelection,
+};
 
 /// Creates a provider name used by selection assertions.
 fn name(value: &str) -> ProviderName {

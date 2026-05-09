@@ -3,8 +3,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use qubit_spi::{
-    ProviderCreateError, ProviderDescriptor, ProviderRegistry, ProviderRegistryError,
-    ServiceProvider, ServiceSpec,
+    ProviderCreateError,
+    ProviderDescriptor,
+    ProviderRegistry,
+    ProviderRegistryError,
+    ServiceProvider,
+    ServiceSpec,
 };
 
 /// Service contract used to verify multiple service handle outputs.

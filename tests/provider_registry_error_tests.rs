@@ -3,7 +3,12 @@ mod support;
 use std::error::Error;
 use std::io;
 
-use qubit_spi::{ProviderCreateError, ProviderFailure, ProviderName, ProviderRegistryError};
+use qubit_spi::{
+    ProviderCreateError,
+    ProviderFailure,
+    ProviderName,
+    ProviderRegistryError,
+};
 
 /// Creates a provider name used by error assertions.
 fn name(value: &str) -> ProviderName {

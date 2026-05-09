@@ -14,7 +14,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::{
-    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistryError,
+    ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
+    ProviderRegistryError,
     ServiceSpec,
 };
 
