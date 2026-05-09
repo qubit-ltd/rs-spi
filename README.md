@@ -1,15 +1,41 @@
 # Qubit SPI
 
-[![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg)](https://crates.io/crates/qubit-spi)
+[![CircleCI](https://circleci.com/gh/qubit-ltd/rs-spi.svg?style=shield)](https://circleci.com/gh/qubit-ltd/rs-spi)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-spi/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-spi?branch=main)
+[![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
 [![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
 Typed service provider registry infrastructure for Rust.
+
+## Overview
 
 `qubit-spi` provides a small, explicit SPI layer for crates that define a trait
 in one package and allow other packages to provide optional implementations. It
 is designed for statically linked Rust crates, where the application decides
 which extension crates are linked and when providers are registered.
+
+The public surface is organized around three core types:
+
+- `ServiceSpec`: binds the configuration type and produced service type.
+- `ServiceProvider`: creates one implementation of a service specification.
+- `ProviderRegistry`: stores providers and resolves them by name, fallback
+  chain, or priority-based automatic selection.
+
+## Design Goals
+
+- **Explicit Discovery**: applications decide which providers are linked and
+  registered.
+- **Readable Types**: registries use one `ServiceSpec` type parameter instead
+  of separate service, config, and error parameters.
+- **Type Safety**: service and configuration types are fixed by the spec at
+  compile time.
+- **Deterministic Selection**: automatic selection uses stable priority and name
+  ordering.
+- **Fallback Transparency**: failed candidates are preserved for diagnostics.
+- **Small Runtime Surface**: the crate depends only on `log` and `thiserror`.
 
 ## Features
 
@@ -277,6 +303,70 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 
 This crate uses Rust 2024 edition and requires Rust 1.94 or newer.
 
+## Testing & Code Coverage
+
+This project keeps tests under `tests/` and validates provider name handling,
+descriptor normalization, registration, lookup, provider selection, fallback
+failure reporting, and error formatting.
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Generate a coverage report
+./coverage.sh
+
+# Generate a text format coverage report
+./coverage.sh text
+
+# Align formatting with CI
+./align-ci.sh
+
+# Run CI checks (format, clippy, tests, docs, coverage, audit)
+./ci-check.sh
+```
+
+## Dependencies
+
+Runtime dependencies are intentionally small:
+
+- `log` provides low-noise diagnostics through the standard logging facade.
+- `thiserror` provides concrete error implementations.
+
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Copyright (c) 2026. Haixing Hu, Qubit Co. Ltd. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+<http://www.apache.org/licenses/LICENSE-2.0>
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+See [LICENSE](LICENSE) for the full license text.
+
+## Contributing
+
+Contributions are welcome. Please keep changes aligned with the existing Rust
+project structure and run `./ci-check.sh` before opening a pull request.
+
+## Author
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+## Related Projects
+
+More Rust libraries from Qubit are published under the
+[qubit-ltd](https://github.com/qubit-ltd) GitHub organization.
+
+---
+
+Repository: [https://github.com/qubit-ltd/rs-spi](https://github.com/qubit-ltd/rs-spi)

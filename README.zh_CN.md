@@ -1,14 +1,37 @@
 # Qubit SPI
 
-[![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg)](https://crates.io/crates/qubit-spi)
+[![CircleCI](https://circleci.com/gh/qubit-ltd/rs-spi.svg?style=shield)](https://circleci.com/gh/qubit-ltd/rs-spi)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-spi/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-spi?branch=main)
+[![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
 [![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
 Rust 的强类型服务提供者注册基础设施。
+
+## 概述
 
 `qubit-spi` 提供一个小而明确的 SPI 层，用于“基础 crate 定义 trait，扩展
 crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应用程序决定链接
 哪些扩展 crate，也决定在启动时注册哪些 provider。
+
+公共 API 围绕三个核心类型组织：
+
+- `ServiceSpec`：绑定配置类型和创建出来的 service 类型。
+- `ServiceProvider`：为一个 service specification 创建某个具体实现。
+- `ProviderRegistry`：存储 provider，并按名称、fallback chain 或基于优先级的
+  自动选择解析 provider。
+
+## 设计目标
+
+- **显式发现**：由应用程序决定链接和注册哪些 provider。
+- **类型可读性**：registry 只使用一个 `ServiceSpec` 泛型参数，而不是拆成 service、
+  config 和 error 三个参数。
+- **类型安全**：service 类型和配置类型由 spec 在编译期固定。
+- **确定性选择**：自动选择使用稳定的 priority 和名称排序。
+- **Fallback 透明**：失败候选会被保留下来，便于诊断。
+- **小运行时表面积**：crate 只依赖 `log` 和 `thiserror`。
 
 ## 功能特性
 
@@ -269,6 +292,67 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 
 本 crate 使用 Rust 2024 edition，要求 Rust 1.94 或更新版本。
 
+## 测试与代码覆盖率
+
+本项目测试统一放在 `tests/` 目录下，覆盖 provider 名称处理、descriptor 规范化、
+注册、查找、provider 选择、fallback 失败报告和错误格式化。
+
+### 运行测试
+
+```bash
+# 运行所有测试
+cargo test
+
+# 生成覆盖率报告
+./coverage.sh
+
+# 生成文本格式覆盖率报告
+./coverage.sh text
+
+# 对齐 CI 格式化要求
+./align-ci.sh
+
+# 运行 CI 检查（格式化、clippy、测试、文档、覆盖率、audit）
+./ci-check.sh
+```
+
+## 依赖项
+
+运行时依赖保持很少：
+
+- `log` 通过标准日志门面提供低噪声诊断日志。
+- `thiserror` 用于实现具体错误类型。
+
 ## 许可证
 
-本项目基于 Apache License, Version 2.0 授权。详见 [LICENSE](LICENSE)。
+Copyright (c) 2026. Haixing Hu, Qubit Co. Ltd. All rights reserved.
+
+根据 Apache 许可证 2.0 版（"许可证"）授权；
+除非遵守许可证，否则您不得使用此文件。
+您可以在以下位置获取许可证副本：
+
+<http://www.apache.org/licenses/LICENSE-2.0>
+
+除非适用法律要求或书面同意，否则根据许可证分发的软件
+按"原样"分发，不附带任何明示或暗示的担保或条件。
+有关许可证下的特定语言管理权限和限制，请参阅许可证。
+
+完整的许可证文本请参阅 [LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎贡献。请保持改动与现有 Rust 项目结构一致，并在提交 Pull Request 前运行
+`./ci-check.sh`。
+
+## 作者
+
+**胡海星** - *Qubit Co. Ltd.*
+
+## 相关项目
+
+Qubit 旗下的更多 Rust 库发布在 GitHub 组织
+[qubit-ltd](https://github.com/qubit-ltd)。
+
+---
+
+仓库地址：[https://github.com/qubit-ltd/rs-spi](https://github.com/qubit-ltd/rs-spi)
