@@ -1,19 +1,11 @@
 mod support;
 
 use qubit_spi::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderRegistryError,
-    ServiceProvider,
-    ServiceSpec,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistryError,
+    ServiceProvider, ServiceSpec,
 };
 
-use crate::support::test_services::{
-    GreetingProvider,
-    GreetingSpec,
-    TestConfig,
-};
+use crate::support::test_services::{GreetingProvider, GreetingSpec, TestConfig};
 
 /// Minimal provider used to exercise default trait methods.
 #[derive(Debug)]
@@ -24,11 +16,11 @@ impl ServiceProvider<GreetingSpec> for MinimalProvider {
         ProviderDescriptor::new("minimal")
     }
 
-    fn create(
+    fn create_box(
         &self,
         config: &TestConfig,
-    ) -> Result<<GreetingSpec as ServiceSpec>::Service, ProviderCreateError> {
-        GreetingProvider::new("delegate", "hello").create(config)
+    ) -> Result<Box<<GreetingSpec as ServiceSpec>::Service>, ProviderCreateError> {
+        GreetingProvider::new("delegate", "hello").create_box(config)
     }
 }
 
@@ -52,7 +44,7 @@ fn test_provider_default_methods_return_available() {
 fn test_provider_create_uses_config() {
     let provider = GreetingProvider::new("static", "hello");
     let service = provider
-        .create(&TestConfig::new("say "))
+        .create_box(&TestConfig::new("say "))
         .expect("provider should create a greeting service");
 
     assert_eq!("say hello", service.greet());

@@ -46,7 +46,7 @@
 //!
 //! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
-//!     type Service = Box<dyn Greeter>;
+//!     type Service = dyn Greeter;
 //! }
 //!
 //! impl ServiceProvider<GreeterSpec> for EnglishProvider {
@@ -54,7 +54,7 @@
 //!         ProviderDescriptor::new("english")?.with_aliases(&["en"])
 //!     }
 //!
-//!     fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
+//!     fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
 //!         Ok(Box::new(EnglishGreeter))
 //!     }
 //! }
@@ -65,7 +65,7 @@
 //!     .expect("provider names should be unique");
 //!
 //! let greeter = registry
-//!     .create("en", &())
+//!     .create_box("en", &())
 //!     .expect("registered provider should create a greeter");
 //! assert_eq!("hello", greeter.greet());
 //! ```

@@ -18,7 +18,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 公共 API 围绕三个核心类型组织：
 
-- `ServiceSpec`：绑定配置类型和创建出来的 service 类型。
+- `ServiceSpec`：绑定配置类型和 service contract。
 - `ServiceProvider`：为一个 service specification 创建某个具体实现。
 - `ProviderRegistry`：存储 provider，并按名称、fallback chain 或基于优先级的
   自动选择解析 provider。
@@ -28,7 +28,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 - **显式发现**：由应用程序决定链接和注册哪些 provider。
 - **类型可读性**：registry 只使用一个 `ServiceSpec` 泛型参数，而不是拆成 service、
   config 和 error 三个参数。
-- **类型安全**：service 类型和配置类型由 spec 在编译期固定。
+- **类型安全**：service contract 和配置类型由 spec 在编译期固定。
 - **确定性选择**：自动选择使用稳定的 priority 和名称排序。
 - **Fallback 透明**：失败候选会被保留下来，便于诊断。
 - **小运行时表面积**：crate 只依赖 `log` 和 `thiserror`。
@@ -51,7 +51,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 ```toml
 [dependencies]
-qubit-spi = "0.1"
+qubit-spi = "0.2"
 ```
 
 ## 快速开始
@@ -86,7 +86,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Service = Box<dyn Greeter>;
+    type Service = dyn Greeter;
 }
 
 #[derive(Debug)]
@@ -97,7 +97,7 @@ impl ServiceProvider<GreeterSpec> for EnglishProvider {
         ProviderDescriptor::new("english")?.with_aliases(&["en"])
     }
 
-    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
+    fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(EnglishGreeter))
     }
 }
@@ -108,7 +108,7 @@ registry
     .expect("provider names should be unique");
 
 let greeter = registry
-    .create("en", &())
+    .create_box("en", &())
     .expect("registered provider should create a greeter");
 assert_eq!("hello", greeter.greet());
 ```
@@ -117,9 +117,9 @@ assert_eq!("hello", greeter.greet());
 
 ### ServiceSpec
 
-`ServiceSpec` 绑定一个服务族的配置类型和 provider 输出类型。这样
-`ProviderRegistry<Spec>` 只有一个泛型参数，同时每个 crate 仍然可以决定 provider
-返回 `Box<dyn Trait>`、`Arc<dyn Trait>`、具体类型或其他 service handle。
+`ServiceSpec` 绑定一个服务族的配置类型和 service contract。这个 contract 可以是
+`dyn MyService` 这样的 trait object；调用方再决定 registry 返回
+`Box<dyn MyService>`、`Arc<dyn MyService>` 还是 `Rc<dyn MyService>`。
 
 ### ServiceProvider
 
@@ -129,7 +129,9 @@ assert_eq!("hello", greeter.greet());
 | --- | --- |
 | `descriptor()` | 稳定 provider id、alias 和 priority |
 | `availability(config)` | 检查可选依赖在当前环境是否可用 |
-| `create(config)` | 创建 `Spec::Service` service 值 |
+| `create_box(config)` | 创建 boxed service 值 |
+| `create_arc(config)` | 创建原子引用计数 service 值 |
+| `create_rc(config)` | 创建单线程引用计数 service 值 |
 
 ### ProviderRegistry
 
@@ -181,7 +183,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Service = Box<dyn Greeter>;
+    type Service = dyn Greeter;
 }
 
 #[derive(Debug)]
@@ -192,7 +194,7 @@ impl ServiceProvider<GreeterSpec> for Provider {
         Ok(ProviderDescriptor::new(self.0)?.with_priority(self.1))
     }
 
-    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
+    fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(GreeterImpl(self.0)))
     }
 }
@@ -208,7 +210,7 @@ registry
 let selection = ProviderSelection::from_names("native", &["repository"])
     .expect("selection names should be valid");
 let greeter = registry
-    .create_selected(&selection, &())
+    .create_selected_box(&selection, &())
     .expect("one provider should create a greeter");
 
 assert_eq!("native", greeter.greet());
@@ -268,7 +270,7 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 
 | API | 用途 |
 | --- | --- |
-| `ServiceSpec` | 绑定 provider 配置类型和 service 类型 |
+| `ServiceSpec` | 绑定 provider 配置类型和 service contract |
 | `ServiceProvider` | 每个后端实现的 provider trait |
 | `ProviderDescriptor` | 捕获 provider id、alias 和 priority |
 | `ProviderName` | 已校验并规范化的 provider 名称 |
@@ -279,9 +281,15 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 | `ProviderRegistry::find_provider(name)` | 返回 `Option` 的 provider 查询便利方法 |
 | `ProviderRegistry::iter_provider_names()` | 无分配遍历 provider id |
 | `ProviderRegistry::iter_provider_descriptors()` | 无分配遍历 descriptor |
-| `ProviderRegistry::create(name, config)` | 按 provider 名称创建 service |
-| `ProviderRegistry::create_auto(config)` | 按自动优先级创建 service |
-| `ProviderRegistry::create_selected(selection, config)` | 按 selection 创建 |
+| `ProviderRegistry::create_box(name, config)` | 按 provider 名称创建 boxed service |
+| `ProviderRegistry::create_arc(name, config)` | 按 provider 名称创建原子引用计数 service |
+| `ProviderRegistry::create_rc(name, config)` | 按 provider 名称创建单线程引用计数 service |
+| `ProviderRegistry::create_auto_box(config)` | 按自动优先级创建 boxed service |
+| `ProviderRegistry::create_auto_arc(config)` | 按自动优先级创建原子引用计数 service |
+| `ProviderRegistry::create_auto_rc(config)` | 按自动优先级创建单线程引用计数 service |
+| `ProviderRegistry::create_selected_box(selection, config)` | 按 selection 创建 boxed service |
+| `ProviderRegistry::create_selected_arc(selection, config)` | 按 selection 创建原子引用计数 service |
+| `ProviderRegistry::create_selected_rc(selection, config)` | 按 selection 创建单线程引用计数 service |
 | `ProviderSelection` | 自动或 named fallback 候选选择 |
 | `ProviderAvailability` | provider 可用性状态 |
 | `ProviderCreateError` | provider 层创建错误 |

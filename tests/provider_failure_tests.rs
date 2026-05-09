@@ -3,11 +3,7 @@ mod support;
 use std::error::Error;
 use std::io;
 
-use qubit_spi::{
-    ProviderCreateError,
-    ProviderFailure,
-    ProviderRegistryError,
-};
+use qubit_spi::{ProviderCreateError, ProviderFailure, ProviderRegistryError};
 
 /// Test unknown provider failures expose their candidate name.
 #[test]

@@ -19,7 +19,7 @@ which extension crates are linked and when providers are registered.
 
 The public surface is organized around three core types:
 
-- `ServiceSpec`: binds the configuration type and produced service type.
+- `ServiceSpec`: binds the configuration type and service contract.
 - `ServiceProvider`: creates one implementation of a service specification.
 - `ProviderRegistry`: stores providers and resolves them by name, fallback
   chain, or priority-based automatic selection.
@@ -55,7 +55,7 @@ Add the crate to `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-spi = "0.1"
+qubit-spi = "0.2"
 ```
 
 ## Quick Start
@@ -90,7 +90,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Service = Box<dyn Greeter>;
+    type Service = dyn Greeter;
 }
 
 #[derive(Debug)]
@@ -101,7 +101,7 @@ impl ServiceProvider<GreeterSpec> for EnglishProvider {
         ProviderDescriptor::new("english")?.with_aliases(&["en"])
     }
 
-    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
+    fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(EnglishGreeter))
     }
 }
@@ -112,7 +112,7 @@ registry
     .expect("provider names should be unique");
 
 let greeter = registry
-    .create("en", &())
+    .create_box("en", &())
     .expect("registered provider should create a greeter");
 assert_eq!("hello", greeter.greet());
 ```
@@ -121,10 +121,10 @@ assert_eq!("hello", greeter.greet());
 
 ### ServiceSpec
 
-`ServiceSpec` binds the configuration type and provider output type for one
-service family. This keeps `ProviderRegistry<Spec>` readable while still
-allowing each crate to choose whether providers return `Box<dyn Trait>`,
-`Arc<dyn Trait>`, concrete values, or other owned service handles.
+`ServiceSpec` binds the configuration type and service contract for one service
+family. The contract can be a trait object such as `dyn MyService`; callers then
+choose whether a registry returns `Box<dyn MyService>`, `Arc<dyn MyService>`,
+or `Rc<dyn MyService>`.
 
 ### ServiceProvider
 
@@ -135,7 +135,9 @@ provider supplies:
 | --- | --- |
 | `descriptor()` | Stable provider id, aliases, and priority |
 | `availability(config)` | Runtime check for optional dependencies |
-| `create(config)` | Creates the `Spec::Service` service value |
+| `create_box(config)` | Creates a boxed service value |
+| `create_arc(config)` | Creates an atomically shared service value |
+| `create_rc(config)` | Creates a locally shared service value |
 
 ### ProviderRegistry
 
@@ -188,7 +190,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Service = Box<dyn Greeter>;
+    type Service = dyn Greeter;
 }
 
 #[derive(Debug)]
@@ -199,7 +201,7 @@ impl ServiceProvider<GreeterSpec> for Provider {
         Ok(ProviderDescriptor::new(self.0)?.with_priority(self.1))
     }
 
-    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
+    fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(GreeterImpl(self.0)))
     }
 }
@@ -215,7 +217,7 @@ registry
 let selection = ProviderSelection::from_names("native", &["repository"])
     .expect("selection names should be valid");
 let greeter = registry
-    .create_selected(&selection, &())
+    .create_selected_box(&selection, &())
     .expect("one provider should create a greeter");
 
 assert_eq!("native", greeter.greet());
@@ -279,7 +281,7 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 
 | API | Purpose |
 | --- | --- |
-| `ServiceSpec` | Binds provider configuration and service types |
+| `ServiceSpec` | Binds provider configuration and service contract |
 | `ServiceProvider` | Provider trait implemented by each backend |
 | `ProviderDescriptor` | Captured provider id, aliases, and priority |
 | `ProviderName` | Validated and normalized provider name |
@@ -290,9 +292,15 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 | `ProviderRegistry::find_provider(name)` | Option-returning provider lookup convenience |
 | `ProviderRegistry::iter_provider_names()` | Iterates provider ids without allocation |
 | `ProviderRegistry::iter_provider_descriptors()` | Iterates descriptors without allocation |
-| `ProviderRegistry::create(name, config)` | Creates one service by provider name |
-| `ProviderRegistry::create_auto(config)` | Creates a service by automatic priority |
-| `ProviderRegistry::create_selected(selection, config)` | Creates from selection |
+| `ProviderRegistry::create_box(name, config)` | Creates a boxed service by provider name |
+| `ProviderRegistry::create_arc(name, config)` | Creates an atomically shared service by provider name |
+| `ProviderRegistry::create_rc(name, config)` | Creates a locally shared service by provider name |
+| `ProviderRegistry::create_auto_box(config)` | Creates a boxed service by automatic priority |
+| `ProviderRegistry::create_auto_arc(config)` | Creates an atomically shared service by automatic priority |
+| `ProviderRegistry::create_auto_rc(config)` | Creates a locally shared service by automatic priority |
+| `ProviderRegistry::create_selected_box(selection, config)` | Creates a boxed service from selection |
+| `ProviderRegistry::create_selected_arc(selection, config)` | Creates an atomically shared service from selection |
+| `ProviderRegistry::create_selected_rc(selection, config)` | Creates a locally shared service from selection |
 | `ProviderSelection` | Automatic or named fallback candidate selection |
 | `ProviderAvailability` | Provider availability state |
 | `ProviderCreateError` | Provider-level creation error |

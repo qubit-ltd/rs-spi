@@ -10,11 +10,7 @@
 //! Provider-level service creation errors.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
 /// Error returned by one provider while creating a service.

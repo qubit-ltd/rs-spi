@@ -1,7 +1,4 @@
-use qubit_spi::{
-    ProviderName,
-    ProviderRegistryError,
-};
+use qubit_spi::{ProviderName, ProviderRegistryError};
 
 /// Test provider names implement standard string conversion traits.
 #[test]

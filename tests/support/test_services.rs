@@ -1,19 +1,11 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use qubit_spi::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderRegistry,
-    ProviderRegistryError,
-    ServiceProvider,
-    ServiceSpec,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistry,
+    ProviderRegistryError, ServiceProvider, ServiceSpec,
 };
 
 /// Configuration used by test providers.
@@ -63,7 +55,7 @@ pub struct GreetingSpec;
 
 impl ServiceSpec for GreetingSpec {
     type Config = TestConfig;
-    type Service = Box<dyn GreetingService>;
+    type Service = dyn GreetingService;
 }
 
 /// Provider implementation used by registry tests.
@@ -145,7 +137,10 @@ impl ServiceProvider<GreetingSpec> for GreetingProvider {
         self.availability.clone()
     }
 
-    fn create(&self, config: &TestConfig) -> Result<Box<dyn GreetingService>, ProviderCreateError> {
+    fn create_box(
+        &self,
+        config: &TestConfig,
+    ) -> Result<Box<dyn GreetingService>, ProviderCreateError> {
         self.created.fetch_add(1, Ordering::SeqCst);
         if let Some(error) = &self.failure {
             return Err(error.clone());

@@ -9,28 +9,16 @@
  ******************************************************************************/
 //! Typed registry for pluggable service providers.
 
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use log::{
-    debug,
-    trace,
-};
+use log::{debug, trace};
 
 use crate::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderFailure,
-    ProviderName,
-    ProviderRegistryError,
-    ProviderSelection,
-    ServiceProvider,
-    ServiceSpec,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderFailure, ProviderName,
+    ProviderRegistryError, ProviderSelection, ServiceProvider, ServiceSpec,
 };
 
 /// Registry of providers for one service specification.
@@ -245,14 +233,14 @@ where
         Ok(entry.provider.as_ref())
     }
 
-    /// Creates a service from one provider name.
+    /// Creates a boxed service from one provider name.
     ///
     /// # Parameters
     /// - `name`: Provider id or alias.
     /// - `config`: Configuration passed to the provider.
     ///
     /// # Returns
-    /// Service value created by the selected provider.
+    /// Boxed service value created by the selected provider.
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError::EmptyProviderName`] or
@@ -261,18 +249,95 @@ where
     /// [`ProviderRegistryError::ProviderUnavailable`] when the provider is not
     /// available, or [`ProviderRegistryError::ProviderCreate`] when the provider
     /// factory fails.
-    pub fn create(
+    #[inline]
+    pub fn create_box(
         &self,
         name: &str,
         config: &Spec::Config,
-    ) -> Result<Spec::Service, ProviderRegistryError> {
+    ) -> Result<Box<Spec::Service>, ProviderRegistryError> {
+        self.create_with(name, config, |provider, config| provider.create_box(config))
+    }
+
+    /// Creates an atomically shared service from one provider name.
+    ///
+    /// # Parameters
+    /// - `name`: Provider id or alias.
+    /// - `config`: Configuration passed to the provider.
+    ///
+    /// # Returns
+    /// Atomically shared service value created by the selected provider.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyProviderName`] or
+    /// [`ProviderRegistryError::InvalidProviderName`] when `name` is invalid,
+    /// [`ProviderRegistryError::UnknownProvider`] when no provider matches,
+    /// [`ProviderRegistryError::ProviderUnavailable`] when the provider is not
+    /// available, or [`ProviderRegistryError::ProviderCreate`] when the provider
+    /// factory fails.
+    #[inline]
+    pub fn create_arc(
+        &self,
+        name: &str,
+        config: &Spec::Config,
+    ) -> Result<Arc<Spec::Service>, ProviderRegistryError> {
+        self.create_with(name, config, |provider, config| provider.create_arc(config))
+    }
+
+    /// Creates a locally shared service from one provider name.
+    ///
+    /// # Parameters
+    /// - `name`: Provider id or alias.
+    /// - `config`: Configuration passed to the provider.
+    ///
+    /// # Returns
+    /// Locally shared service value created by the selected provider.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyProviderName`] or
+    /// [`ProviderRegistryError::InvalidProviderName`] when `name` is invalid,
+    /// [`ProviderRegistryError::UnknownProvider`] when no provider matches,
+    /// [`ProviderRegistryError::ProviderUnavailable`] when the provider is not
+    /// available, or [`ProviderRegistryError::ProviderCreate`] when the provider
+    /// factory fails.
+    #[inline]
+    pub fn create_rc(
+        &self,
+        name: &str,
+        config: &Spec::Config,
+    ) -> Result<Rc<Spec::Service>, ProviderRegistryError> {
+        self.create_with(name, config, |provider, config| provider.create_rc(config))
+    }
+
+    /// Creates a service handle from one provider name.
+    ///
+    /// # Parameters
+    /// - `name`: Provider id or alias.
+    /// - `config`: Configuration passed to the provider.
+    /// - `create`: Provider factory method used to create the handle.
+    ///
+    /// # Returns
+    /// Service handle created by the selected provider.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError`] when the provider name is invalid,
+    /// unknown, unavailable, or when the provider factory fails.
+    fn create_with<Handle, Create>(
+        &self,
+        name: &str,
+        config: &Spec::Config,
+        create: Create,
+    ) -> Result<Handle, ProviderRegistryError>
+    where
+        Create:
+            Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
+    {
         let name = ProviderName::new(name)?;
         let entry = self
             .find_entry_by_name(&name)
             .ok_or_else(|| ProviderRegistryError::UnknownProvider { name: name.clone() })?;
         trace!("creating service from provider '{name}'");
         match entry.provider.availability(config) {
-            ProviderAvailability::Available => match entry.provider.create(config) {
+            ProviderAvailability::Available => match create(entry.provider.as_ref(), config) {
                 Ok(service) => {
                     debug!("provider '{name}' created service");
                     Ok(service)
@@ -295,27 +360,67 @@ where
         }
     }
 
-    /// Creates a service using automatic provider selection.
+    /// Creates a boxed service using automatic provider selection.
     ///
     /// # Parameters
     /// - `config`: Configuration passed to candidate providers.
     ///
     /// # Returns
-    /// Service created by the highest-priority usable provider.
+    /// Boxed service created by the highest-priority usable provider.
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
     /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when all
     /// automatic candidates fail.
     #[inline]
-    pub fn create_auto(
+    pub fn create_auto_box(
         &self,
         config: &Spec::Config,
-    ) -> Result<Spec::Service, ProviderRegistryError> {
-        self.create_selected(&ProviderSelection::Auto, config)
+    ) -> Result<Box<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_box(&ProviderSelection::Auto, config)
     }
 
-    /// Creates a service from explicit provider selection.
+    /// Creates an atomically shared service using automatic provider selection.
+    ///
+    /// # Parameters
+    /// - `config`: Configuration passed to candidate providers.
+    ///
+    /// # Returns
+    /// Atomically shared service created by the highest-priority usable provider.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
+    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when all
+    /// automatic candidates fail.
+    #[inline]
+    pub fn create_auto_arc(
+        &self,
+        config: &Spec::Config,
+    ) -> Result<Arc<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_arc(&ProviderSelection::Auto, config)
+    }
+
+    /// Creates a locally shared service using automatic provider selection.
+    ///
+    /// # Parameters
+    /// - `config`: Configuration passed to candidate providers.
+    ///
+    /// # Returns
+    /// Locally shared service created by the highest-priority usable provider.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
+    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when all
+    /// automatic candidates fail.
+    #[inline]
+    pub fn create_auto_rc(
+        &self,
+        config: &Spec::Config,
+    ) -> Result<Rc<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_rc(&ProviderSelection::Auto, config)
+    }
+
+    /// Creates a boxed service from explicit provider selection.
     ///
     /// Automatic selection tries all registered providers ordered by descending
     /// priority and then by provider id. Named selection tries the primary
@@ -327,17 +432,107 @@ where
     /// - `config`: Configuration passed to candidate providers.
     ///
     /// # Returns
-    /// Service created by the first successful provider candidate.
+    /// Boxed service created by the first successful provider candidate.
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
     /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
     /// candidate is unknown, unavailable, or fails during creation.
-    pub fn create_selected(
+    #[inline]
+    pub fn create_selected_box(
         &self,
         selection: &ProviderSelection,
         config: &Spec::Config,
-    ) -> Result<Spec::Service, ProviderRegistryError> {
+    ) -> Result<Box<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_with(selection, config, |provider, config| {
+            provider.create_box(config)
+        })
+    }
+
+    /// Creates an atomically shared service from explicit provider selection.
+    ///
+    /// Automatic selection tries all registered providers ordered by descending
+    /// priority and then by provider id. Named selection tries the primary
+    /// provider followed by fallbacks in order. Selection stops at the first
+    /// provider that can create a service.
+    ///
+    /// # Parameters
+    /// - `selection`: Provider selection policy.
+    /// - `config`: Configuration passed to candidate providers.
+    ///
+    /// # Returns
+    /// Atomically shared service created by the first successful provider
+    /// candidate.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
+    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
+    /// candidate is unknown, unavailable, or fails during creation.
+    #[inline]
+    pub fn create_selected_arc(
+        &self,
+        selection: &ProviderSelection,
+        config: &Spec::Config,
+    ) -> Result<Arc<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_with(selection, config, |provider, config| {
+            provider.create_arc(config)
+        })
+    }
+
+    /// Creates a locally shared service from explicit provider selection.
+    ///
+    /// Automatic selection tries all registered providers ordered by descending
+    /// priority and then by provider id. Named selection tries the primary
+    /// provider followed by fallbacks in order. Selection stops at the first
+    /// provider that can create a service.
+    ///
+    /// # Parameters
+    /// - `selection`: Provider selection policy.
+    /// - `config`: Configuration passed to candidate providers.
+    ///
+    /// # Returns
+    /// Locally shared service created by the first successful provider
+    /// candidate.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
+    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
+    /// candidate is unknown, unavailable, or fails during creation.
+    #[inline]
+    pub fn create_selected_rc(
+        &self,
+        selection: &ProviderSelection,
+        config: &Spec::Config,
+    ) -> Result<Rc<Spec::Service>, ProviderRegistryError> {
+        self.create_selected_with(selection, config, |provider, config| {
+            provider.create_rc(config)
+        })
+    }
+
+    /// Creates a service handle from explicit provider selection.
+    ///
+    /// # Parameters
+    /// - `selection`: Provider selection policy.
+    /// - `config`: Configuration passed to candidate providers.
+    /// - `create`: Provider factory method used to create the handle.
+    ///
+    /// # Returns
+    /// Service handle created by the first successful provider candidate.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
+    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
+    /// candidate is unknown, unavailable, or fails during creation.
+    fn create_selected_with<Handle, Create>(
+        &self,
+        selection: &ProviderSelection,
+        config: &Spec::Config,
+        create: Create,
+    ) -> Result<Handle, ProviderRegistryError>
+    where
+        Create:
+            Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
+    {
         if self.providers.is_empty() {
             trace!("provider selection failed because registry is empty");
             return Err(ProviderRegistryError::EmptyRegistry);
@@ -349,7 +544,7 @@ where
                     "automatic provider selection prepared {} candidate(s)",
                     candidates.len(),
                 );
-                self.create_from_candidates(candidates.iter(), config)
+                self.create_from_candidates_with(candidates.iter(), config, &create)
             }
             ProviderSelection::Named { primary, fallbacks } => {
                 trace!(
@@ -357,37 +552,42 @@ where
                     primary,
                     fallbacks.len(),
                 );
-                self.create_from_candidates(
+                self.create_from_candidates_with(
                     std::iter::once(primary).chain(fallbacks.iter()),
                     config,
+                    &create,
                 )
             }
         }
     }
 
-    /// Creates a service by trying the supplied candidates in order.
+    /// Creates a service handle by trying the supplied candidates in order.
     ///
     /// # Parameters
     /// - `candidates`: Candidate provider names to try.
     /// - `config`: Configuration passed to candidate providers.
+    /// - `create`: Provider factory method used to create the handle.
     ///
     /// # Returns
-    /// Service created by the first successful candidate.
+    /// Service handle created by the first successful candidate.
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError::NoAvailableProvider`] when every
     /// candidate is unknown, unavailable, or fails during creation.
-    fn create_from_candidates<'a, I>(
+    fn create_from_candidates_with<'a, I, Handle, Create>(
         &self,
         candidates: I,
         config: &Spec::Config,
-    ) -> Result<Spec::Service, ProviderRegistryError>
+        create: &Create,
+    ) -> Result<Handle, ProviderRegistryError>
     where
         I: IntoIterator<Item = &'a ProviderName>,
+        Create:
+            Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
     {
         let mut failures = Vec::new();
         for candidate in candidates {
-            match self.create_from_candidate(candidate, config) {
+            match self.create_from_candidate_with(candidate, config, create) {
                 Ok(service) => {
                     debug!("provider candidate '{candidate}' created service");
                     return Ok(service);
@@ -405,31 +605,35 @@ where
         Err(ProviderRegistryError::NoAvailableProvider { failures })
     }
 
-    /// Creates a service from one normalized candidate name.
+    /// Creates a service handle from one normalized candidate name.
     ///
     /// # Parameters
     /// - `candidate`: Normalized provider id or alias.
     /// - `config`: Configuration passed to the provider.
+    /// - `create`: Provider factory method used to create the handle.
     ///
     /// # Returns
-    /// Service created by the provider.
+    /// Service handle created by the provider.
     ///
     /// # Errors
     /// Returns [`ProviderFailure`] when the candidate is unknown, unavailable,
     /// or fails during service creation.
-    fn create_from_candidate(
+    fn create_from_candidate_with<Handle, Create>(
         &self,
         candidate: &ProviderName,
         config: &Spec::Config,
-    ) -> Result<Spec::Service, ProviderFailure> {
+        create: &Create,
+    ) -> Result<Handle, ProviderFailure>
+    where
+        Create:
+            Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
+    {
         let Some(entry) = self.find_entry_by_name(candidate) else {
             trace!("provider candidate '{candidate}' is unknown");
             return Err(ProviderFailure::unknown_name(candidate.clone()));
         };
         match entry.provider.availability(config) {
-            ProviderAvailability::Available => entry
-                .provider
-                .create(config)
+            ProviderAvailability::Available => create(entry.provider.as_ref(), config)
                 .map_err(|error| failure_from_create_error(candidate.clone(), error)),
             ProviderAvailability::Unavailable { reason } => {
                 trace!("provider candidate '{candidate}' is unavailable: {reason}");

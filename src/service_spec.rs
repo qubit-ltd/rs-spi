@@ -7,17 +7,17 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Service specification binding configuration and service types.
+//! Service specification binding configuration and service contracts.
 
 /// Type-level description of one pluggable service family.
 ///
 /// A service specification gives a registry one type parameter that carries the
-/// configuration type accepted by providers and the service type produced by
-/// providers.
+/// configuration type accepted by providers and the service contract implemented
+/// by produced services.
 pub trait ServiceSpec {
     /// Configuration type passed to provider checks and factories.
     type Config: ?Sized;
 
-    /// Service value produced by providers.
-    type Service;
+    /// Service contract implemented by provider-created services.
+    type Service: ?Sized;
 }

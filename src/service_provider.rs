@@ -10,12 +10,11 @@
 //! Provider contract for pluggable service implementations.
 
 use std::fmt::Debug;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderRegistryError,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistryError,
     ServiceSpec,
 };
 
@@ -23,9 +22,9 @@ use crate::{
 ///
 /// A provider gives a registry stable names, optional aliases, availability
 /// checks, a priority used by automatic selection, and a factory method for
-/// creating one service instance. The associated service type may be a trait
-/// object, such as `dyn MyService`, which allows a registry to select an
-/// implementation at runtime while keeping the registry itself strongly typed.
+/// creating one service instance. The associated service contract may be a
+/// trait object, such as `dyn MyService`, while registry creation methods
+/// decide whether the returned handle is a [`Box`], [`Arc`], or [`Rc`].
 ///
 /// # Examples
 ///
@@ -65,7 +64,7 @@ use crate::{
 ///
 /// impl ServiceSpec for EncoderSpec {
 ///     type Config = ();
-///     type Service = Box<dyn Encoder>;
+///     type Service = dyn Encoder;
 /// }
 ///
 /// impl ServiceProvider<EncoderSpec> for PlainEncoderProvider {
@@ -73,7 +72,7 @@ use crate::{
 ///         ProviderDescriptor::new("plain")?.with_aliases(&["identity"])
 ///     }
 ///
-///     fn create(&self, _config: &()) -> Result<Box<dyn Encoder>, ProviderCreateError> {
+///     fn create_box(&self, _config: &()) -> Result<Box<dyn Encoder>, ProviderCreateError> {
 ///         Ok(Box::new(PlainEncoder))
 ///     }
 /// }
@@ -84,7 +83,7 @@ use crate::{
 ///     .expect("provider id and aliases should be unique");
 ///
 /// let encoder = registry
-///     .create("identity", &())
+///     .create_box("identity", &())
 ///     .expect("registered provider should create an encoder");
 /// assert_eq!("payload", encoder.encode("payload"));
 /// ```
@@ -131,7 +130,7 @@ use crate::{
 ///
 /// impl ServiceSpec for CacheSpec {
 ///     type Config = CacheConfig;
-///     type Service = Box<dyn Cache>;
+///     type Service = dyn Cache;
 /// }
 ///
 /// impl ServiceProvider<CacheSpec> for MemoryCacheProvider {
@@ -139,7 +138,7 @@ use crate::{
 ///         Ok(ProviderDescriptor::new("memory")?.with_priority(10))
 ///     }
 ///
-///     fn create(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
+///     fn create_box(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
 ///         Ok(Box::new(NamedCache("memory")))
 ///     }
 /// }
@@ -160,7 +159,7 @@ use crate::{
 ///         }
 ///     }
 ///
-///     fn create(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
+///     fn create_box(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
 ///         Ok(Box::new(NamedCache("remote")))
 ///     }
 /// }
@@ -174,7 +173,7 @@ use crate::{
 ///     .expect("remote provider should register");
 ///
 /// let cache = registry
-///     .create_auto(&CacheConfig {
+///     .create_auto_box(&CacheConfig {
 ///         remote_enabled: false,
 ///     })
 ///     .expect("memory cache should be selected as fallback");
@@ -207,17 +206,50 @@ where
         ProviderAvailability::Available
     }
 
-    /// Creates a service instance.
+    /// Creates a boxed service instance.
     ///
     /// # Parameters
     /// - `config`: Service configuration used to initialize the implementation.
     ///
     /// # Returns
-    /// Service implementation.
+    /// Boxed service implementation.
     ///
     /// # Errors
     /// Returns [`ProviderCreateError`] when initialization fails. Registries
     /// translate this provider-level error into [`ProviderRegistryError`] with
     /// provider-name context.
-    fn create(&self, config: &Spec::Config) -> Result<Spec::Service, ProviderCreateError>;
+    fn create_box(&self, config: &Spec::Config) -> Result<Box<Spec::Service>, ProviderCreateError>;
+
+    /// Creates an atomically shared service instance.
+    ///
+    /// # Parameters
+    /// - `config`: Service configuration used to initialize the implementation.
+    ///
+    /// # Returns
+    /// Atomically reference-counted service implementation.
+    ///
+    /// # Errors
+    /// Returns [`ProviderCreateError`] when initialization fails. The default
+    /// implementation creates a boxed service first and converts it into
+    /// [`Arc`].
+    #[inline]
+    fn create_arc(&self, config: &Spec::Config) -> Result<Arc<Spec::Service>, ProviderCreateError> {
+        self.create_box(config).map(Arc::from)
+    }
+
+    /// Creates a locally shared service instance.
+    ///
+    /// # Parameters
+    /// - `config`: Service configuration used to initialize the implementation.
+    ///
+    /// # Returns
+    /// Single-threaded reference-counted service implementation.
+    ///
+    /// # Errors
+    /// Returns [`ProviderCreateError`] when initialization fails. The default
+    /// implementation creates a boxed service first and converts it into [`Rc`].
+    #[inline]
+    fn create_rc(&self, config: &Spec::Config) -> Result<Rc<Spec::Service>, ProviderCreateError> {
+        self.create_box(config).map(Rc::from)
+    }
 }

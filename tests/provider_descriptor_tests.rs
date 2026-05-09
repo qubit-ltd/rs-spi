@@ -1,7 +1,4 @@
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderRegistryError,
-};
+use qubit_spi::{ProviderDescriptor, ProviderRegistryError};
 
 /// Test provider descriptors normalize ids, aliases, and priority.
 #[test]

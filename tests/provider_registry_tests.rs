@@ -5,17 +5,9 @@ use std::io;
 use std::sync::Arc;
 use std::sync::Once;
 
-use qubit_spi::{
-    ProviderCreateError,
-    ProviderRegistryError,
-    ProviderSelection,
-};
+use qubit_spi::{ProviderCreateError, ProviderRegistryError, ProviderSelection};
 
-use crate::support::test_services::{
-    GreetingProvider,
-    GreetingRegistry,
-    TestConfig,
-};
+use crate::support::test_services::{GreetingProvider, GreetingRegistry, TestConfig};
 
 /// No-op logger used to exercise diagnostic logging paths.
 struct TestLogger;
@@ -52,7 +44,7 @@ fn exercise_registry_diagnostics() {
     let empty_registry = GreetingRegistry::new();
     assert!(matches!(
         empty_registry
-            .create_auto(&TestConfig::new(""))
+            .create_auto_box(&TestConfig::new(""))
             .expect_err("empty registry should fail"),
         ProviderRegistryError::EmptyRegistry
     ));
@@ -71,20 +63,24 @@ fn exercise_registry_diagnostics() {
     assert!(registry.resolve_provider("low").is_ok());
     assert!(registry.resolve_provider("missing").is_err());
     assert!(registry.resolve_provider("bad provider").is_err());
-    assert!(registry.create("low", &TestConfig::new("")).is_ok());
+    assert!(registry.create_box("low", &TestConfig::new("")).is_ok());
     assert!(
         registry
-            .create("unavailable", &TestConfig::new(""))
+            .create_box("unavailable", &TestConfig::new(""))
             .is_err()
     );
-    assert!(registry.create("failing", &TestConfig::new("")).is_err());
-    assert!(registry.create_auto(&TestConfig::new("")).is_ok());
+    assert!(
+        registry
+            .create_box("failing", &TestConfig::new(""))
+            .is_err()
+    );
+    assert!(registry.create_auto_box(&TestConfig::new("")).is_ok());
 
     let failing_selection = ProviderSelection::from_names("missing", &["unavailable", "failing"])
         .expect("selection names should be valid");
     assert!(
         registry
-            .create_selected(&failing_selection, &TestConfig::new(""))
+            .create_selected_box(&failing_selection, &TestConfig::new(""))
             .is_err()
     );
 
@@ -92,7 +88,7 @@ fn exercise_registry_diagnostics() {
         .expect("selection names should be valid");
     assert!(
         registry
-            .create_selected(&fallback_selection, &TestConfig::new(""))
+            .create_selected_box(&fallback_selection, &TestConfig::new(""))
             .is_ok()
     );
 }
@@ -125,10 +121,10 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
 
     let config = TestConfig::new("say ");
     let by_id = registry
-        .create("STATIC", &config)
+        .create_box("STATIC", &config)
         .expect("provider id should resolve");
     let by_alias = registry
-        .create(" static-greeter ", &config)
+        .create_box(" static-greeter ", &config)
         .expect("provider alias should resolve");
     let descriptors = registry.provider_descriptors();
     let iter_names: Vec<_> = registry.iter_provider_names().collect();
@@ -194,7 +190,7 @@ fn test_register_shared_uses_shared_provider_instance() {
         .register_shared(provider.clone())
         .expect("shared provider should register");
     let service = registry
-        .create("shared", &TestConfig::new(""))
+        .create_box("shared", &TestConfig::new(""))
         .expect("shared provider should create a service");
 
     assert_eq!("hello", service.greet());
@@ -249,7 +245,7 @@ fn test_register_rejects_invalid_provider_name() {
 fn test_create_reports_unknown_provider() {
     let registry = GreetingRegistry::new();
     let error = registry
-        .create("missing", &TestConfig::new(""))
+        .create_box("missing", &TestConfig::new(""))
         .expect_err("unknown provider should fail");
 
     assert!(matches!(
@@ -267,7 +263,7 @@ fn test_create_reports_unavailable_provider() {
         .expect("provider should register");
 
     let error = registry
-        .create("native", &TestConfig::new(""))
+        .create_box("native", &TestConfig::new(""))
         .expect_err("unavailable provider should fail");
 
     assert!(matches!(
@@ -286,7 +282,7 @@ fn test_create_wraps_provider_creation_error() {
         .expect("provider should register");
 
     let error = registry
-        .create("native", &TestConfig::new(""))
+        .create_box("native", &TestConfig::new(""))
         .expect_err("failing provider should fail");
 
     assert!(matches!(
@@ -307,7 +303,7 @@ fn test_create_preserves_provider_creation_source() {
         .expect("provider should register");
 
     let error = registry
-        .create("native", &TestConfig::new(""))
+        .create_box("native", &TestConfig::new(""))
         .expect_err("failing provider should fail");
     let ProviderRegistryError::ProviderCreate { source, .. } = error else {
         panic!("expected ProviderCreate");
@@ -331,7 +327,7 @@ fn test_create_maps_provider_unavailable_creation_error() {
         .expect("provider should register");
 
     let error = registry
-        .create("native", &TestConfig::new(""))
+        .create_box("native", &TestConfig::new(""))
         .expect_err("provider should report unavailable during creation");
 
     assert!(matches!(
@@ -353,7 +349,7 @@ fn test_create_auto_selects_highest_priority_provider() {
         .expect("high provider should register");
 
     let service = registry
-        .create_auto(&TestConfig::new(""))
+        .create_auto_box(&TestConfig::new(""))
         .expect("auto selection should create highest priority provider");
 
     assert_eq!("high", service.greet());
@@ -371,7 +367,7 @@ fn test_create_auto_tie_breaks_by_provider_id() {
         .expect("a provider should register");
 
     let service = registry
-        .create_auto(&TestConfig::new(""))
+        .create_auto_box(&TestConfig::new(""))
         .expect("auto selection should create first provider by id");
 
     assert_eq!("a", service.greet());
@@ -394,7 +390,7 @@ fn test_create_selected_uses_fallback_chain() {
         .expect("selection names should be valid");
 
     let service = registry
-        .create_selected(&selection, &TestConfig::new(""))
+        .create_selected_box(&selection, &TestConfig::new(""))
         .expect("fallback provider should be used");
 
     assert_eq!("fallback", service.greet());
@@ -414,7 +410,7 @@ fn test_create_selected_reports_all_candidate_failures() {
         .expect("selection names should be valid");
 
     let error = registry
-        .create_selected(&selection, &TestConfig::new(""))
+        .create_selected_box(&selection, &TestConfig::new(""))
         .expect_err("all failed candidates should be reported");
 
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
@@ -446,7 +442,7 @@ fn test_create_selected_converts_create_error_to_candidate_failure() {
         ProviderSelection::from_names("primary", &[]).expect("selection names should be valid");
 
     let error = registry
-        .create_selected(&selection, &TestConfig::new(""))
+        .create_selected_box(&selection, &TestConfig::new(""))
         .expect_err("creation errors should be reported as candidate failures");
 
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
@@ -473,7 +469,7 @@ fn test_create_selected_converts_provider_unavailable_create_error() {
         .expect("selection names should be valid");
 
     let error = registry
-        .create_selected(&selection, &TestConfig::new(""))
+        .create_selected_box(&selection, &TestConfig::new(""))
         .expect_err("provider creation errors should be aggregated");
 
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
@@ -495,7 +491,7 @@ fn test_create_selected_converts_provider_unavailable_create_error() {
 fn test_create_auto_reports_empty_registry() {
     let registry = GreetingRegistry::new();
     let error = registry
-        .create_auto(&TestConfig::new(""))
+        .create_auto_box(&TestConfig::new(""))
         .expect_err("empty registry should fail");
 
     assert!(matches!(error, ProviderRegistryError::EmptyRegistry));
