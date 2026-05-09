@@ -12,13 +12,13 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 ## 功能特性
 
-- 针对一个服务 trait、配置类型和 provider 错误类型的强类型 registry。
-- 稳定 provider id 和大小写不敏感 alias。
+- 基于 `ServiceSpec` 的单泛型 registry。
+- 稳定的 `ProviderName` 校验和规范化 provider descriptor。
 - 可选后端的运行时可用性检查。
 - 基于 priority 的自动 provider 选择。
-- 显式 default 加 fallback chain 的选择机制。
+- 显式 named provider 加 fallback chain 的选择机制。
 - 通过 `Arc` 注册共享 provider 实例。
-- 错误中保留 unknown、unavailable 和 creation failure 等候选状态。
+- provider 创建错误与 registry 错误分层。
 
 ## 安装
 
@@ -35,9 +35,12 @@ qubit-spi = "0.1"
 use std::fmt::Debug;
 
 use qubit_spi::{
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistry,
     ProviderRegistryError,
     ServiceProvider,
+    ServiceSpec,
 };
 
 trait Greeter: Debug + Send + Sync {
@@ -54,26 +57,27 @@ impl Greeter for EnglishGreeter {
 }
 
 #[derive(Debug)]
+struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = ();
+    type Output = Box<dyn Greeter>;
+}
+
+#[derive(Debug)]
 struct EnglishProvider;
 
-impl ServiceProvider for EnglishProvider {
-    type Config = ();
-    type Service = dyn Greeter;
-
-    fn id(&self) -> &'static str {
-        "english"
+impl ServiceProvider<GreeterSpec> for EnglishProvider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        ProviderDescriptor::new("english")?.with_aliases(&["en"])
     }
 
-    fn aliases(&self) -> &'static [&'static str] {
-        &["en"]
-    }
-
-    fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(EnglishGreeter))
     }
 }
 
-let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+let mut registry = ProviderRegistry::<GreeterSpec>::new();
 registry
     .register(EnglishProvider)
     .expect("provider names should be unique");
@@ -86,35 +90,36 @@ assert_eq!("hello", greeter.greet());
 
 ## 核心概念
 
+### ServiceSpec
+
+`ServiceSpec` 绑定一个服务族的配置类型和 provider 输出类型。这样
+`ProviderRegistry<Spec>` 只有一个泛型参数，同时每个 crate 仍然可以决定 provider
+返回 `Box<dyn Trait>`、`Arc<dyn Trait>`、具体类型或其他 service handle。
+
 ### ServiceProvider
 
-`ServiceProvider` 是每个后端实现的工厂协议。provider 提供：
+`ServiceProvider<Spec>` 是每个后端实现的工厂协议。provider 提供：
 
 | 方法 | 用途 |
 | --- | --- |
-| `id()` | 规范、稳定的 provider id |
-| `aliases()` | registry 接受的其他名称 |
-| `priority()` | 自动选择时优先级越高越优先 |
+| `descriptor()` | 稳定 provider id、alias 和 priority |
 | `availability(config)` | 检查可选依赖在当前环境是否可用 |
-| `create(config)` | 创建 boxed service 实现 |
-
-关联类型 `Service` 可以是 `dyn Greeter` 这样的 trait object。
+| `create(config)` | 创建 `Spec::Output` service 值 |
 
 ### ProviderRegistry
 
-`ProviderRegistry<S, C>` 存储同一个服务类型 `S` 和配置类型 `C` 下的所有
-provider。
+`ProviderRegistry<Spec>` 存储同一个 service specification 下的所有 provider。
 
-provider id 和 alias 采用大小写不敏感匹配。注册时会拒绝重复名称，包括同一个
-provider 自身 id 与 alias 之间的冲突。
+registry 在注册时捕获 provider descriptor。provider id 和 alias 会规范化为
+`ProviderName` 并建立索引，所以 provider 实例内部状态变化不会影响 registry 的
+名称解析不变量。
 
 ### ProviderSelection
 
-`ProviderSelection` 描述 `create_default()` 如何构造候选 provider：
+`ProviderSelection` 是一个枚举：
 
-- default 为空或为 `auto`：按 priority 降序、provider id 升序尝试所有已注册
-  provider。
-- default 是显式名称：先尝试 default，再按顺序尝试 fallbacks。
+- `Auto`：按 priority 降序、provider id 升序尝试所有已注册 provider。
+- `Named`：先尝试 primary provider，再按顺序尝试 fallbacks。
 
 只要某个 provider 可用并成功创建 service，选择过程就会停止。
 
@@ -124,10 +129,13 @@ provider 自身 id 与 alias 之间的冲突。
 use std::fmt::Debug;
 
 use qubit_spi::{
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistry,
     ProviderRegistryError,
     ProviderSelection,
     ServiceProvider,
+    ServiceSpec,
 };
 
 trait Greeter: Debug + Send + Sync {
@@ -144,26 +152,27 @@ impl Greeter for GreeterImpl {
 }
 
 #[derive(Debug)]
+struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = ();
+    type Output = Box<dyn Greeter>;
+}
+
+#[derive(Debug)]
 struct Provider(&'static str, i32);
 
-impl ServiceProvider for Provider {
-    type Config = ();
-    type Service = dyn Greeter;
-
-    fn id(&self) -> &'static str {
-        self.0
+impl ServiceProvider<GreeterSpec> for Provider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        Ok(ProviderDescriptor::new(self.0)?.with_priority(self.1))
     }
 
-    fn priority(&self) -> i32 {
-        self.1
-    }
-
-    fn create(&self, _config: &()) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(GreeterImpl(self.0)))
     }
 }
 
-let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+let mut registry = ProviderRegistry::<GreeterSpec>::new();
 registry
     .register(Provider("repository", 0))
     .expect("unique provider");
@@ -171,9 +180,10 @@ registry
     .register(Provider("native", 10))
     .expect("unique provider");
 
-let selection = ProviderSelection::from_names("native", &["repository"]);
+let selection = ProviderSelection::from_names("native", &["repository"])
+    .expect("selection names should be valid");
 let greeter = registry
-    .create_default(&selection, &())
+    .create_selected(&selection, &())
     .expect("one provider should create a greeter");
 
 assert_eq!("native", greeter.greet());
@@ -181,17 +191,24 @@ assert_eq!("native", greeter.greet());
 
 ## 错误模型
 
-`ProviderRegistryError` 区分注册、查找和选择失败：
+provider 错误和 registry 错误分层：
+
+- `ProviderCreateError` 由 provider factory 返回。
+- `ProviderRegistryError` 由注册、查找和选择过程返回。
+- `ProviderFailure` 记录 fallback chain 中每个失败候选。
+
+`ProviderRegistryError` 的主要 variant：
 
 | Variant | 含义 |
 | --- | --- |
 | `EmptyProviderName` | provider id、alias 或 selector 为空 |
+| `InvalidProviderName` | provider id、alias 或 selector 包含非法字符 |
 | `DuplicateProviderName` | provider id 或 alias 与已有名称冲突 |
 | `UnknownProvider` | 没有 provider 匹配请求的 selector |
 | `ProviderUnavailable` | 选中的 provider 报告不可用 |
 | `ProviderCreate` | 选中的 provider 创建服务失败 |
 | `NoAvailableProvider` | fallback chain 中所有候选都失败 |
-| `EmptyRegistry` | 对空 registry 请求自动或默认创建 |
+| `EmptyRegistry` | 对空 registry 请求自动或 selected 创建 |
 
 `NoAvailableProvider` 会保留有序的 `ProviderFailure`，调用方可以解释完整 fallback
 链路。
@@ -209,18 +226,22 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 
 | API | 用途 |
 | --- | --- |
+| `ServiceSpec` | 绑定 provider 配置类型和输出类型 |
 | `ServiceProvider` | 每个后端实现的 provider trait |
+| `ProviderDescriptor` | 捕获 provider id、alias 和 priority |
+| `ProviderName` | 已校验并规范化的 provider 名称 |
 | `ProviderRegistry::new()` | 创建空 registry |
 | `ProviderRegistry::register(provider)` | 注册 owned provider |
 | `ProviderRegistry::register_arc(provider)` | 注册共享 provider |
 | `ProviderRegistry::find_provider(name)` | 按 id 或 alias 解析 provider |
 | `ProviderRegistry::create(name, config)` | 按 provider 名称创建 service |
 | `ProviderRegistry::create_auto(config)` | 按自动优先级创建 service |
-| `ProviderRegistry::create_default(selection, config)` | 按 default 和 fallbacks 创建 |
-| `ProviderSelection` | default 与 fallback 候选配置 |
+| `ProviderRegistry::create_selected(selection, config)` | 按 selection 创建 |
+| `ProviderSelection` | 自动或 named fallback 候选选择 |
 | `ProviderAvailability` | provider 可用性状态 |
+| `ProviderCreateError` | provider 层创建错误 |
 | `ProviderFailure` | fallback chain 中的单个失败候选 |
-| `ProviderRegistryError` | registry 错误类型 |
+| `ProviderRegistryError` | registry 层错误类型 |
 
 ## Rust 版本
 

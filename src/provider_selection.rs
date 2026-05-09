@@ -7,112 +7,121 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Selection policy for default provider resolution.
+//! Selection policy for provider resolution.
 
-/// Default and fallback provider names used by registry selection.
+use crate::{
+    ProviderName,
+    ProviderRegistryError,
+};
+
+/// Provider candidates used by registry selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProviderSelection {
-    /// Preferred provider name or automatic-selection keyword.
-    default_name: String,
-    /// Ordered fallback provider names.
-    fallbacks: Vec<String>,
-    /// Keyword that enables automatic provider selection.
-    auto_name: String,
+pub enum ProviderSelection {
+    /// Select providers automatically by registry priority.
+    Auto,
+    /// Try a primary provider followed by explicit fallback providers.
+    Named {
+        /// Primary provider candidate.
+        primary: ProviderName,
+        /// Ordered fallback provider candidates.
+        fallbacks: Vec<ProviderName>,
+    },
 }
 
 impl ProviderSelection {
     /// Creates an automatic provider selection.
     ///
     /// # Returns
-    /// Selection whose default provider name is `auto`.
+    /// Automatic provider selection.
     pub fn auto() -> Self {
-        Self::default()
+        Self::Auto
     }
 
-    /// Creates a provider selection from owned fallback names.
+    /// Creates a named provider selection without fallbacks.
     ///
     /// # Parameters
-    /// - `default_name`: Preferred provider name, or the auto keyword.
+    /// - `primary`: Primary provider name.
+    ///
+    /// # Returns
+    /// Named provider selection.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError`] when `primary` is not a valid provider
+    /// name.
+    pub fn named(primary: &str) -> Result<Self, ProviderRegistryError> {
+        Ok(Self::Named {
+            primary: ProviderName::new(primary)?,
+            fallbacks: Vec::new(),
+        })
+    }
+
+    /// Creates a named provider selection from borrowed fallback names.
+    ///
+    /// # Parameters
+    /// - `primary`: Primary provider name.
     /// - `fallbacks`: Ordered fallback provider names.
     ///
     /// # Returns
-    /// Selection with trimmed names and empty fallback entries removed.
-    pub fn new(default_name: &str, fallbacks: &[String]) -> Self {
-        Self {
-            default_name: normalize_name(default_name),
-            fallbacks: normalize_owned_names(fallbacks),
-            auto_name: "auto".to_owned(),
-        }
+    /// Named provider selection.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
+    /// valid provider name.
+    pub fn from_names(primary: &str, fallbacks: &[&str]) -> Result<Self, ProviderRegistryError> {
+        Ok(Self::Named {
+            primary: ProviderName::new(primary)?,
+            fallbacks: normalize_borrowed_names(fallbacks)?,
+        })
     }
 
-    /// Creates a provider selection from borrowed fallback names.
+    /// Creates a named provider selection from owned fallback names.
     ///
     /// # Parameters
-    /// - `default_name`: Preferred provider name, or the auto keyword.
+    /// - `primary`: Primary provider name.
     /// - `fallbacks`: Ordered fallback provider names.
     ///
     /// # Returns
-    /// Selection with trimmed names and empty fallback entries removed.
-    pub fn from_names(default_name: &str, fallbacks: &[&str]) -> Self {
-        Self {
-            default_name: normalize_name(default_name),
-            fallbacks: normalize_borrowed_names(fallbacks),
-            auto_name: "auto".to_owned(),
-        }
+    /// Named provider selection.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
+    /// valid provider name.
+    pub fn new(primary: &str, fallbacks: &[String]) -> Result<Self, ProviderRegistryError> {
+        Ok(Self::Named {
+            primary: ProviderName::new(primary)?,
+            fallbacks: normalize_owned_names(fallbacks)?,
+        })
     }
 
-    /// Sets the keyword that enables automatic provider selection.
-    ///
-    /// Empty keywords are normalized back to `auto`.
-    ///
-    /// # Parameters
-    /// - `auto_name`: Keyword used to request automatic provider selection.
+    /// Tells whether this selection requests automatic selection.
     ///
     /// # Returns
-    /// Updated selection.
-    pub fn with_auto_name(mut self, auto_name: &str) -> Self {
-        let normalized = normalize_name(auto_name);
-        if normalized.is_empty() {
-            self.auto_name = "auto".to_owned();
-        } else {
-            self.auto_name = normalized;
-        }
-        self
+    /// `true` when this selection is [`ProviderSelection::Auto`].
+    pub fn is_auto(&self) -> bool {
+        matches!(self, Self::Auto)
     }
 
-    /// Gets the preferred provider name.
+    /// Gets the primary provider for named selections.
     ///
     /// # Returns
-    /// Default provider name after trimming.
-    pub fn default_name(&self) -> &str {
-        &self.default_name
+    /// `Some` primary provider for named selections, or `None` for automatic
+    /// selection.
+    pub fn primary(&self) -> Option<&ProviderName> {
+        match self {
+            Self::Auto => None,
+            Self::Named { primary, .. } => Some(primary),
+        }
     }
 
     /// Gets ordered fallback provider names.
     ///
     /// # Returns
-    /// Fallback names after trimming and empty-entry removal.
-    pub fn fallbacks(&self) -> &[String] {
-        &self.fallbacks
-    }
-
-    /// Gets the automatic-selection keyword.
-    ///
-    /// # Returns
-    /// Auto keyword.
-    pub fn auto_name(&self) -> &str {
-        &self.auto_name
-    }
-
-    /// Tells whether the default selector requests automatic selection.
-    ///
-    /// Empty defaults are treated as automatic selection.
-    ///
-    /// # Returns
-    /// `true` when the default name is empty or equals the auto keyword
-    /// case-insensitively.
-    pub fn is_auto_default(&self) -> bool {
-        self.default_name.is_empty() || self.default_name.eq_ignore_ascii_case(&self.auto_name)
+    /// Fallback provider names, or an empty slice for automatic selection.
+    pub fn fallbacks(&self) -> &[ProviderName] {
+        match self {
+            Self::Auto => &[],
+            Self::Named { fallbacks, .. } => fallbacks,
+        }
     }
 
     /// Builds the candidate provider names to try.
@@ -121,39 +130,26 @@ impl ProviderSelection {
     /// - `auto_candidates`: Registry-provided automatic candidate order.
     ///
     /// # Returns
-    /// Automatic candidates when this selection is auto, otherwise the explicit
-    /// default followed by configured fallbacks.
-    pub(crate) fn candidates(&self, auto_candidates: Vec<String>) -> Vec<String> {
-        if self.is_auto_default() {
-            return auto_candidates;
+    /// Automatic candidates when this selection is automatic, otherwise the
+    /// primary provider followed by explicit fallbacks.
+    pub(crate) fn candidates(&self, auto_candidates: Vec<ProviderName>) -> Vec<ProviderName> {
+        match self {
+            Self::Auto => auto_candidates,
+            Self::Named { primary, fallbacks } => {
+                let mut candidates = Vec::with_capacity(fallbacks.len() + 1);
+                candidates.push(primary.clone());
+                candidates.extend(fallbacks.iter().cloned());
+                candidates
+            }
         }
-        let mut candidates = Vec::with_capacity(self.fallbacks.len() + 1);
-        candidates.push(self.default_name.clone());
-        candidates.extend(self.fallbacks.iter().cloned());
-        candidates
     }
 }
 
 impl Default for ProviderSelection {
     /// Creates an automatic provider selection.
     fn default() -> Self {
-        Self {
-            default_name: "auto".to_owned(),
-            fallbacks: Vec::new(),
-            auto_name: "auto".to_owned(),
-        }
+        Self::Auto
     }
-}
-
-/// Trims one provider name.
-///
-/// # Parameters
-/// - `name`: Raw provider name.
-///
-/// # Returns
-/// Trimmed provider name.
-fn normalize_name(name: &str) -> String {
-    name.trim().to_owned()
 }
 
 /// Normalizes owned provider names.
@@ -162,13 +158,15 @@ fn normalize_name(name: &str) -> String {
 /// - `names`: Raw provider names.
 ///
 /// # Returns
-/// Trimmed provider names with empty entries removed.
-fn normalize_owned_names(names: &[String]) -> Vec<String> {
+/// Normalized provider names.
+///
+/// # Errors
+/// Returns [`ProviderRegistryError`] when any provider name is invalid.
+fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
     names
         .iter()
         .map(String::as_str)
-        .map(normalize_name)
-        .filter(|name| !name.is_empty())
+        .map(ProviderName::new)
         .collect()
 }
 
@@ -178,12 +176,10 @@ fn normalize_owned_names(names: &[String]) -> Vec<String> {
 /// - `names`: Raw provider names.
 ///
 /// # Returns
-/// Trimmed provider names with empty entries removed.
-fn normalize_borrowed_names(names: &[&str]) -> Vec<String> {
-    names
-        .iter()
-        .copied()
-        .map(normalize_name)
-        .filter(|name| !name.is_empty())
-        .collect()
+/// Normalized provider names.
+///
+/// # Errors
+/// Returns [`ProviderRegistryError`] when any provider name is invalid.
+fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
+    names.iter().copied().map(ProviderName::new).collect()
 }

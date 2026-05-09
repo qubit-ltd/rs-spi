@@ -1,60 +1,88 @@
-use qubit_spi::ProviderSelection;
+use qubit_spi::{
+    ProviderName,
+    ProviderRegistryError,
+    ProviderSelection,
+};
+
+/// Creates a provider name used by selection assertions.
+fn name(value: &str) -> ProviderName {
+    ProviderName::new(value).expect("test provider name should be valid")
+}
 
 /// Test the default selection uses automatic provider selection.
 #[test]
 fn test_default_selection_uses_auto_without_fallbacks() {
-    let selection = ProviderSelection::default();
+    let selection = ProviderSelection::auto();
 
-    assert_eq!("auto", selection.default_name());
-    assert_eq!("auto", selection.auto_name());
+    assert!(selection.is_auto());
+    assert!(selection.primary().is_none());
     assert!(selection.fallbacks().is_empty());
-    assert!(selection.is_auto_default());
+    assert_eq!(ProviderSelection::default(), selection);
 }
 
-/// Test name-based selection trims default and fallback names.
+/// Test name-based selection trims and normalizes provider names.
 #[test]
-fn test_from_names_trims_default_and_fallback_names() {
-    let selection = ProviderSelection::from_names(" native ", &[" fallback ", "", " backup "]);
+fn test_from_names_trims_and_normalizes_names() {
+    let selection = ProviderSelection::from_names(" Native ", &[" Fallback ", " backup "])
+        .expect("selection names should be valid");
 
-    assert_eq!("native", selection.default_name());
-    assert_eq!(
-        &["fallback".to_owned(), "backup".to_owned()],
-        selection.fallbacks(),
-    );
-    assert!(!selection.is_auto_default());
+    assert!(!selection.is_auto());
+    assert_eq!(Some(&name("native")), selection.primary());
+    assert_eq!(&[name("fallback"), name("backup")], selection.fallbacks());
 }
 
-/// Test a custom automatic selector can be configured.
+/// Test empty fallback names are rejected instead of being silently ignored.
 #[test]
-fn test_with_auto_name_changes_auto_keyword() {
-    let selection = ProviderSelection::from_names("best", &[]).with_auto_name("best");
+fn test_from_names_rejects_empty_fallback_names() {
+    let error = ProviderSelection::from_names("native", &[" "])
+        .expect_err("empty fallback names should be rejected");
 
-    assert_eq!("best", selection.auto_name());
-    assert!(selection.is_auto_default());
+    assert!(matches!(error, ProviderRegistryError::EmptyProviderName));
 }
 
-/// Test owned fallback names are normalized.
+/// Test invalid provider names are rejected at selection construction.
+#[test]
+fn test_from_names_rejects_invalid_provider_names() {
+    let error = ProviderSelection::from_names("native provider", &[])
+        .expect_err("names with spaces should be rejected");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native provider"
+    ));
+}
+
+/// Test explicit named selections can be built without fallbacks.
+#[test]
+fn test_named_selection_has_primary_without_fallbacks() {
+    let selection = ProviderSelection::named("native").expect("selection name should be valid");
+
+    assert!(!selection.is_auto());
+    assert_eq!(Some(&name("native")), selection.primary());
+    assert!(selection.fallbacks().is_empty());
+}
+
+/// Test owned fallback names use the same normalization rules.
 #[test]
 fn test_new_normalizes_owned_fallback_names() {
-    let fallbacks = vec![
-        " fallback ".to_owned(),
-        "".to_owned(),
-        " backup ".to_owned(),
-    ];
-    let selection = ProviderSelection::new("native", &fallbacks);
+    let fallbacks = vec![" Fallback ".to_owned(), " BACKUP ".to_owned()];
+    let selection =
+        ProviderSelection::new(" Native ", &fallbacks).expect("selection names should be valid");
 
-    assert_eq!("native", selection.default_name());
-    assert_eq!(
-        &["fallback".to_owned(), "backup".to_owned()],
-        selection.fallbacks(),
-    );
+    assert_eq!(Some(&name("native")), selection.primary());
+    assert_eq!(&[name("fallback"), name("backup")], selection.fallbacks());
 }
 
-/// Test empty auto keywords fall back to the standard keyword.
+/// Test owned fallback names reject invalid values.
 #[test]
-fn test_with_auto_name_normalizes_empty_keyword_to_auto() {
-    let selection = ProviderSelection::from_names("auto", &[]).with_auto_name(" ");
+fn test_new_rejects_invalid_owned_fallback_names() {
+    let fallbacks = vec!["fallback provider".to_owned()];
+    let error = ProviderSelection::new("native", &fallbacks)
+        .expect_err("invalid fallback names should be rejected");
 
-    assert_eq!("auto", selection.auto_name());
-    assert!(selection.is_auto_default());
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. }
+            if name == "fallback provider"
+    ));
 }

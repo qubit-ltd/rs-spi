@@ -8,9 +8,12 @@ use std::sync::atomic::{
 
 use qubit_spi::{
     ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistry,
     ProviderRegistryError,
     ServiceProvider,
+    ServiceSpec,
 };
 
 /// Configuration used by test providers.
@@ -52,7 +55,16 @@ impl GreetingService for StaticGreetingService {
 }
 
 /// Provider registry type used by greeting tests.
-pub type GreetingRegistry = ProviderRegistry<dyn GreetingService, TestConfig>;
+pub type GreetingRegistry = ProviderRegistry<GreetingSpec>;
+
+/// Service specification used by greeting registry tests.
+#[derive(Debug)]
+pub struct GreetingSpec;
+
+impl ServiceSpec for GreetingSpec {
+    type Config = TestConfig;
+    type Output = Box<dyn GreetingService>;
+}
 
 /// Provider implementation used by registry tests.
 #[derive(Debug)]
@@ -62,7 +74,7 @@ pub struct GreetingProvider {
     message: &'static str,
     priority: i32,
     availability: ProviderAvailability,
-    failure: Option<ProviderRegistryError>,
+    failure: Option<ProviderCreateError>,
     created: AtomicUsize,
 }
 
@@ -100,12 +112,18 @@ impl GreetingProvider {
 
     /// Makes this provider fail during creation.
     pub fn failing(mut self, message: &'static str) -> Self {
-        self.failure = Some(ProviderRegistryError::create_failed(message));
+        self.failure = Some(ProviderCreateError::failed(message));
         self
     }
 
-    /// Makes this provider fail with a specific registry error during creation.
-    pub fn failing_with(mut self, error: ProviderRegistryError) -> Self {
+    /// Makes this provider report unavailable during creation.
+    pub fn failing_unavailable(mut self, reason: &'static str) -> Self {
+        self.failure = Some(ProviderCreateError::unavailable(reason));
+        self
+    }
+
+    /// Makes this provider fail with a specific creation error.
+    pub fn failing_with(mut self, error: ProviderCreateError) -> Self {
         self.failure = Some(error);
         self
     }
@@ -116,27 +134,18 @@ impl GreetingProvider {
     }
 }
 
-impl ServiceProvider for GreetingProvider {
-    type Config = TestConfig;
-    type Service = dyn GreetingService;
-
-    fn id(&self) -> &'static str {
-        self.id
+impl ServiceProvider<GreetingSpec> for GreetingProvider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        Ok(ProviderDescriptor::new(self.id)?
+            .with_aliases(self.aliases)?
+            .with_priority(self.priority))
     }
 
-    fn aliases(&self) -> &'static [&'static str] {
-        self.aliases
-    }
-
-    fn priority(&self) -> i32 {
-        self.priority
-    }
-
-    fn availability(&self, _config: &Self::Config) -> ProviderAvailability {
+    fn availability(&self, _config: &TestConfig) -> ProviderAvailability {
         self.availability.clone()
     }
 
-    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(&self, config: &TestConfig) -> Result<Box<dyn GreetingService>, ProviderCreateError> {
         self.created.fetch_add(1, Ordering::SeqCst);
         if let Some(error) = &self.failure {
             return Err(error.clone());

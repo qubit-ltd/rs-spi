@@ -27,3 +27,4 @@ name = "qubit_spi"
 doctest = true
 
 [dependencies]
+thiserror = "2.0"

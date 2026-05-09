@@ -3,6 +3,7 @@ mod support;
 use std::sync::Arc;
 
 use qubit_spi::{
+    ProviderCreateError,
     ProviderFailure,
     ProviderRegistryError,
     ProviderSelection,
@@ -12,7 +13,7 @@ use qubit_spi::{
 use crate::support::test_services::{
     GreetingProvider,
     GreetingRegistry,
-    GreetingService,
+    GreetingSpec,
     TestConfig,
 };
 
@@ -41,8 +42,11 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
     let by_alias = registry
         .create(" static-greeter ", &config)
         .expect("provider alias should resolve");
+    let descriptors = registry.provider_descriptors();
 
     assert_eq!(vec!["static"], registry.provider_names());
+    assert_eq!("static", descriptors[0].id().as_str());
+    assert_eq!(vec!["static-greeter"], descriptors[0].aliases_as_str());
     assert!(registry.find_provider("static-greeter").is_some());
     assert_eq!("say hello", by_id.greet());
     assert_eq!("say hello", by_alias.greet());
@@ -52,9 +56,7 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
 #[test]
 fn test_register_arc_uses_shared_provider_instance() {
     let provider = Arc::new(GreetingProvider::new("shared", "hello"));
-    let provider_for_registry: Arc<
-        dyn ServiceProvider<Config = TestConfig, Service = dyn GreetingService>,
-    > = provider.clone();
+    let provider_for_registry: Arc<dyn ServiceProvider<GreetingSpec>> = provider.clone();
     let mut registry = GreetingRegistry::new();
 
     registry
@@ -82,7 +84,7 @@ fn test_register_rejects_duplicate_provider_names() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::DuplicateProviderName { ref name } if name == "FAST"
+        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "fast"
     ));
 }
 
@@ -97,6 +99,20 @@ fn test_register_rejects_empty_provider_name() {
     assert!(matches!(error, ProviderRegistryError::EmptyProviderName));
 }
 
+/// Test invalid provider ids are rejected.
+#[test]
+fn test_register_rejects_invalid_provider_name() {
+    let mut registry = GreetingRegistry::new();
+    let error = registry
+        .register(GreetingProvider::new("native provider", "hello"))
+        .expect_err("invalid provider id should be rejected");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native provider"
+    ));
+}
+
 /// Test unknown selectors fail with an unknown-provider error.
 #[test]
 fn test_create_reports_unknown_provider() {
@@ -107,7 +123,7 @@ fn test_create_reports_unknown_provider() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::UnknownProvider { ref name } if name == "missing"
+        ProviderRegistryError::UnknownProvider { ref name } if name.as_str() == "missing"
     ));
 }
 
@@ -126,7 +142,7 @@ fn test_create_reports_unavailable_provider() {
     assert!(matches!(
         error,
         ProviderRegistryError::ProviderUnavailable { ref name, ref reason }
-            if name == "native" && reason == "not installed"
+            if name.as_str() == "native" && reason == "not installed"
     ));
 }
 
@@ -145,75 +161,26 @@ fn test_create_wraps_provider_creation_error() {
     assert!(matches!(
         error,
         ProviderRegistryError::ProviderCreate { ref name, ref reason }
-            if name == "native" && reason == "boom"
+            if name.as_str() == "native" && reason == "boom"
     ));
 }
 
-/// Test unnamed provider errors receive the selected provider name.
+/// Test provider-reported unavailability is mapped to registry context.
 #[test]
-fn test_create_attaches_provider_name_to_unnamed_provider_errors() {
+fn test_create_maps_provider_unavailable_creation_error() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("native", "hello").failing_with(
-            ProviderRegistryError::UnknownProvider {
-                name: String::new(),
-            },
-        ))
+        .register(GreetingProvider::new("native", "hello").failing_unavailable("runtime missing"))
         .expect("provider should register");
 
     let error = registry
         .create("native", &TestConfig::new(""))
-        .expect_err("provider should return an unknown-provider error");
-
-    assert!(matches!(
-        error,
-        ProviderRegistryError::UnknownProvider { ref name } if name == "native"
-    ));
-}
-
-/// Test unnamed unavailable errors receive the selected provider name.
-#[test]
-fn test_create_attaches_provider_name_to_unnamed_unavailable_errors() {
-    let mut registry = GreetingRegistry::new();
-    registry
-        .register(GreetingProvider::new("native", "hello").failing_with(
-            ProviderRegistryError::ProviderUnavailable {
-                name: String::new(),
-                reason: "runtime missing".to_owned(),
-            },
-        ))
-        .expect("provider should register");
-
-    let error = registry
-        .create("native", &TestConfig::new(""))
-        .expect_err("provider should return an unavailable-provider error");
+        .expect_err("provider should report unavailable during creation");
 
     assert!(matches!(
         error,
         ProviderRegistryError::ProviderUnavailable { ref name, ref reason }
-            if name == "native" && reason == "runtime missing"
-    ));
-}
-
-/// Test provider errors that already carry a name keep their original context.
-#[test]
-fn test_create_preserves_named_provider_error_context() {
-    let mut registry = GreetingRegistry::new();
-    registry
-        .register(GreetingProvider::new("outer", "hello").failing_with(
-            ProviderRegistryError::UnknownProvider {
-                name: "inner".to_owned(),
-            },
-        ))
-        .expect("provider should register");
-
-    let error = registry
-        .create("outer", &TestConfig::new(""))
-        .expect_err("provider should return a named unknown-provider error");
-
-    assert!(matches!(
-        error,
-        ProviderRegistryError::UnknownProvider { ref name } if name == "inner"
+            if name.as_str() == "native" && reason == "runtime missing"
     ));
 }
 
@@ -255,7 +222,7 @@ fn test_create_auto_tie_breaks_by_provider_id() {
 
 /// Test explicit fallback chains continue after unavailable and failing providers.
 #[test]
-fn test_create_default_uses_fallback_chain() {
+fn test_create_selected_uses_fallback_chain() {
     let mut registry = GreetingRegistry::new();
     registry
         .register(GreetingProvider::new("primary", "primary").unavailable("disabled"))
@@ -266,10 +233,11 @@ fn test_create_default_uses_fallback_chain() {
     registry
         .register(GreetingProvider::new("fallback", "fallback"))
         .expect("fallback provider should register");
-    let selection = ProviderSelection::from_names("primary", &["secondary", "fallback"]);
+    let selection = ProviderSelection::from_names("primary", &["secondary", "fallback"])
+        .expect("selection names should be valid");
 
     let service = registry
-        .create_default(&selection, &TestConfig::new(""))
+        .create_selected(&selection, &TestConfig::new(""))
         .expect("fallback provider should be used");
 
     assert_eq!("fallback", service.greet());
@@ -277,7 +245,7 @@ fn test_create_default_uses_fallback_chain() {
 
 /// Test failed candidate chains report all failures.
 #[test]
-fn test_create_default_reports_all_candidate_failures() {
+fn test_create_selected_reports_all_candidate_failures() {
     let mut registry = GreetingRegistry::new();
     registry
         .register(GreetingProvider::new("native", "hello").unavailable("not installed"))
@@ -285,10 +253,11 @@ fn test_create_default_reports_all_candidate_failures() {
     registry
         .register(GreetingProvider::new("fallback", "hello").failing("boom"))
         .expect("fallback provider should register");
-    let selection = ProviderSelection::from_names("missing", &["native", "fallback"]);
+    let selection = ProviderSelection::from_names("missing", &["native", "fallback"])
+        .expect("selection names should be valid");
 
     let error = registry
-        .create_default(&selection, &TestConfig::new(""))
+        .create_selected(&selection, &TestConfig::new(""))
         .expect_err("all failed candidates should be reported");
 
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
@@ -296,75 +265,68 @@ fn test_create_default_reports_all_candidate_failures() {
     };
     assert_eq!(
         vec![
-            ProviderFailure::unknown("missing"),
-            ProviderFailure::unavailable("native", "not installed"),
-            ProviderFailure::create_failed("fallback", "boom"),
+            ProviderFailure::unknown("missing").expect("valid provider name"),
+            ProviderFailure::unavailable("native", "not installed").expect("valid provider name"),
+            ProviderFailure::create_failed("fallback", "boom").expect("valid provider name"),
         ],
         failures,
     );
 }
 
-/// Test fallback aggregation converts registry-only errors into creation failures.
+/// Test fallback aggregation maps provider creation failures to candidate failures.
 #[test]
-fn test_create_default_converts_registry_error_to_candidate_failure() {
+fn test_create_selected_converts_create_error_to_candidate_failure() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("primary", "hello").failing_with(
-            ProviderRegistryError::DuplicateProviderName {
-                name: "alias".to_owned(),
-            },
-        ))
+        .register(
+            GreetingProvider::new("primary", "hello")
+                .failing_with(ProviderCreateError::failed("backend exploded")),
+        )
         .expect("primary provider should register");
-    let selection = ProviderSelection::from_names("primary", &[]);
+    let selection =
+        ProviderSelection::from_names("primary", &[]).expect("selection names should be valid");
 
     let error = registry
-        .create_default(&selection, &TestConfig::new(""))
-        .expect_err("registry-only errors should be reported as candidate failures");
-
-    let ProviderRegistryError::NoAvailableProvider { failures } = error else {
-        panic!("expected NoAvailableProvider");
-    };
-    assert_eq!(
-        vec![ProviderFailure::create_failed(
-            "primary",
-            "duplicate provider name: alias",
-        )],
-        failures,
-    );
-}
-
-/// Test fallback aggregation preserves provider-returned candidate errors.
-#[test]
-fn test_create_default_converts_provider_returned_candidate_errors() {
-    let mut registry = GreetingRegistry::new();
-    registry
-        .register(GreetingProvider::new("primary", "hello").failing_with(
-            ProviderRegistryError::UnknownProvider {
-                name: String::new(),
-            },
-        ))
-        .expect("primary provider should register");
-    registry
-        .register(GreetingProvider::new("fallback", "hello").failing_with(
-            ProviderRegistryError::ProviderUnavailable {
-                name: String::new(),
-                reason: "runtime missing".to_owned(),
-            },
-        ))
-        .expect("fallback provider should register");
-    let selection = ProviderSelection::from_names("primary", &["fallback"]);
-
-    let error = registry
-        .create_default(&selection, &TestConfig::new(""))
-        .expect_err("provider-returned candidate errors should be aggregated");
+        .create_selected(&selection, &TestConfig::new(""))
+        .expect_err("creation errors should be reported as candidate failures");
 
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
         panic!("expected NoAvailableProvider");
     };
     assert_eq!(
         vec![
-            ProviderFailure::unknown("primary"),
-            ProviderFailure::unavailable("fallback", "runtime missing"),
+            ProviderFailure::create_failed("primary", "backend exploded")
+                .expect("valid provider name")
+        ],
+        failures,
+    );
+}
+
+/// Test fallback aggregation preserves provider-reported unavailable creation errors.
+#[test]
+fn test_create_selected_converts_provider_unavailable_create_error() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("primary", "hello").failing_unavailable("runtime missing"))
+        .expect("primary provider should register");
+    registry
+        .register(GreetingProvider::new("fallback", "hello").failing("boom"))
+        .expect("fallback provider should register");
+    let selection = ProviderSelection::from_names("primary", &["fallback"])
+        .expect("selection names should be valid");
+
+    let error = registry
+        .create_selected(&selection, &TestConfig::new(""))
+        .expect_err("provider creation errors should be aggregated");
+
+    let ProviderRegistryError::NoAvailableProvider { failures } = error else {
+        panic!("expected NoAvailableProvider");
+    };
+    assert_eq!(
+        vec![
+            ProviderFailure::unavailable("primary", "runtime missing")
+                .expect("valid provider name"),
+            ProviderFailure::create_failed("fallback", "boom").expect("valid provider name"),
         ],
         failures,
     );

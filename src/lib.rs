@@ -17,9 +17,12 @@
 //! use std::fmt::Debug;
 //!
 //! use qubit_spi::{
+//!     ProviderCreateError,
+//!     ProviderDescriptor,
 //!     ProviderRegistry,
 //!     ProviderRegistryError,
 //!     ServiceProvider,
+//!     ServiceSpec,
 //! };
 //!
 //! trait Greeter: Debug + Send + Sync {
@@ -38,24 +41,25 @@
 //! #[derive(Debug)]
 //! struct EnglishProvider;
 //!
-//! impl ServiceProvider for EnglishProvider {
+//! #[derive(Debug)]
+//! struct GreeterSpec;
+//!
+//! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
-//!     type Service = dyn Greeter;
+//!     type Output = Box<dyn Greeter>;
+//! }
 //!
-//!     fn id(&self) -> &'static str {
-//!         "english"
+//! impl ServiceProvider<GreeterSpec> for EnglishProvider {
+//!     fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+//!         ProviderDescriptor::new("english")?.with_aliases(&["en"])
 //!     }
 //!
-//!     fn aliases(&self) -> &'static [&'static str] {
-//!         &["en"]
-//!     }
-//!
-//!     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+//!     fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
 //!         Ok(Box::new(EnglishGreeter))
 //!     }
 //! }
 //!
-//! let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+//! let mut registry = ProviderRegistry::<GreeterSpec>::new();
 //! registry
 //!     .register(EnglishProvider)
 //!     .expect("provider names should be unique");
@@ -67,15 +71,23 @@
 //! ```
 
 mod provider_availability;
+mod provider_create_error;
+mod provider_descriptor;
 mod provider_failure;
+mod provider_name;
 mod provider_registry;
 mod provider_registry_error;
 mod provider_selection;
 mod service_provider;
+mod service_spec;
 
 pub use provider_availability::ProviderAvailability;
+pub use provider_create_error::ProviderCreateError;
+pub use provider_descriptor::ProviderDescriptor;
 pub use provider_failure::ProviderFailure;
+pub use provider_name::ProviderName;
 pub use provider_registry::ProviderRegistry;
 pub use provider_registry_error::ProviderRegistryError;
 pub use provider_selection::ProviderSelection;
 pub use service_provider::ServiceProvider;
+pub use service_spec::ServiceSpec;

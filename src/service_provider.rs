@@ -13,7 +13,10 @@ use std::fmt::Debug;
 
 use crate::{
     ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistryError,
+    ServiceSpec,
 };
 
 /// Factory contract for one service implementation.
@@ -33,9 +36,12 @@ use crate::{
 /// use std::fmt::Debug;
 ///
 /// use qubit_spi::{
+///     ProviderCreateError,
+///     ProviderDescriptor,
 ///     ProviderRegistry,
 ///     ProviderRegistryError,
 ///     ServiceProvider,
+///     ServiceSpec,
 /// };
 ///
 /// trait Encoder: Debug + Send + Sync {
@@ -54,24 +60,25 @@ use crate::{
 /// #[derive(Debug)]
 /// struct PlainEncoderProvider;
 ///
-/// impl ServiceProvider for PlainEncoderProvider {
+/// #[derive(Debug)]
+/// struct EncoderSpec;
+///
+/// impl ServiceSpec for EncoderSpec {
 ///     type Config = ();
-///     type Service = dyn Encoder;
+///     type Output = Box<dyn Encoder>;
+/// }
 ///
-///     fn id(&self) -> &'static str {
-///         "plain"
+/// impl ServiceProvider<EncoderSpec> for PlainEncoderProvider {
+///     fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+///         ProviderDescriptor::new("plain")?.with_aliases(&["identity"])
 ///     }
 ///
-///     fn aliases(&self) -> &'static [&'static str] {
-///         &["identity"]
-///     }
-///
-///     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+///     fn create(&self, _config: &()) -> Result<Box<dyn Encoder>, ProviderCreateError> {
 ///         Ok(Box::new(PlainEncoder))
 ///     }
 /// }
 ///
-/// let mut registry = ProviderRegistry::<dyn Encoder, ()>::new();
+/// let mut registry = ProviderRegistry::<EncoderSpec>::new();
 /// registry
 ///     .register(PlainEncoderProvider)
 ///     .expect("provider id and aliases should be unique");
@@ -89,10 +96,13 @@ use crate::{
 /// use std::fmt::Debug;
 ///
 /// use qubit_spi::{
+///     ProviderCreateError,
+///     ProviderDescriptor,
 ///     ProviderAvailability,
 ///     ProviderRegistry,
 ///     ProviderRegistryError,
 ///     ServiceProvider,
+///     ServiceSpec,
 /// };
 ///
 /// #[derive(Debug)]
@@ -116,19 +126,20 @@ use crate::{
 /// #[derive(Debug)]
 /// struct MemoryCacheProvider;
 ///
-/// impl ServiceProvider for MemoryCacheProvider {
+/// #[derive(Debug)]
+/// struct CacheSpec;
+///
+/// impl ServiceSpec for CacheSpec {
 ///     type Config = CacheConfig;
-///     type Service = dyn Cache;
+///     type Output = Box<dyn Cache>;
+/// }
 ///
-///     fn id(&self) -> &'static str {
-///         "memory"
+/// impl ServiceProvider<CacheSpec> for MemoryCacheProvider {
+///     fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+///         Ok(ProviderDescriptor::new("memory")?.with_priority(10))
 ///     }
 ///
-///     fn priority(&self) -> i32 {
-///         10
-///     }
-///
-///     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+///     fn create(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
 ///         Ok(Box::new(NamedCache("memory")))
 ///     }
 /// }
@@ -136,19 +147,12 @@ use crate::{
 /// #[derive(Debug)]
 /// struct RemoteCacheProvider;
 ///
-/// impl ServiceProvider for RemoteCacheProvider {
-///     type Config = CacheConfig;
-///     type Service = dyn Cache;
-///
-///     fn id(&self) -> &'static str {
-///         "remote"
+/// impl ServiceProvider<CacheSpec> for RemoteCacheProvider {
+///     fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+///         Ok(ProviderDescriptor::new("remote")?.with_priority(20))
 ///     }
 ///
-///     fn priority(&self) -> i32 {
-///         20
-///     }
-///
-///     fn availability(&self, config: &Self::Config) -> ProviderAvailability {
+///     fn availability(&self, config: &CacheConfig) -> ProviderAvailability {
 ///         if config.remote_enabled {
 ///             ProviderAvailability::Available
 ///         } else {
@@ -156,12 +160,12 @@ use crate::{
 ///         }
 ///     }
 ///
-///     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+///     fn create(&self, _config: &CacheConfig) -> Result<Box<dyn Cache>, ProviderCreateError> {
 ///         Ok(Box::new(NamedCache("remote")))
 ///     }
 /// }
 ///
-/// let mut registry = ProviderRegistry::<dyn Cache, CacheConfig>::new();
+/// let mut registry = ProviderRegistry::<CacheSpec>::new();
 /// registry
 ///     .register(MemoryCacheProvider)
 ///     .expect("memory provider should register");
@@ -176,34 +180,20 @@ use crate::{
 ///     .expect("memory cache should be selected as fallback");
 /// assert_eq!("memory", cache.backend());
 /// ```
-pub trait ServiceProvider: Debug + Send + Sync {
-    /// Configuration type passed to provider checks and factories.
-    type Config;
-
-    /// Service type created by this provider.
-    type Service: ?Sized + 'static;
-
-    /// Gets the canonical provider identifier.
+pub trait ServiceProvider<Spec>: Debug + Send + Sync
+where
+    Spec: ServiceSpec,
+{
+    /// Gets stable provider metadata.
     ///
     /// # Returns
-    /// Stable provider identifier. Identifiers should be lowercase ASCII.
-    fn id(&self) -> &'static str;
-
-    /// Gets additional names accepted for this provider.
+    /// Provider descriptor used by registries for name lookup and automatic
+    /// selection.
     ///
-    /// # Returns
-    /// Alias names. Registry matching is case-insensitive.
-    fn aliases(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    /// Gets provider priority used by automatic selection.
-    ///
-    /// # Returns
-    /// Priority value. Larger values are preferred.
-    fn priority(&self) -> i32 {
-        0
-    }
+    /// # Errors
+    /// Returns [`ProviderRegistryError`] when the provider id or aliases are
+    /// invalid.
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError>;
 
     /// Checks whether this provider can create a service.
     ///
@@ -212,7 +202,7 @@ pub trait ServiceProvider: Debug + Send + Sync {
     ///
     /// # Returns
     /// Provider availability in the current runtime environment.
-    fn availability(&self, _config: &Self::Config) -> ProviderAvailability {
+    fn availability(&self, _config: &Spec::Config) -> ProviderAvailability {
         ProviderAvailability::Available
     }
 
@@ -225,8 +215,8 @@ pub trait ServiceProvider: Debug + Send + Sync {
     /// Boxed service implementation.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError`] when initialization fails. Provider
-    /// implementations should use [`ProviderRegistryError::create_failed`] to
-    /// translate backend-specific errors into registry errors.
-    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError>;
+    /// Returns [`ProviderCreateError`] when initialization fails. Registries
+    /// translate this provider-level error into [`ProviderRegistryError`] with
+    /// provider-name context.
+    fn create(&self, config: &Spec::Config) -> Result<Spec::Output, ProviderCreateError>;
 }

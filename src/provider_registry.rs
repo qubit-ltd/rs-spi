@@ -9,35 +9,59 @@
  ******************************************************************************/
 //! Typed registry for pluggable service providers.
 
-use std::collections::HashSet;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::{
     ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderFailure,
+    ProviderName,
     ProviderRegistryError,
     ProviderSelection,
     ServiceProvider,
+    ServiceSpec,
 };
 
-/// Registry of providers for one service trait and configuration type.
+/// Registry of providers for one service specification.
 ///
-/// Provider ids and aliases are matched case-insensitively. Duplicate ids or
-/// aliases are rejected during registration, including duplicates within one
-/// provider's own id and aliases, so a selector resolves to at most one
-/// provider.
+/// Provider descriptors are captured during registration. Provider ids and
+/// aliases are normalized into [`ProviderName`] values and indexed
+/// case-insensitively, so lookup does not depend on provider metadata changing
+/// after registration.
 #[derive(Debug)]
-pub struct ProviderRegistry<S, C>
+pub struct ProviderRegistry<Spec>
 where
-    S: ?Sized + 'static,
+    Spec: ServiceSpec + 'static,
 {
     /// Registered providers in insertion order.
-    providers: Vec<Arc<dyn ServiceProvider<Config = C, Service = S>>>,
+    providers: Vec<ProviderEntry<Spec>>,
+    /// Normalized provider id and alias lookup table.
+    index: HashMap<ProviderName, usize>,
+    /// Keeps the service specification attached to this registry type.
+    marker: PhantomData<fn() -> Spec>,
 }
 
-impl<S, C> ProviderRegistry<S, C>
+/// Registered provider and its captured descriptor.
+#[derive(Debug)]
+struct ProviderEntry<Spec>
 where
-    S: ?Sized + 'static,
+    Spec: ServiceSpec + 'static,
+{
+    /// Captured provider descriptor.
+    descriptor: ProviderDescriptor,
+    /// Provider factory.
+    provider: Arc<dyn ServiceProvider<Spec>>,
+}
+
+impl<Spec> ProviderRegistry<Spec>
+where
+    Spec: ServiceSpec + 'static,
 {
     /// Creates an empty provider registry.
     ///
@@ -69,13 +93,11 @@ where
     /// - `provider`: Provider to register.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyProviderName`] when the provider id
-    /// or an alias is empty after trimming. Returns
-    /// [`ProviderRegistryError::DuplicateProviderName`] when the provider id or
-    /// an alias conflicts with an existing or same-provider name.
+    /// Returns [`ProviderRegistryError`] when the provider descriptor is invalid
+    /// or when its id or aliases conflict with an existing provider.
     pub fn register<P>(&mut self, provider: P) -> Result<(), ProviderRegistryError>
     where
-        P: ServiceProvider<Config = C, Service = S> + 'static,
+        P: ServiceProvider<Spec> + 'static,
     {
         self.register_arc(Arc::new(provider))
     }
@@ -86,23 +108,22 @@ where
     /// - `provider`: Shared provider to register.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyProviderName`] when the provider id
-    /// or an alias is empty after trimming. Returns
-    /// [`ProviderRegistryError::DuplicateProviderName`] when the provider id or
-    /// an alias conflicts with an existing or same-provider name.
+    /// Returns [`ProviderRegistryError`] when the provider descriptor is invalid
+    /// or when its id or aliases conflict with an existing provider.
     pub fn register_arc(
         &mut self,
-        provider: Arc<dyn ServiceProvider<Config = C, Service = S>>,
+        provider: Arc<dyn ServiceProvider<Spec>>,
     ) -> Result<(), ProviderRegistryError> {
-        let names = provider_names(provider.as_ref())?;
-        let mut local_names = HashSet::with_capacity(names.len());
-        for name in names {
-            let key = provider_name_key(&name);
-            if !local_names.insert(key) || self.find_provider(&name).is_some() {
-                return Err(ProviderRegistryError::DuplicateProviderName { name });
-            }
+        let descriptor = provider.descriptor()?;
+        self.validate_descriptor(&descriptor)?;
+        let provider_index = self.providers.len();
+        for name in descriptor.names() {
+            self.index.insert(name.clone(), provider_index);
         }
-        self.providers.push(provider);
+        self.providers.push(ProviderEntry {
+            descriptor,
+            provider,
+        });
         Ok(())
     }
 
@@ -110,32 +131,36 @@ where
     ///
     /// # Returns
     /// Registered provider ids.
-    pub fn provider_names(&self) -> Vec<&'static str> {
+    pub fn provider_names(&self) -> Vec<&str> {
         self.providers
             .iter()
-            .map(|provider| provider.id())
+            .map(|entry| entry.descriptor.id().as_str())
+            .collect()
+    }
+
+    /// Gets captured provider descriptors in registration order.
+    ///
+    /// # Returns
+    /// Provider descriptors captured during registration.
+    pub fn provider_descriptors(&self) -> Vec<&ProviderDescriptor> {
+        self.providers
+            .iter()
+            .map(|entry| &entry.descriptor)
             .collect()
     }
 
     /// Finds a provider by id or alias.
     ///
     /// # Parameters
-    /// - `name`: Provider id or alias. Matching is case-insensitive.
+    /// - `name`: Provider id or alias. Names are normalized before lookup.
     ///
     /// # Returns
-    /// Matching provider, or `None` when no provider matches.
-    pub fn find_provider(
-        &self,
-        name: &str,
-    ) -> Option<&dyn ServiceProvider<Config = C, Service = S>> {
-        let selector = name.trim();
-        if selector.is_empty() {
-            return None;
-        }
-        self.providers
-            .iter()
-            .map(Arc::as_ref)
-            .find(|provider| provider_matches(*provider, selector))
+    /// Matching provider, or `None` when no provider matches or `name` is
+    /// invalid.
+    pub fn find_provider(&self, name: &str) -> Option<&dyn ServiceProvider<Spec>> {
+        let name = ProviderName::new(name).ok()?;
+        self.find_entry_by_name(&name)
+            .map(|entry| entry.provider.as_ref())
     }
 
     /// Creates a service from one provider name.
@@ -145,30 +170,31 @@ where
     /// - `config`: Configuration passed to the provider.
     ///
     /// # Returns
-    /// Boxed service created by the selected provider.
+    /// Service value created by the selected provider.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is empty,
+    /// Returns [`ProviderRegistryError::EmptyProviderName`] or
+    /// [`ProviderRegistryError::InvalidProviderName`] when `name` is invalid,
     /// [`ProviderRegistryError::UnknownProvider`] when no provider matches,
     /// [`ProviderRegistryError::ProviderUnavailable`] when the provider is not
     /// available, or [`ProviderRegistryError::ProviderCreate`] when the provider
     /// factory fails.
-    pub fn create(&self, name: &str, config: &C) -> Result<Box<S>, ProviderRegistryError> {
-        let selector = normalize_provider_name(name)?;
-        let provider = self.find_provider(&selector).ok_or_else(|| {
-            ProviderRegistryError::UnknownProvider {
-                name: selector.clone(),
-            }
-        })?;
-        match provider.availability(config) {
-            ProviderAvailability::Available => provider
+    pub fn create(
+        &self,
+        name: &str,
+        config: &Spec::Config,
+    ) -> Result<Spec::Output, ProviderRegistryError> {
+        let name = ProviderName::new(name)?;
+        let entry = self
+            .find_entry_by_name(&name)
+            .ok_or_else(|| ProviderRegistryError::UnknownProvider { name: name.clone() })?;
+        match entry.provider.availability(config) {
+            ProviderAvailability::Available => entry
+                .provider
                 .create(config)
-                .map_err(|error| error.with_provider_name(&selector)),
+                .map_err(|error| registry_error_from_create_error(name, error)),
             ProviderAvailability::Unavailable { reason } => {
-                Err(ProviderRegistryError::ProviderUnavailable {
-                    name: selector,
-                    reason,
-                })
+                Err(ProviderRegistryError::ProviderUnavailable { name, reason })
             }
         }
     }
@@ -185,19 +211,22 @@ where
     /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
     /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when all
     /// automatic candidates fail.
-    pub fn create_auto(&self, config: &C) -> Result<Box<S>, ProviderRegistryError> {
-        self.create_default(&ProviderSelection::auto(), config)
+    pub fn create_auto(
+        &self,
+        config: &Spec::Config,
+    ) -> Result<Spec::Output, ProviderRegistryError> {
+        self.create_selected(&ProviderSelection::Auto, config)
     }
 
-    /// Creates a service from default and fallback provider selection.
+    /// Creates a service from explicit provider selection.
     ///
     /// Automatic selection tries all registered providers ordered by descending
-    /// priority and then by provider id. Explicit selection tries the configured
-    /// default provider followed by fallbacks in order. Selection stops at the
-    /// first provider that can create a service.
+    /// priority and then by provider id. Named selection tries the primary
+    /// provider followed by fallbacks in order. Selection stops at the first
+    /// provider that can create a service.
     ///
     /// # Parameters
-    /// - `selection`: Default and fallback provider selection.
+    /// - `selection`: Provider selection policy.
     /// - `config`: Configuration passed to candidate providers.
     ///
     /// # Returns
@@ -207,152 +236,166 @@ where
     /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
     /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
     /// candidate is unknown, unavailable, or fails during creation.
-    pub fn create_default(
+    pub fn create_selected(
         &self,
         selection: &ProviderSelection,
-        config: &C,
-    ) -> Result<Box<S>, ProviderRegistryError> {
+        config: &Spec::Config,
+    ) -> Result<Spec::Output, ProviderRegistryError> {
         if self.providers.is_empty() {
             return Err(ProviderRegistryError::EmptyRegistry);
         }
         let candidates = selection.candidates(self.auto_candidates());
         let mut failures = Vec::new();
         for candidate in candidates {
-            let Some(provider) = self.find_provider(&candidate) else {
-                failures.push(ProviderFailure::unknown(&candidate));
+            let Some(entry) = self.find_entry_by_name(&candidate) else {
+                failures.push(ProviderFailure::unknown_name(candidate));
                 continue;
             };
-            match provider.availability(config) {
-                ProviderAvailability::Available => match provider.create(config) {
+            match entry.provider.availability(config) {
+                ProviderAvailability::Available => match entry.provider.create(config) {
                     Ok(service) => return Ok(service),
-                    Err(error) => failures.push(error.into_provider_failure(&candidate)),
+                    Err(error) => failures.push(failure_from_create_error(candidate, error)),
                 },
                 ProviderAvailability::Unavailable { reason } => {
-                    failures.push(ProviderFailure::unavailable(&candidate, &reason));
+                    failures.push(ProviderFailure::unavailable_name(candidate, &reason));
                 }
             }
         }
         Err(ProviderRegistryError::NoAvailableProvider { failures })
     }
 
+    /// Validates that a descriptor does not conflict with existing entries.
+    ///
+    /// # Parameters
+    /// - `descriptor`: Descriptor to validate.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when the
+    /// descriptor contains duplicate names or conflicts with an existing name.
+    fn validate_descriptor(
+        &self,
+        descriptor: &ProviderDescriptor,
+    ) -> Result<(), ProviderRegistryError> {
+        let mut local_names = HashSet::with_capacity(descriptor.aliases().len() + 1);
+        for name in descriptor.names() {
+            if !local_names.insert(name.clone()) || self.index.contains_key(name) {
+                return Err(ProviderRegistryError::DuplicateProviderName { name: name.clone() });
+            }
+        }
+        Ok(())
+    }
+
+    /// Finds a provider entry by a normalized provider name.
+    ///
+    /// # Parameters
+    /// - `name`: Normalized provider id or alias.
+    ///
+    /// # Returns
+    /// Matching provider entry, or `None` when no provider matches.
+    fn find_entry_by_name(&self, name: &ProviderName) -> Option<&ProviderEntry<Spec>> {
+        self.index
+            .get(name)
+            .and_then(|provider_index| self.providers.get(*provider_index))
+    }
+
     /// Builds automatic provider candidates.
     ///
     /// # Returns
     /// Provider ids ordered by descending priority and then ascending id.
-    fn auto_candidates(&self) -> Vec<String> {
-        let mut providers: Vec<&dyn ServiceProvider<Config = C, Service = S>> =
-            self.providers.iter().map(Arc::as_ref).collect();
+    fn auto_candidates(&self) -> Vec<ProviderName> {
+        let mut providers: Vec<&ProviderEntry<Spec>> = self.providers.iter().collect();
         providers.sort_by(|left, right| {
             right
+                .descriptor
                 .priority()
-                .cmp(&left.priority())
-                .then_with(|| left.id().cmp(right.id()))
+                .cmp(&left.descriptor.priority())
+                .then_with(|| left.descriptor.id().cmp(right.descriptor.id()))
         });
         providers
             .into_iter()
-            .map(|provider| provider.id().to_owned())
+            .map(|entry| entry.descriptor.id().clone())
             .collect()
     }
 }
 
-impl<S, C> Clone for ProviderRegistry<S, C>
+impl<Spec> Clone for ProviderRegistry<Spec>
 where
-    S: ?Sized + 'static,
+    Spec: ServiceSpec + 'static,
 {
     /// Clones the provider list while sharing provider instances.
     fn clone(&self) -> Self {
         Self {
             providers: self.providers.clone(),
+            index: self.index.clone(),
+            marker: PhantomData,
         }
     }
 }
 
-impl<S, C> Default for ProviderRegistry<S, C>
+impl<Spec> Clone for ProviderEntry<Spec>
 where
-    S: ?Sized + 'static,
+    Spec: ServiceSpec + 'static,
+{
+    /// Clones one provider entry while sharing the provider instance.
+    fn clone(&self) -> Self {
+        Self {
+            descriptor: self.descriptor.clone(),
+            provider: self.provider.clone(),
+        }
+    }
+}
+
+impl<Spec> Default for ProviderRegistry<Spec>
+where
+    Spec: ServiceSpec + 'static,
 {
     /// Creates an empty provider registry.
     fn default() -> Self {
         Self {
             providers: Vec::new(),
+            index: HashMap::new(),
+            marker: PhantomData,
         }
     }
 }
 
-/// Gets all names exposed by a provider.
+/// Converts a provider creation error into a registry error.
 ///
 /// # Parameters
-/// - `provider`: Provider to inspect.
+/// - `name`: Provider name being created.
+/// - `error`: Provider creation error.
 ///
 /// # Returns
-/// Provider id followed by aliases.
-///
-/// # Errors
-/// Returns [`ProviderRegistryError::EmptyProviderName`] when any exposed name is
-/// empty after trimming.
-fn provider_names<S, C>(
-    provider: &dyn ServiceProvider<Config = C, Service = S>,
-) -> Result<Vec<String>, ProviderRegistryError>
-where
-    S: ?Sized + 'static,
-{
-    let mut names = Vec::with_capacity(provider.aliases().len() + 1);
-    names.push(normalize_provider_name(provider.id())?);
-    for alias in provider.aliases() {
-        names.push(normalize_provider_name(alias)?);
-    }
-    Ok(names)
-}
-
-/// Normalizes and validates one provider name.
-///
-/// # Parameters
-/// - `name`: Raw provider name.
-///
-/// # Returns
-/// Trimmed provider name.
-///
-/// # Errors
-/// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is empty
-/// after trimming.
-fn normalize_provider_name(name: &str) -> Result<String, ProviderRegistryError> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        Err(ProviderRegistryError::EmptyProviderName)
-    } else {
-        Ok(trimmed.to_owned())
+/// Registry error with provider-name context.
+fn registry_error_from_create_error(
+    name: ProviderName,
+    error: ProviderCreateError,
+) -> ProviderRegistryError {
+    match error {
+        ProviderCreateError::Unavailable { reason } => {
+            ProviderRegistryError::ProviderUnavailable { name, reason }
+        }
+        ProviderCreateError::Failed { reason } => {
+            ProviderRegistryError::ProviderCreate { name, reason }
+        }
     }
 }
 
-/// Builds a case-insensitive comparison key for a provider name.
+/// Converts a provider creation error into a candidate failure.
 ///
 /// # Parameters
-/// - `name`: Normalized provider name.
+/// - `name`: Candidate provider name.
+/// - `error`: Provider creation error.
 ///
 /// # Returns
-/// Lowercase provider-name key.
-fn provider_name_key(name: &str) -> String {
-    name.to_ascii_lowercase()
-}
-
-/// Tells whether a provider matches a requested selector.
-///
-/// # Parameters
-/// - `provider`: Provider to inspect.
-/// - `selector`: Requested provider id or alias.
-///
-/// # Returns
-/// `true` when the selector matches the provider id or any alias.
-fn provider_matches<S, C>(
-    provider: &dyn ServiceProvider<Config = C, Service = S>,
-    selector: &str,
-) -> bool
-where
-    S: ?Sized + 'static,
-{
-    provider.id().trim().eq_ignore_ascii_case(selector)
-        || provider
-            .aliases()
-            .iter()
-            .any(|alias| alias.trim().eq_ignore_ascii_case(selector))
+/// Candidate failure with provider-name context.
+fn failure_from_create_error(name: ProviderName, error: ProviderCreateError) -> ProviderFailure {
+    match error {
+        ProviderCreateError::Unavailable { reason } => {
+            ProviderFailure::unavailable_name(name, &reason)
+        }
+        ProviderCreateError::Failed { reason } => {
+            ProviderFailure::create_failed_name(name, &reason)
+        }
+    }
 }

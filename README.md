@@ -13,15 +13,13 @@ which extension crates are linked and when providers are registered.
 
 ## Features
 
-- Strongly typed provider registries for one service trait, config type, and
-  provider error type.
-- Stable provider ids and case-insensitive aliases.
+- One-parameter registries based on a `ServiceSpec` type.
+- Stable `ProviderName` validation and normalized provider descriptors.
 - Runtime availability checks for optional backends.
 - Priority-based automatic provider selection.
-- Explicit default plus fallback-chain selection.
+- Explicit named provider plus fallback-chain selection.
 - Shared provider registration through `Arc`.
-- Error details that preserve unknown, unavailable, and creation-failure
-  candidate states.
+- Separated provider creation errors and registry errors.
 
 ## Installation
 
@@ -38,9 +36,12 @@ qubit-spi = "0.1"
 use std::fmt::Debug;
 
 use qubit_spi::{
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistry,
     ProviderRegistryError,
     ServiceProvider,
+    ServiceSpec,
 };
 
 trait Greeter: Debug + Send + Sync {
@@ -57,26 +58,27 @@ impl Greeter for EnglishGreeter {
 }
 
 #[derive(Debug)]
+struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = ();
+    type Output = Box<dyn Greeter>;
+}
+
+#[derive(Debug)]
 struct EnglishProvider;
 
-impl ServiceProvider for EnglishProvider {
-    type Config = ();
-    type Service = dyn Greeter;
-
-    fn id(&self) -> &'static str {
-        "english"
+impl ServiceProvider<GreeterSpec> for EnglishProvider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        ProviderDescriptor::new("english")?.with_aliases(&["en"])
     }
 
-    fn aliases(&self) -> &'static [&'static str] {
-        &["en"]
-    }
-
-    fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(EnglishGreeter))
     }
 }
 
-let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+let mut registry = ProviderRegistry::<GreeterSpec>::new();
 registry
     .register(EnglishProvider)
     .expect("provider names should be unique");
@@ -89,38 +91,38 @@ assert_eq!("hello", greeter.greet());
 
 ## Core Concepts
 
+### ServiceSpec
+
+`ServiceSpec` binds the configuration type and provider output type for one
+service family. This keeps `ProviderRegistry<Spec>` readable while still
+allowing each crate to choose whether providers return `Box<dyn Trait>`,
+`Arc<dyn Trait>`, concrete values, or other owned service handles.
+
 ### ServiceProvider
 
-`ServiceProvider` is the factory contract implemented by each backend. A
+`ServiceProvider<Spec>` is the factory contract implemented by each backend. A
 provider supplies:
 
 | Method | Purpose |
 | --- | --- |
-| `id()` | Canonical stable provider id |
-| `aliases()` | Additional names accepted by the registry |
-| `priority()` | Higher value wins during automatic selection |
+| `descriptor()` | Stable provider id, aliases, and priority |
 | `availability(config)` | Runtime check for optional dependencies |
-| `create(config)` | Creates a boxed service implementation |
-
-The associated `Service` type can be a trait object such as `dyn Greeter`.
+| `create(config)` | Creates the `Spec::Output` service value |
 
 ### ProviderRegistry
 
-`ProviderRegistry<S, C>` stores providers for one service type `S` and one
-configuration type `C`.
+`ProviderRegistry<Spec>` stores providers for one service specification.
 
-Provider ids and aliases are matched case-insensitively. Duplicate names are
-rejected during registration, including conflicts among a provider's own id and
-aliases.
+Provider descriptors are captured at registration time. Provider ids and aliases
+are normalized into `ProviderName` values and indexed, so lookup is stable even
+if a provider instance has mutable internal state.
 
 ### ProviderSelection
 
-`ProviderSelection` describes how `create_default()` chooses candidates:
+`ProviderSelection` is an enum:
 
-- default name is empty or `auto`: try registered providers by descending
-  priority, then by provider id.
-- default name is explicit: try the default first, then configured fallbacks in
-  order.
+- `Auto`: try registered providers by descending priority, then provider id.
+- `Named`: try a primary provider, then explicit fallbacks in order.
 
 Selection stops at the first provider that is available and successfully creates
 a service.
@@ -131,10 +133,13 @@ a service.
 use std::fmt::Debug;
 
 use qubit_spi::{
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistry,
     ProviderRegistryError,
     ProviderSelection,
     ServiceProvider,
+    ServiceSpec,
 };
 
 trait Greeter: Debug + Send + Sync {
@@ -151,26 +156,27 @@ impl Greeter for GreeterImpl {
 }
 
 #[derive(Debug)]
+struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = ();
+    type Output = Box<dyn Greeter>;
+}
+
+#[derive(Debug)]
 struct Provider(&'static str, i32);
 
-impl ServiceProvider for Provider {
-    type Config = ();
-    type Service = dyn Greeter;
-
-    fn id(&self) -> &'static str {
-        self.0
+impl ServiceProvider<GreeterSpec> for Provider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        Ok(ProviderDescriptor::new(self.0)?.with_priority(self.1))
     }
 
-    fn priority(&self) -> i32 {
-        self.1
-    }
-
-    fn create(&self, _config: &()) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
         Ok(Box::new(GreeterImpl(self.0)))
     }
 }
 
-let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+let mut registry = ProviderRegistry::<GreeterSpec>::new();
 registry
     .register(Provider("repository", 0))
     .expect("unique provider");
@@ -178,9 +184,10 @@ registry
     .register(Provider("native", 10))
     .expect("unique provider");
 
-let selection = ProviderSelection::from_names("native", &["repository"]);
+let selection = ProviderSelection::from_names("native", &["repository"])
+    .expect("selection names should be valid");
 let greeter = registry
-    .create_default(&selection, &())
+    .create_selected(&selection, &())
     .expect("one provider should create a greeter");
 
 assert_eq!("native", greeter.greet());
@@ -188,17 +195,24 @@ assert_eq!("native", greeter.greet());
 
 ## Error Model
 
-`ProviderRegistryError` separates registration, lookup, and selection failures:
+Provider errors and registry errors are separate:
+
+- `ProviderCreateError` is returned by a provider factory.
+- `ProviderRegistryError` is returned by registration, lookup, and selection.
+- `ProviderFailure` records each failed fallback candidate.
+
+`ProviderRegistryError` variants:
 
 | Variant | Meaning |
 | --- | --- |
 | `EmptyProviderName` | A provider id, alias, or selector was empty |
+| `InvalidProviderName` | A provider id, alias, or selector used unsupported characters |
 | `DuplicateProviderName` | A provider id or alias conflicts with another name |
 | `UnknownProvider` | No provider matched the requested selector |
 | `ProviderUnavailable` | The selected provider reported unavailable |
 | `ProviderCreate` | The selected provider failed during creation |
 | `NoAvailableProvider` | Every candidate in a fallback chain failed |
-| `EmptyRegistry` | Automatic/default creation was requested from an empty registry |
+| `EmptyRegistry` | Automatic/selected creation was requested from an empty registry |
 
 `NoAvailableProvider` keeps ordered `ProviderFailure` values so callers can
 explain the whole fallback chain.
@@ -217,18 +231,22 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 
 | API | Purpose |
 | --- | --- |
+| `ServiceSpec` | Binds provider configuration and output types |
 | `ServiceProvider` | Provider trait implemented by each backend |
+| `ProviderDescriptor` | Captured provider id, aliases, and priority |
+| `ProviderName` | Validated and normalized provider name |
 | `ProviderRegistry::new()` | Creates an empty registry |
 | `ProviderRegistry::register(provider)` | Registers an owned provider |
 | `ProviderRegistry::register_arc(provider)` | Registers a shared provider |
 | `ProviderRegistry::find_provider(name)` | Resolves a provider by id or alias |
 | `ProviderRegistry::create(name, config)` | Creates one service by provider name |
 | `ProviderRegistry::create_auto(config)` | Creates a service by automatic priority |
-| `ProviderRegistry::create_default(selection, config)` | Creates from default and fallbacks |
-| `ProviderSelection` | Default and fallback candidate configuration |
+| `ProviderRegistry::create_selected(selection, config)` | Creates from selection |
+| `ProviderSelection` | Automatic or named fallback candidate selection |
 | `ProviderAvailability` | Provider availability state |
+| `ProviderCreateError` | Provider-level creation error |
 | `ProviderFailure` | One failed candidate in a fallback chain |
-| `ProviderRegistryError` | Registry error type |
+| `ProviderRegistryError` | Registry-level error type |
 
 ## Rust Version
 

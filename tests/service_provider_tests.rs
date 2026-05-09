@@ -2,13 +2,16 @@ mod support;
 
 use qubit_spi::{
     ProviderAvailability,
+    ProviderCreateError,
+    ProviderDescriptor,
     ProviderRegistryError,
     ServiceProvider,
+    ServiceSpec,
 };
 
 use crate::support::test_services::{
     GreetingProvider,
-    GreetingService,
+    GreetingSpec,
     TestConfig,
 };
 
@@ -16,28 +19,31 @@ use crate::support::test_services::{
 #[derive(Debug)]
 struct MinimalProvider;
 
-impl ServiceProvider for MinimalProvider {
-    type Config = TestConfig;
-    type Service = dyn GreetingService;
-
-    fn id(&self) -> &'static str {
-        "minimal"
+impl ServiceProvider<GreetingSpec> for MinimalProvider {
+    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
+        ProviderDescriptor::new("minimal")
     }
 
-    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
+    fn create(
+        &self,
+        config: &TestConfig,
+    ) -> Result<<GreetingSpec as ServiceSpec>::Output, ProviderCreateError> {
         GreetingProvider::new("delegate", "hello").create(config)
     }
 }
 
-/// Test default provider methods supply common metadata defaults.
+/// Test default provider methods supply common availability defaults.
 #[test]
-fn test_provider_default_methods_return_empty_aliases_zero_priority_and_available() {
+fn test_provider_default_methods_return_available() {
     let provider = MinimalProvider;
     let availability = provider.availability(&TestConfig::new(""));
+    let descriptor = provider
+        .descriptor()
+        .expect("minimal provider descriptor should be valid");
 
-    assert_eq!("minimal", provider.id());
-    assert_eq!(&[] as &[&str], provider.aliases());
-    assert_eq!(0, provider.priority());
+    assert_eq!("minimal", descriptor.id().as_str());
+    assert!(descriptor.aliases().is_empty());
+    assert_eq!(0, descriptor.priority());
     assert_eq!(ProviderAvailability::Available, availability);
 }
 

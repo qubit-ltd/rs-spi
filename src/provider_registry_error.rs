@@ -9,170 +9,80 @@
  ******************************************************************************/
 //! Error type for provider registration and selection.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
+use thiserror::Error;
+
+use crate::{
+    ProviderFailure,
+    ProviderName,
 };
 
-use crate::ProviderFailure;
-
 /// Error returned by provider registries.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum ProviderRegistryError {
     /// A provider id, alias, or selector is empty after trimming.
+    #[error("provider name must not be empty")]
     EmptyProviderName,
+    /// A provider name contains unsupported characters.
+    #[error("invalid provider name '{name}': {reason}")]
+    InvalidProviderName {
+        /// Invalid provider name after trimming.
+        name: String,
+        /// Human-readable validation failure reason.
+        reason: String,
+    },
     /// A provider id or alias conflicts with an already registered name.
+    #[error("duplicate provider name: {name}")]
     DuplicateProviderName {
         /// Conflicting provider name.
-        name: String,
+        name: ProviderName,
     },
     /// No registered provider matches the requested selector.
+    #[error("unknown provider: {name}")]
     UnknownProvider {
         /// Requested provider selector.
-        name: String,
+        name: ProviderName,
     },
     /// The selected provider is not available in the current environment.
+    #[error("provider '{name}' is unavailable: {reason}")]
     ProviderUnavailable {
         /// Requested provider selector.
-        name: String,
+        name: ProviderName,
         /// Human-readable unavailability reason.
         reason: String,
     },
     /// The selected provider failed while creating a service.
+    #[error("provider '{name}' failed to create service: {reason}")]
     ProviderCreate {
         /// Requested provider selector.
-        name: String,
+        name: ProviderName,
         /// Human-readable creation failure reason.
         reason: String,
     },
     /// All configured provider candidates failed.
+    #[error(
+        "no available provider; candidate failures: {}",
+        format_provider_failures(.failures)
+    )]
     NoAvailableProvider {
         /// Candidate failures in the order they were tried.
         failures: Vec<ProviderFailure>,
     },
     /// No providers are registered.
+    #[error("provider registry is empty")]
     EmptyRegistry,
 }
 
-impl ProviderRegistryError {
-    /// Creates a provider-creation failure without a provider name.
-    ///
-    /// Provider implementations can return this error when they do not know the
-    /// selector used by the registry. The registry will attach the candidate
-    /// provider name before returning the error to callers.
-    ///
-    /// # Parameters
-    /// - `reason`: Human-readable creation failure reason.
-    ///
-    /// # Returns
-    /// Provider creation failure.
-    pub fn create_failed(reason: &str) -> Self {
-        Self::ProviderCreate {
-            name: String::new(),
-            reason: reason.to_owned(),
-        }
-    }
-
-    /// Creates a provider-creation failure for a named provider.
-    ///
-    /// # Parameters
-    /// - `name`: Provider selector or id.
-    /// - `reason`: Human-readable creation failure reason.
-    ///
-    /// # Returns
-    /// Provider creation failure.
-    pub fn provider_create(name: &str, reason: &str) -> Self {
-        Self::ProviderCreate {
-            name: name.to_owned(),
-            reason: reason.to_owned(),
-        }
-    }
-
-    /// Attaches a provider name to name-bearing errors that do not already have one.
-    ///
-    /// # Parameters
-    /// - `name`: Provider candidate name being tried by the registry.
-    ///
-    /// # Returns
-    /// Error with provider context preserved or attached.
-    pub(crate) fn with_provider_name(self, name: &str) -> Self {
-        match self {
-            Self::UnknownProvider { name: current } if current.trim().is_empty() => {
-                Self::UnknownProvider {
-                    name: name.to_owned(),
-                }
-            }
-            Self::ProviderUnavailable {
-                name: current,
-                reason,
-            } if current.trim().is_empty() => Self::ProviderUnavailable {
-                name: name.to_owned(),
-                reason,
-            },
-            Self::ProviderCreate {
-                name: current,
-                reason,
-            } if current.trim().is_empty() => Self::ProviderCreate {
-                name: name.to_owned(),
-                reason,
-            },
-            error => error,
-        }
-    }
-
-    /// Converts a provider error into a candidate failure.
-    ///
-    /// # Parameters
-    /// - `name`: Provider candidate name being tried by the registry.
-    ///
-    /// # Returns
-    /// Candidate failure preserving the most useful provider error context.
-    pub(crate) fn into_provider_failure(self, name: &str) -> ProviderFailure {
-        match self.with_provider_name(name) {
-            Self::UnknownProvider { name } => ProviderFailure::unknown(&name),
-            Self::ProviderUnavailable { name, reason } => {
-                ProviderFailure::unavailable(&name, &reason)
-            }
-            Self::ProviderCreate { name, reason } => ProviderFailure::create_failed(&name, &reason),
-            error => ProviderFailure::create_failed(name, &error.to_string()),
-        }
-    }
+/// Formats ordered fallback candidate failures.
+///
+/// # Parameters
+/// - `failures`: Candidate failures in the order they were tried.
+///
+/// # Returns
+/// Candidate failure messages joined by `; `.
+fn format_provider_failures(failures: &[ProviderFailure]) -> String {
+    failures
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
 }
-
-impl Display for ProviderRegistryError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        match self {
-            Self::EmptyProviderName => formatter.write_str("provider name must not be empty"),
-            Self::DuplicateProviderName { name } => {
-                write!(formatter, "duplicate provider name: {name}")
-            }
-            Self::UnknownProvider { name } => {
-                write!(formatter, "unknown provider: {name}")
-            }
-            Self::ProviderUnavailable { name, reason } => {
-                write!(formatter, "provider '{name}' is unavailable: {reason}")
-            }
-            Self::ProviderCreate { name, reason } if name.is_empty() => {
-                write!(formatter, "provider failed to create service: {reason}")
-            }
-            Self::ProviderCreate { name, reason } => {
-                write!(
-                    formatter,
-                    "provider '{name}' failed to create service: {reason}"
-                )
-            }
-            Self::NoAvailableProvider { failures } => {
-                let messages: Vec<String> = failures.iter().map(ToString::to_string).collect();
-                write!(
-                    formatter,
-                    "no available provider; candidate failures: {}",
-                    messages.join("; "),
-                )
-            }
-            Self::EmptyRegistry => formatter.write_str("provider registry is empty"),
-        }
-    }
-}
-
-impl std::error::Error for ProviderRegistryError {}
