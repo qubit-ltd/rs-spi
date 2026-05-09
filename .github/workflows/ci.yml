@@ -2,10 +2,8 @@ name: Rust CI
 
 on:
   push:
-  pull_request:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
+    branches:
+      - main
 
 permissions:
   contents: read
