@@ -1,6 +1,6 @@
 # Qubit SPI
 
-[![CircleCI](https://circleci.com/gh/qubit-ltd/rs-spi.svg?style=shield)](https://circleci.com/gh/qubit-ltd/rs-spi)
+[![Rust CI](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-spi/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-spi?branch=main)
 [![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
 [![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
