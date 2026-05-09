@@ -1,0 +1,29 @@
+[package]
+name = "qubit-spi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+authors = ["Haixing Hu <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/qubit-ltd/rs-spi"
+description = "Typed service provider registry infrastructure for Rust"
+homepage = "https://github.com/qubit-ltd/rs-spi"
+documentation = "https://docs.rs/qubit-spi"
+readme = "README.md"
+keywords = ["spi", "provider", "registry", "service", "qubit"]
+categories = ["rust-patterns"]
+exclude = [
+    "coverage.sh",
+    "COVERAGE.md",
+    "COVERAGE.zh_CN.md",
+    ".circleci/*",
+    "ci-check.sh",
+    ".llvm-cov.toml",
+    ".cargo-audit.toml.example",
+]
+
+[lib]
+name = "qubit_spi"
+doctest = true
+
+[dependencies]
