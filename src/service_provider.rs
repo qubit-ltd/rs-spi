@@ -23,7 +23,7 @@ use crate::{
 ///
 /// A provider gives a registry stable names, optional aliases, availability
 /// checks, a priority used by automatic selection, and a factory method for
-/// creating one service instance. The associated `Service` type may be a trait
+/// creating one service instance. The associated service type may be a trait
 /// object, such as `dyn MyService`, which allows a registry to select an
 /// implementation at runtime while keeping the registry itself strongly typed.
 ///
@@ -65,7 +65,7 @@ use crate::{
 ///
 /// impl ServiceSpec for EncoderSpec {
 ///     type Config = ();
-///     type Output = Box<dyn Encoder>;
+///     type Service = Box<dyn Encoder>;
 /// }
 ///
 /// impl ServiceProvider<EncoderSpec> for PlainEncoderProvider {
@@ -131,7 +131,7 @@ use crate::{
 ///
 /// impl ServiceSpec for CacheSpec {
 ///     type Config = CacheConfig;
-///     type Output = Box<dyn Cache>;
+///     type Service = Box<dyn Cache>;
 /// }
 ///
 /// impl ServiceProvider<CacheSpec> for MemoryCacheProvider {
@@ -202,6 +202,7 @@ where
     ///
     /// # Returns
     /// Provider availability in the current runtime environment.
+    #[inline]
     fn availability(&self, _config: &Spec::Config) -> ProviderAvailability {
         ProviderAvailability::Available
     }
@@ -212,11 +213,11 @@ where
     /// - `config`: Service configuration used to initialize the implementation.
     ///
     /// # Returns
-    /// Boxed service implementation.
+    /// Service implementation.
     ///
     /// # Errors
     /// Returns [`ProviderCreateError`] when initialization fails. Registries
     /// translate this provider-level error into [`ProviderRegistryError`] with
     /// provider-name context.
-    fn create(&self, config: &Spec::Config) -> Result<Spec::Output, ProviderCreateError>;
+    fn create(&self, config: &Spec::Config) -> Result<Spec::Service, ProviderCreateError>;
 }

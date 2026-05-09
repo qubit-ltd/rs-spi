@@ -27,7 +27,7 @@ impl ServiceProvider<GreetingSpec> for MinimalProvider {
     fn create(
         &self,
         config: &TestConfig,
-    ) -> Result<<GreetingSpec as ServiceSpec>::Output, ProviderCreateError> {
+    ) -> Result<<GreetingSpec as ServiceSpec>::Service, ProviderCreateError> {
         GreetingProvider::new("delegate", "hello").create(config)
     }
 }

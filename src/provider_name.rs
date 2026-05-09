@@ -39,6 +39,7 @@ impl ProviderName {
     /// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is empty
     /// after trimming. Returns [`ProviderRegistryError::InvalidProviderName`]
     /// when `name` is non-ASCII or contains unsupported characters.
+    #[inline]
     pub fn new(name: &str) -> Result<Self, ProviderRegistryError> {
         let trimmed = name.trim();
         if trimmed.is_empty() {
@@ -63,18 +64,21 @@ impl ProviderName {
     ///
     /// # Returns
     /// Normalized provider name string.
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl AsRef<str> for ProviderName {
+    #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl Display for ProviderName {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
     }
@@ -83,6 +87,7 @@ impl Display for ProviderName {
 impl FromStr for ProviderName {
     type Err = ProviderRegistryError;
 
+    #[inline]
     fn from_str(name: &str) -> Result<Self, Self::Err> {
         Self::new(name)
     }

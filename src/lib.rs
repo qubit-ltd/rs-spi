@@ -46,7 +46,7 @@
 //!
 //! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
-//!     type Output = Box<dyn Greeter>;
+//!     type Service = Box<dyn Greeter>;
 //! }
 //!
 //! impl ServiceProvider<GreeterSpec> for EnglishProvider {

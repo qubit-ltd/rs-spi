@@ -1,6 +1,10 @@
 mod support;
 
+use std::error::Error;
+use std::io;
+
 use qubit_spi::{
+    ProviderCreateError,
     ProviderFailure,
     ProviderRegistryError,
 };
@@ -12,6 +16,7 @@ fn test_unknown_provider_failure_display_and_name() {
 
     assert_eq!("missing", failure.name());
     assert_eq!("unknown provider: missing", failure.to_string());
+    assert!(Error::source(&failure).is_none());
 }
 
 /// Test unavailable provider failures include the reason.
@@ -25,6 +30,12 @@ fn test_unavailable_provider_failure_display_and_name() {
         "provider 'native' is unavailable: not installed",
         failure.to_string(),
     );
+    assert_eq!(
+        "provider is unavailable: not installed",
+        Error::source(&failure)
+            .expect("source should exist")
+            .to_string(),
+    );
 }
 
 /// Test creation failures keep the underlying provider error.
@@ -37,6 +48,39 @@ fn test_create_failed_provider_failure_display_and_name() {
     assert_eq!(
         "provider 'native' failed to create service: boom",
         failure.to_string(),
+    );
+    assert_eq!(
+        "provider failed to create service: boom",
+        Error::source(&failure)
+            .expect("source should exist")
+            .to_string(),
+    );
+}
+
+/// Test candidate failures can preserve nested provider source errors.
+#[test]
+fn test_create_failed_provider_failure_preserves_nested_source() {
+    let failure = ProviderFailure::create_failed_from_error(
+        "native",
+        ProviderCreateError::failed_with_source("boom", io::Error::other("root cause")),
+    )
+    .expect("valid provider name");
+    let provider_error = Error::source(&failure).expect("provider error should exist");
+
+    assert_eq!(
+        "provider 'native' failed to create service: boom",
+        failure.to_string()
+    );
+    assert_eq!(
+        "provider failed to create service: boom",
+        provider_error.to_string()
+    );
+    assert_eq!(
+        "root cause",
+        provider_error
+            .source()
+            .expect("nested source should exist")
+            .to_string(),
     );
 }
 

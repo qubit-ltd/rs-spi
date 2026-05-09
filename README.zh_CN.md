@@ -19,6 +19,8 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 - 显式 named provider 加 fallback chain 的选择机制。
 - 通过 `Arc` 注册共享 provider 实例。
 - provider 创建错误与 registry 错误分层。
+- provider 创建错误可以保留下层 source error。
+- 通过 `log` 门面提供低噪声诊断日志。
 
 ## 安装
 
@@ -61,7 +63,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Output = Box<dyn Greeter>;
+    type Service = Box<dyn Greeter>;
 }
 
 #[derive(Debug)]
@@ -104,7 +106,7 @@ assert_eq!("hello", greeter.greet());
 | --- | --- |
 | `descriptor()` | 稳定 provider id、alias 和 priority |
 | `availability(config)` | 检查可选依赖在当前环境是否可用 |
-| `create(config)` | 创建 `Spec::Output` service 值 |
+| `create(config)` | 创建 `Spec::Service` service 值 |
 
 ### ProviderRegistry
 
@@ -156,7 +158,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Output = Box<dyn Greeter>;
+    type Service = Box<dyn Greeter>;
 }
 
 #[derive(Debug)]
@@ -213,6 +215,23 @@ provider 错误和 registry 错误分层：
 `NoAvailableProvider` 会保留有序的 `ProviderFailure`，调用方可以解释完整 fallback
 链路。
 
+`ProviderCreateError::failed_with_source()` 和
+`ProviderCreateError::unavailable_with_source()` 会保留下层错误原因，并通过直接
+registry 创建和 fallback failure 报告继续向外暴露。
+
+## 诊断日志
+
+`qubit-spi` 通过 `log` 门面输出低噪声诊断日志。应用程序仍然负责安装自己选择的
+logger 实现。本 crate 使用 `debug` 记录成功注册和选择结果，使用 `trace` 记录名称
+解析、候选顺序和 fallback 失败。日志不会记录 service 配置值或 service 实例。
+
+## 生命周期模型
+
+`ProviderRegistry` 会把 provider 存储为共享 trait object。因此，已注册的
+provider 和 service specification 都要求是 `'static`。这是有意设计：本 crate
+面向由应用 crate 与扩展 crate 组装出来的长期存活 provider registry，而不是借用
+栈上临时 provider 状态的短生命周期 registry。
+
 ## 与 Java ServiceLoader 的关系
 
 Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意保持显式发现：
@@ -226,14 +245,17 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 
 | API | 用途 |
 | --- | --- |
-| `ServiceSpec` | 绑定 provider 配置类型和输出类型 |
+| `ServiceSpec` | 绑定 provider 配置类型和 service 类型 |
 | `ServiceProvider` | 每个后端实现的 provider trait |
 | `ProviderDescriptor` | 捕获 provider id、alias 和 priority |
 | `ProviderName` | 已校验并规范化的 provider 名称 |
 | `ProviderRegistry::new()` | 创建空 registry |
 | `ProviderRegistry::register(provider)` | 注册 owned provider |
-| `ProviderRegistry::register_arc(provider)` | 注册共享 provider |
-| `ProviderRegistry::find_provider(name)` | 按 id 或 alias 解析 provider |
+| `ProviderRegistry::register_shared(provider)` | 注册共享 provider |
+| `ProviderRegistry::resolve_provider(name)` | 解析 provider，失败时返回精确错误 |
+| `ProviderRegistry::find_provider(name)` | 返回 `Option` 的 provider 查询便利方法 |
+| `ProviderRegistry::iter_provider_names()` | 无分配遍历 provider id |
+| `ProviderRegistry::iter_provider_descriptors()` | 无分配遍历 descriptor |
 | `ProviderRegistry::create(name, config)` | 按 provider 名称创建 service |
 | `ProviderRegistry::create_auto(config)` | 按自动优先级创建 service |
 | `ProviderRegistry::create_selected(selection, config)` | 按 selection 创建 |

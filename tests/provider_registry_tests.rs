@@ -1,21 +1,101 @@
 mod support;
 
+use std::error::Error;
+use std::io;
 use std::sync::Arc;
+use std::sync::Once;
 
 use qubit_spi::{
     ProviderCreateError,
-    ProviderFailure,
     ProviderRegistryError,
     ProviderSelection,
-    ServiceProvider,
 };
 
 use crate::support::test_services::{
     GreetingProvider,
     GreetingRegistry,
-    GreetingSpec,
     TestConfig,
 };
+
+/// No-op logger used to exercise diagnostic logging paths.
+struct TestLogger;
+
+impl log::Log for TestLogger {
+    /// Tells the log facade that all records are accepted by this test logger.
+    fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
+        true
+    }
+
+    /// Drops one log record.
+    fn log(&self, _record: &log::Record<'_>) {}
+
+    /// Flushes the no-op logger.
+    fn flush(&self) {}
+}
+
+/// Shared no-op logger instance.
+static TEST_LOGGER: TestLogger = TestLogger;
+
+/// Ensures the global test logger is installed only once.
+static TEST_LOGGER_INIT: Once = Once::new();
+
+/// Installs a trace-level no-op logger for diagnostic-path coverage.
+fn init_test_logger() {
+    TEST_LOGGER_INIT.call_once(|| {
+        let _ignored = log::set_logger(&TEST_LOGGER);
+        log::set_max_level(log::LevelFilter::Trace);
+    });
+}
+
+/// Exercises registry paths that emit diagnostic log records.
+fn exercise_registry_diagnostics() {
+    let empty_registry = GreetingRegistry::new();
+    assert!(matches!(
+        empty_registry
+            .create_auto(&TestConfig::new(""))
+            .expect_err("empty registry should fail"),
+        ProviderRegistryError::EmptyRegistry
+    ));
+
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("low", "low").with_priority(1))
+        .expect("low provider should register");
+    registry
+        .register(GreetingProvider::new("unavailable", "hello").unavailable("disabled"))
+        .expect("unavailable provider should register");
+    registry
+        .register(GreetingProvider::new("failing", "hello").failing("boom"))
+        .expect("failing provider should register");
+
+    assert!(registry.resolve_provider("low").is_ok());
+    assert!(registry.resolve_provider("missing").is_err());
+    assert!(registry.resolve_provider("bad provider").is_err());
+    assert!(registry.create("low", &TestConfig::new("")).is_ok());
+    assert!(
+        registry
+            .create("unavailable", &TestConfig::new(""))
+            .is_err()
+    );
+    assert!(registry.create("failing", &TestConfig::new("")).is_err());
+    assert!(registry.create_auto(&TestConfig::new("")).is_ok());
+
+    let failing_selection = ProviderSelection::from_names("missing", &["unavailable", "failing"])
+        .expect("selection names should be valid");
+    assert!(
+        registry
+            .create_selected(&failing_selection, &TestConfig::new(""))
+            .is_err()
+    );
+
+    let fallback_selection = ProviderSelection::from_names("unavailable", &["low"])
+        .expect("selection names should be valid");
+    assert!(
+        registry
+            .create_selected(&fallback_selection, &TestConfig::new(""))
+            .is_ok()
+    );
+}
 
 /// Test new registries start empty.
 #[test]
@@ -25,6 +105,14 @@ fn test_new_registry_is_empty() {
     assert!(registry.is_empty());
     assert_eq!(0, registry.len());
     assert!(registry.provider_names().is_empty());
+}
+
+/// Test diagnostic logging paths do not change registry behavior.
+#[test]
+fn test_diagnostic_logging_paths_do_not_change_registry_behavior() {
+    exercise_registry_diagnostics();
+    init_test_logger();
+    exercise_registry_diagnostics();
 }
 
 /// Test registration exposes providers by id and alias case-insensitively.
@@ -43,8 +131,15 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
         .create(" static-greeter ", &config)
         .expect("provider alias should resolve");
     let descriptors = registry.provider_descriptors();
+    let iter_names: Vec<_> = registry.iter_provider_names().collect();
+    let iter_descriptor_ids: Vec<_> = registry
+        .iter_provider_descriptors()
+        .map(|descriptor| descriptor.id().as_str())
+        .collect();
 
     assert_eq!(vec!["static"], registry.provider_names());
+    assert_eq!(vec!["static"], iter_names);
+    assert_eq!(vec!["static"], iter_descriptor_ids);
     assert_eq!("static", descriptors[0].id().as_str());
     assert_eq!(vec!["static-greeter"], descriptors[0].aliases_as_str());
     assert!(registry.find_provider("static-greeter").is_some());
@@ -52,15 +147,51 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
     assert_eq!("say hello", by_alias.greet());
 }
 
+/// Test resolving providers reports invalid and unknown names precisely.
+#[test]
+fn test_resolve_provider_reports_name_errors() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("static", "hello").with_aliases(&["static-greeter"]))
+        .expect("provider should register");
+
+    let provider = registry
+        .resolve_provider(" STATIC-GREETER ")
+        .expect("provider alias should resolve");
+    let invalid_error = registry
+        .resolve_provider("bad provider")
+        .expect_err("invalid provider names should fail");
+    let missing_error = registry
+        .resolve_provider("missing")
+        .expect_err("unknown providers should fail");
+
+    assert_eq!(
+        "static",
+        provider
+            .descriptor()
+            .expect("descriptor should remain valid")
+            .id()
+            .as_str(),
+    );
+    assert!(matches!(
+        invalid_error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. }
+            if name == "bad provider"
+    ));
+    assert!(matches!(
+        missing_error,
+        ProviderRegistryError::UnknownProvider { ref name } if name.as_str() == "missing"
+    ));
+}
+
 /// Test shared provider registration keeps the same provider instance.
 #[test]
-fn test_register_arc_uses_shared_provider_instance() {
+fn test_register_shared_uses_shared_provider_instance() {
     let provider = Arc::new(GreetingProvider::new("shared", "hello"));
-    let provider_for_registry: Arc<dyn ServiceProvider<GreetingSpec>> = provider.clone();
     let mut registry = GreetingRegistry::new();
 
     registry
-        .register_arc(provider_for_registry)
+        .register_shared(provider.clone())
         .expect("shared provider should register");
     let service = registry
         .create("shared", &TestConfig::new(""))
@@ -141,8 +272,8 @@ fn test_create_reports_unavailable_provider() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::ProviderUnavailable { ref name, ref reason }
-            if name.as_str() == "native" && reason == "not installed"
+        ProviderRegistryError::ProviderUnavailable { ref name, ref source }
+            if name.as_str() == "native" && source.reason() == "not installed"
     ));
 }
 
@@ -160,9 +291,35 @@ fn test_create_wraps_provider_creation_error() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::ProviderCreate { ref name, ref reason }
-            if name.as_str() == "native" && reason == "boom"
+        ProviderRegistryError::ProviderCreate { ref name, ref source }
+            if name.as_str() == "native" && source.reason() == "boom"
     ));
+}
+
+/// Test provider creation errors preserve nested sources through the registry.
+#[test]
+fn test_create_preserves_provider_creation_source() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("native", "hello").failing_with(
+            ProviderCreateError::failed_with_source("boom", io::Error::other("root cause")),
+        ))
+        .expect("provider should register");
+
+    let error = registry
+        .create("native", &TestConfig::new(""))
+        .expect_err("failing provider should fail");
+    let ProviderRegistryError::ProviderCreate { source, .. } = error else {
+        panic!("expected ProviderCreate");
+    };
+
+    assert_eq!("boom", source.reason());
+    assert_eq!(
+        "root cause",
+        Error::source(&source)
+            .expect("source should be preserved")
+            .to_string(),
+    );
 }
 
 /// Test provider-reported unavailability is mapped to registry context.
@@ -179,8 +336,8 @@ fn test_create_maps_provider_unavailable_creation_error() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::ProviderUnavailable { ref name, ref reason }
-            if name.as_str() == "native" && reason == "runtime missing"
+        ProviderRegistryError::ProviderUnavailable { ref name, ref source }
+            if name.as_str() == "native" && source.reason() == "runtime missing"
     ));
 }
 
@@ -263,13 +420,15 @@ fn test_create_selected_reports_all_candidate_failures() {
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
         panic!("expected NoAvailableProvider");
     };
+    assert_eq!(3, failures.len());
+    assert_eq!("unknown provider: missing", failures[0].to_string());
     assert_eq!(
-        vec![
-            ProviderFailure::unknown("missing").expect("valid provider name"),
-            ProviderFailure::unavailable("native", "not installed").expect("valid provider name"),
-            ProviderFailure::create_failed("fallback", "boom").expect("valid provider name"),
-        ],
-        failures,
+        "provider 'native' is unavailable: not installed",
+        failures[1].to_string(),
+    );
+    assert_eq!(
+        "provider 'fallback' failed to create service: boom",
+        failures[2].to_string(),
     );
 }
 
@@ -293,12 +452,10 @@ fn test_create_selected_converts_create_error_to_candidate_failure() {
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
         panic!("expected NoAvailableProvider");
     };
+    assert_eq!(1, failures.len());
     assert_eq!(
-        vec![
-            ProviderFailure::create_failed("primary", "backend exploded")
-                .expect("valid provider name")
-        ],
-        failures,
+        "provider 'primary' failed to create service: backend exploded",
+        failures[0].to_string(),
     );
 }
 
@@ -322,13 +479,14 @@ fn test_create_selected_converts_provider_unavailable_create_error() {
     let ProviderRegistryError::NoAvailableProvider { failures } = error else {
         panic!("expected NoAvailableProvider");
     };
+    assert_eq!(2, failures.len());
     assert_eq!(
-        vec![
-            ProviderFailure::unavailable("primary", "runtime missing")
-                .expect("valid provider name"),
-            ProviderFailure::create_failed("fallback", "boom").expect("valid provider name"),
-        ],
-        failures,
+        "provider 'primary' is unavailable: runtime missing",
+        failures[0].to_string(),
+    );
+    assert_eq!(
+        "provider 'fallback' failed to create service: boom",
+        failures[1].to_string(),
     );
 }
 

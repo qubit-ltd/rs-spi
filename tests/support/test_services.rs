@@ -63,7 +63,7 @@ pub struct GreetingSpec;
 
 impl ServiceSpec for GreetingSpec {
     type Config = TestConfig;
-    type Output = Box<dyn GreetingService>;
+    type Service = Box<dyn GreetingService>;
 }
 
 /// Provider implementation used by registry tests.

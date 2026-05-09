@@ -33,6 +33,7 @@ impl ProviderSelection {
     ///
     /// # Returns
     /// Automatic provider selection.
+    #[inline]
     pub fn auto() -> Self {
         Self::Auto
     }
@@ -48,6 +49,7 @@ impl ProviderSelection {
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `primary` is not a valid provider
     /// name.
+    #[inline]
     pub fn named(primary: &str) -> Result<Self, ProviderRegistryError> {
         Ok(Self::Named {
             primary: ProviderName::new(primary)?,
@@ -67,6 +69,7 @@ impl ProviderSelection {
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
     /// valid provider name.
+    #[inline]
     pub fn from_names(primary: &str, fallbacks: &[&str]) -> Result<Self, ProviderRegistryError> {
         Ok(Self::Named {
             primary: ProviderName::new(primary)?,
@@ -86,7 +89,11 @@ impl ProviderSelection {
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
     /// valid provider name.
-    pub fn new(primary: &str, fallbacks: &[String]) -> Result<Self, ProviderRegistryError> {
+    #[inline]
+    pub fn from_owned_names(
+        primary: &str,
+        fallbacks: &[String],
+    ) -> Result<Self, ProviderRegistryError> {
         Ok(Self::Named {
             primary: ProviderName::new(primary)?,
             fallbacks: normalize_owned_names(fallbacks)?,
@@ -97,6 +104,7 @@ impl ProviderSelection {
     ///
     /// # Returns
     /// `true` when this selection is [`ProviderSelection::Auto`].
+    #[inline]
     pub fn is_auto(&self) -> bool {
         matches!(self, Self::Auto)
     }
@@ -106,6 +114,7 @@ impl ProviderSelection {
     /// # Returns
     /// `Some` primary provider for named selections, or `None` for automatic
     /// selection.
+    #[inline]
     pub fn primary(&self) -> Option<&ProviderName> {
         match self {
             Self::Auto => None,
@@ -117,36 +126,18 @@ impl ProviderSelection {
     ///
     /// # Returns
     /// Fallback provider names, or an empty slice for automatic selection.
+    #[inline]
     pub fn fallbacks(&self) -> &[ProviderName] {
         match self {
             Self::Auto => &[],
             Self::Named { fallbacks, .. } => fallbacks,
         }
     }
-
-    /// Builds the candidate provider names to try.
-    ///
-    /// # Parameters
-    /// - `auto_candidates`: Registry-provided automatic candidate order.
-    ///
-    /// # Returns
-    /// Automatic candidates when this selection is automatic, otherwise the
-    /// primary provider followed by explicit fallbacks.
-    pub(crate) fn candidates(&self, auto_candidates: Vec<ProviderName>) -> Vec<ProviderName> {
-        match self {
-            Self::Auto => auto_candidates,
-            Self::Named { primary, fallbacks } => {
-                let mut candidates = Vec::with_capacity(fallbacks.len() + 1);
-                candidates.push(primary.clone());
-                candidates.extend(fallbacks.iter().cloned());
-                candidates
-            }
-        }
-    }
 }
 
 impl Default for ProviderSelection {
     /// Creates an automatic provider selection.
+    #[inline]
     fn default() -> Self {
         Self::Auto
     }

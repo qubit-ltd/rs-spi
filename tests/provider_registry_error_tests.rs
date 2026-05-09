@@ -1,6 +1,10 @@
 mod support;
 
+use std::error::Error;
+use std::io;
+
 use qubit_spi::{
+    ProviderCreateError,
     ProviderFailure,
     ProviderName,
     ProviderRegistryError,
@@ -58,12 +62,18 @@ fn test_unknown_provider_error_display() {
 fn test_provider_unavailable_error_display() {
     let error = ProviderRegistryError::ProviderUnavailable {
         name: name("native"),
-        reason: "not installed".to_owned(),
+        source: ProviderCreateError::unavailable("not installed"),
     };
 
     assert_eq!(
         "provider 'native' is unavailable: not installed",
         error.to_string(),
+    );
+    assert_eq!(
+        "provider is unavailable: not installed",
+        Error::source(&error)
+            .expect("source should exist")
+            .to_string(),
     );
 }
 
@@ -72,12 +82,40 @@ fn test_provider_unavailable_error_display() {
 fn test_provider_create_error_display() {
     let error = ProviderRegistryError::ProviderCreate {
         name: name("native"),
-        reason: "boom".to_owned(),
+        source: ProviderCreateError::failed("boom"),
     };
 
     assert_eq!(
         "provider 'native' failed to create service: boom",
         error.to_string(),
+    );
+    assert_eq!(
+        "provider failed to create service: boom",
+        Error::source(&error)
+            .expect("source should exist")
+            .to_string(),
+    );
+}
+
+/// Test provider creation errors keep nested source errors.
+#[test]
+fn test_provider_create_error_preserves_nested_source() {
+    let error = ProviderRegistryError::ProviderCreate {
+        name: name("native"),
+        source: ProviderCreateError::failed_with_source("boom", io::Error::other("root cause")),
+    };
+    let provider_error = Error::source(&error).expect("provider source should exist");
+
+    assert_eq!(
+        "provider 'native' failed to create service: boom",
+        error.to_string()
+    );
+    assert_eq!(
+        "root cause",
+        provider_error
+            .source()
+            .expect("nested source should exist")
+            .to_string(),
     );
 }
 

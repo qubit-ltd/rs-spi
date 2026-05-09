@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// Error returned by provider registries.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error)]
 pub enum ProviderRegistryError {
     /// A provider id, alias, or selector is empty after trimming.
     #[error("provider name must not be empty")]
@@ -43,20 +43,22 @@ pub enum ProviderRegistryError {
         name: ProviderName,
     },
     /// The selected provider is not available in the current environment.
-    #[error("provider '{name}' is unavailable: {reason}")]
+    #[error("provider '{name}' is unavailable: {}", .source.reason())]
     ProviderUnavailable {
         /// Requested provider selector.
         name: ProviderName,
-        /// Human-readable unavailability reason.
-        reason: String,
+        /// Provider-level unavailability error.
+        #[source]
+        source: crate::ProviderCreateError,
     },
     /// The selected provider failed while creating a service.
-    #[error("provider '{name}' failed to create service: {reason}")]
+    #[error("provider '{name}' failed to create service: {}", .source.reason())]
     ProviderCreate {
         /// Requested provider selector.
         name: ProviderName,
-        /// Human-readable creation failure reason.
-        reason: String,
+        /// Provider-level creation error.
+        #[source]
+        source: crate::ProviderCreateError,
     },
     /// All configured provider candidates failed.
     #[error(

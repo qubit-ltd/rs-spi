@@ -30,3 +30,27 @@ fn test_with_aliases_rejects_invalid_aliases() {
         ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "bad alias"
     ));
 }
+
+/// Test descriptors reject duplicate names before registration.
+#[test]
+fn test_with_aliases_rejects_duplicate_descriptor_names() {
+    let duplicate_id_error = ProviderDescriptor::new("native")
+        .expect("provider id should be valid")
+        .with_aliases(&["native"])
+        .expect_err("alias matching id should fail");
+    let duplicate_alias_error = ProviderDescriptor::new("native")
+        .expect("provider id should be valid")
+        .with_aliases(&["fast", "FAST"])
+        .expect_err("duplicate aliases should fail");
+
+    assert!(matches!(
+        duplicate_id_error,
+        ProviderRegistryError::DuplicateProviderName { ref name }
+            if name.as_str() == "native"
+    ));
+    assert!(matches!(
+        duplicate_alias_error,
+        ProviderRegistryError::DuplicateProviderName { ref name }
+            if name.as_str() == "fast"
+    ));
+}

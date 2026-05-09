@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Provider metadata captured by registries.
 
+use std::collections::HashSet;
+
 use crate::{
     ProviderName,
     ProviderRegistryError,
@@ -36,6 +38,7 @@ impl ProviderDescriptor {
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `id` is not a valid provider name.
+    #[inline]
     pub fn new(id: &str) -> Result<Self, ProviderRegistryError> {
         Ok(Self {
             id: ProviderName::new(id)?,
@@ -54,12 +57,15 @@ impl ProviderDescriptor {
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError`] when any alias is not a valid provider
-    /// name.
+    /// name, or when aliases duplicate the descriptor id or each other.
+    #[inline]
     pub fn with_aliases(mut self, aliases: &[&str]) -> Result<Self, ProviderRegistryError> {
-        self.aliases = aliases
+        let aliases = aliases
             .iter()
             .map(|alias| ProviderName::new(alias))
             .collect::<Result<Vec<_>, _>>()?;
+        validate_unique_names(&self.id, &aliases)?;
+        self.aliases = aliases;
         Ok(self)
     }
 
@@ -70,6 +76,7 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Updated provider descriptor.
+    #[inline]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self
@@ -79,6 +86,7 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Provider id.
+    #[inline]
     pub fn id(&self) -> &ProviderName {
         &self.id
     }
@@ -87,6 +95,7 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Provider aliases.
+    #[inline]
     pub fn aliases(&self) -> &[ProviderName] {
         &self.aliases
     }
@@ -95,6 +104,7 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Provider aliases as normalized string slices.
+    #[inline]
     pub fn aliases_as_str(&self) -> Vec<&str> {
         self.aliases.iter().map(ProviderName::as_str).collect()
     }
@@ -103,6 +113,7 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Provider priority.
+    #[inline]
     pub fn priority(&self) -> i32 {
         self.priority
     }
@@ -111,7 +122,33 @@ impl ProviderDescriptor {
     ///
     /// # Returns
     /// Iterator over all normalized names exposed by this descriptor.
+    #[inline]
     pub(crate) fn names(&self) -> impl Iterator<Item = &ProviderName> {
         std::iter::once(&self.id).chain(self.aliases.iter())
     }
+}
+
+/// Validates that descriptor names are internally unique.
+///
+/// # Parameters
+/// - `id`: Canonical provider id.
+/// - `aliases`: Normalized provider aliases.
+///
+/// # Errors
+/// Returns [`ProviderRegistryError::DuplicateProviderName`] when an alias
+/// duplicates the id or another alias.
+fn validate_unique_names(
+    id: &ProviderName,
+    aliases: &[ProviderName],
+) -> Result<(), ProviderRegistryError> {
+    let mut names = HashSet::with_capacity(aliases.len() + 1);
+    names.insert(id.clone());
+    for alias in aliases {
+        if !names.insert(alias.clone()) {
+            return Err(ProviderRegistryError::DuplicateProviderName {
+                name: alias.clone(),
+            });
+        }
+    }
+    Ok(())
 }

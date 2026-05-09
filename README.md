@@ -20,6 +20,8 @@ which extension crates are linked and when providers are registered.
 - Explicit named provider plus fallback-chain selection.
 - Shared provider registration through `Arc`.
 - Separated provider creation errors and registry errors.
+- Provider creation errors can preserve lower-level source errors.
+- Low-noise diagnostics through the `log` facade.
 
 ## Installation
 
@@ -62,7 +64,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Output = Box<dyn Greeter>;
+    type Service = Box<dyn Greeter>;
 }
 
 #[derive(Debug)]
@@ -107,7 +109,7 @@ provider supplies:
 | --- | --- |
 | `descriptor()` | Stable provider id, aliases, and priority |
 | `availability(config)` | Runtime check for optional dependencies |
-| `create(config)` | Creates the `Spec::Output` service value |
+| `create(config)` | Creates the `Spec::Service` service value |
 
 ### ProviderRegistry
 
@@ -160,7 +162,7 @@ struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = ();
-    type Output = Box<dyn Greeter>;
+    type Service = Box<dyn Greeter>;
 }
 
 #[derive(Debug)]
@@ -217,6 +219,26 @@ Provider errors and registry errors are separate:
 `NoAvailableProvider` keeps ordered `ProviderFailure` values so callers can
 explain the whole fallback chain.
 
+`ProviderCreateError::failed_with_source()` and
+`ProviderCreateError::unavailable_with_source()` preserve lower-level error
+causes through direct registry creation and fallback failure reporting.
+
+## Diagnostics
+
+`qubit-spi` emits low-noise diagnostics through the `log` facade. Applications
+remain responsible for installing the logger implementation they prefer. The
+crate uses `debug` for successful registration and selection outcomes, and
+`trace` for name resolution, candidate ordering, and fallback failures. It does
+not log service configuration values or service instances.
+
+## Lifetime Model
+
+`ProviderRegistry` stores providers behind shared trait objects. Registered
+providers and service specifications are therefore required to be `'static`.
+This is intentional: the crate targets long-lived provider registries assembled
+from application crates and extension crates, not short-lived registries that
+borrow stack-local provider state.
+
 ## Relationship to Java ServiceLoader
 
 Rust does not have a standard-library equivalent of Java `ServiceLoader`.
@@ -231,14 +253,17 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 
 | API | Purpose |
 | --- | --- |
-| `ServiceSpec` | Binds provider configuration and output types |
+| `ServiceSpec` | Binds provider configuration and service types |
 | `ServiceProvider` | Provider trait implemented by each backend |
 | `ProviderDescriptor` | Captured provider id, aliases, and priority |
 | `ProviderName` | Validated and normalized provider name |
 | `ProviderRegistry::new()` | Creates an empty registry |
 | `ProviderRegistry::register(provider)` | Registers an owned provider |
-| `ProviderRegistry::register_arc(provider)` | Registers a shared provider |
-| `ProviderRegistry::find_provider(name)` | Resolves a provider by id or alias |
+| `ProviderRegistry::register_shared(provider)` | Registers a shared provider |
+| `ProviderRegistry::resolve_provider(name)` | Resolves a provider or returns a precise error |
+| `ProviderRegistry::find_provider(name)` | Option-returning provider lookup convenience |
+| `ProviderRegistry::iter_provider_names()` | Iterates provider ids without allocation |
+| `ProviderRegistry::iter_provider_descriptors()` | Iterates descriptors without allocation |
 | `ProviderRegistry::create(name, config)` | Creates one service by provider name |
 | `ProviderRegistry::create_auto(config)` | Creates a service by automatic priority |
 | `ProviderRegistry::create_selected(selection, config)` | Creates from selection |

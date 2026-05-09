@@ -29,6 +29,7 @@ impl ProviderAvailability {
     ///
     /// # Returns
     /// Unavailable provider state.
+    #[inline]
     pub fn unavailable(reason: &str) -> Self {
         Self::Unavailable {
             reason: reason.to_owned(),
@@ -39,6 +40,7 @@ impl ProviderAvailability {
     ///
     /// # Returns
     /// `true` when the provider is available.
+    #[inline]
     pub fn is_available(&self) -> bool {
         matches!(self, Self::Available)
     }

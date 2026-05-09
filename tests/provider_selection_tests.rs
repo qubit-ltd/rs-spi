@@ -64,10 +64,10 @@ fn test_named_selection_has_primary_without_fallbacks() {
 
 /// Test owned fallback names use the same normalization rules.
 #[test]
-fn test_new_normalizes_owned_fallback_names() {
+fn test_from_owned_names_normalizes_owned_fallback_names() {
     let fallbacks = vec![" Fallback ".to_owned(), " BACKUP ".to_owned()];
-    let selection =
-        ProviderSelection::new(" Native ", &fallbacks).expect("selection names should be valid");
+    let selection = ProviderSelection::from_owned_names(" Native ", &fallbacks)
+        .expect("selection names should be valid");
 
     assert_eq!(Some(&name("native")), selection.primary());
     assert_eq!(&[name("fallback"), name("backup")], selection.fallbacks());
@@ -75,9 +75,9 @@ fn test_new_normalizes_owned_fallback_names() {
 
 /// Test owned fallback names reject invalid values.
 #[test]
-fn test_new_rejects_invalid_owned_fallback_names() {
+fn test_from_owned_names_rejects_invalid_owned_fallback_names() {
     let fallbacks = vec!["fallback provider".to_owned()];
-    let error = ProviderSelection::new("native", &fallbacks)
+    let error = ProviderSelection::from_owned_names("native", &fallbacks)
         .expect_err("invalid fallback names should be rejected");
 
     assert!(matches!(

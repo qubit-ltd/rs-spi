@@ -33,7 +33,7 @@ struct UnsizedConfigSpec;
 
 impl ServiceSpec for UnsizedConfigSpec {
     type Config = dyn RuntimeConfig;
-    type Output = usize;
+    type Service = usize;
 }
 
 /// Provider that reads values from an unsized configuration reference.
