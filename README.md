@@ -337,7 +337,7 @@ Runtime dependencies are intentionally small:
 
 ## License
 
-Copyright (c) 2026. Haixing Hu, Qubit Co. Ltd. All rights reserved.
+Copyright (c) 2026. Haixing Hu.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -360,7 +360,7 @@ project structure and run `./ci-check.sh` before opening a pull request.
 
 ## Author
 
-**Haixing Hu** - *Qubit Co. Ltd.*
+**Haixing Hu**
 
 ## Related Projects
 
