@@ -5,12 +5,10 @@ use qubit_spi::{
     ProviderRegistryError,
 };
 
-use crate::support::test_services::TestProviderError;
-
 /// Test provider-name validation errors are readable.
 #[test]
 fn test_empty_provider_name_error_display() {
-    let error = ProviderRegistryError::<TestProviderError>::EmptyProviderName;
+    let error = ProviderRegistryError::EmptyProviderName;
 
     assert_eq!("provider name must not be empty", error.to_string());
 }
@@ -18,7 +16,7 @@ fn test_empty_provider_name_error_display() {
 /// Test duplicate provider-name errors include the duplicated name.
 #[test]
 fn test_duplicate_provider_name_error_display() {
-    let error = ProviderRegistryError::<TestProviderError>::DuplicateProviderName {
+    let error = ProviderRegistryError::DuplicateProviderName {
         name: "native".to_owned(),
     };
 
@@ -28,7 +26,7 @@ fn test_duplicate_provider_name_error_display() {
 /// Test unknown provider errors include the requested selector.
 #[test]
 fn test_unknown_provider_error_display() {
-    let error = ProviderRegistryError::<TestProviderError>::UnknownProvider {
+    let error = ProviderRegistryError::UnknownProvider {
         name: "missing".to_owned(),
     };
 
@@ -38,7 +36,7 @@ fn test_unknown_provider_error_display() {
 /// Test unavailable provider errors include the requested selector and reason.
 #[test]
 fn test_provider_unavailable_error_display() {
-    let error = ProviderRegistryError::<TestProviderError>::ProviderUnavailable {
+    let error = ProviderRegistryError::ProviderUnavailable {
         name: "native".to_owned(),
         reason: "not installed".to_owned(),
     };
@@ -54,8 +52,27 @@ fn test_provider_unavailable_error_display() {
 fn test_provider_create_error_display() {
     let error = ProviderRegistryError::ProviderCreate {
         name: "native".to_owned(),
-        error: TestProviderError::new("boom"),
+        reason: "boom".to_owned(),
     };
+
+    assert_eq!(
+        "provider 'native' failed to create service: boom",
+        error.to_string(),
+    );
+}
+
+/// Test unnamed provider creation errors are readable before registry context is attached.
+#[test]
+fn test_create_failed_error_display_without_provider_name() {
+    let error = ProviderRegistryError::create_failed("boom");
+
+    assert_eq!("provider failed to create service: boom", error.to_string());
+}
+
+/// Test the named provider creation helper preserves the provider name.
+#[test]
+fn test_provider_create_helper_display() {
+    let error = ProviderRegistryError::provider_create("native", "boom");
 
     assert_eq!(
         "provider 'native' failed to create service: boom",
@@ -68,7 +85,7 @@ fn test_provider_create_error_display() {
 fn test_no_available_provider_error_display() {
     let error = ProviderRegistryError::NoAvailableProvider {
         failures: vec![
-            ProviderFailure::<TestProviderError>::unknown("missing"),
+            ProviderFailure::unknown("missing"),
             ProviderFailure::unavailable("native", "not installed"),
         ],
     };
@@ -82,7 +99,7 @@ fn test_no_available_provider_error_display() {
 /// Test empty registries have a distinct error.
 #[test]
 fn test_empty_registry_error_display() {
-    let error = ProviderRegistryError::<TestProviderError>::EmptyRegistry;
+    let error = ProviderRegistryError::EmptyRegistry;
 
     assert_eq!("provider registry is empty", error.to_string());
 }

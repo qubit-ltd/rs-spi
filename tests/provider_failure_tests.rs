@@ -2,12 +2,10 @@ mod support;
 
 use qubit_spi::ProviderFailure;
 
-use crate::support::test_services::TestProviderError;
-
 /// Test unknown provider failures expose their candidate name.
 #[test]
 fn test_unknown_provider_failure_display_and_name() {
-    let failure = ProviderFailure::<TestProviderError>::unknown("missing");
+    let failure = ProviderFailure::unknown("missing");
 
     assert_eq!("missing", failure.name());
     assert_eq!("unknown provider: missing", failure.to_string());
@@ -16,7 +14,7 @@ fn test_unknown_provider_failure_display_and_name() {
 /// Test unavailable provider failures include the reason.
 #[test]
 fn test_unavailable_provider_failure_display_and_name() {
-    let failure = ProviderFailure::<TestProviderError>::unavailable("native", "not installed");
+    let failure = ProviderFailure::unavailable("native", "not installed");
 
     assert_eq!("native", failure.name());
     assert_eq!(
@@ -28,7 +26,7 @@ fn test_unavailable_provider_failure_display_and_name() {
 /// Test creation failures keep the underlying provider error.
 #[test]
 fn test_create_failed_provider_failure_display_and_name() {
-    let failure = ProviderFailure::create_failed("native", TestProviderError::new("boom"));
+    let failure = ProviderFailure::create_failed("native", "boom");
 
     assert_eq!("native", failure.name());
     assert_eq!(

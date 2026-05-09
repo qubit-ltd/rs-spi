@@ -17,7 +17,7 @@ use std::fmt::{
 
 /// Failure recorded for one provider candidate.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProviderFailure<E> {
+pub enum ProviderFailure {
     /// No provider matched the candidate name.
     UnknownProvider {
         /// Candidate provider name.
@@ -34,12 +34,12 @@ pub enum ProviderFailure<E> {
     CreateFailed {
         /// Candidate provider name.
         name: String,
-        /// Provider-specific creation error.
-        error: E,
+        /// Human-readable creation failure reason.
+        reason: String,
     },
 }
 
-impl<E> ProviderFailure<E> {
+impl ProviderFailure {
     /// Creates an unknown-provider failure.
     ///
     /// # Parameters
@@ -72,14 +72,14 @@ impl<E> ProviderFailure<E> {
     ///
     /// # Parameters
     /// - `name`: Candidate provider name.
-    /// - `error`: Provider-specific creation error.
+    /// - `reason`: Human-readable creation failure reason.
     ///
     /// # Returns
     /// Provider-creation failure.
-    pub fn create_failed(name: &str, error: E) -> Self {
+    pub fn create_failed(name: &str, reason: &str) -> Self {
         Self::CreateFailed {
             name: name.to_owned(),
-            error,
+            reason: reason.to_owned(),
         }
     }
 
@@ -96,10 +96,7 @@ impl<E> ProviderFailure<E> {
     }
 }
 
-impl<E> Display for ProviderFailure<E>
-where
-    E: Display,
-{
+impl Display for ProviderFailure {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::UnknownProvider { name } => {
@@ -108,10 +105,10 @@ where
             Self::Unavailable { name, reason } => {
                 write!(formatter, "provider '{name}' is unavailable: {reason}")
             }
-            Self::CreateFailed { name, error } => {
+            Self::CreateFailed { name, reason } => {
                 write!(
                     formatter,
-                    "provider '{name}' failed to create service: {error}"
+                    "provider '{name}' failed to create service: {reason}"
                 )
             }
         }

@@ -2,6 +2,7 @@ mod support;
 
 use qubit_spi::{
     ProviderAvailability,
+    ProviderRegistryError,
     ServiceProvider,
 };
 
@@ -9,7 +10,6 @@ use crate::support::test_services::{
     GreetingProvider,
     GreetingService,
     TestConfig,
-    TestProviderError,
 };
 
 /// Minimal provider used to exercise default trait methods.
@@ -18,14 +18,13 @@ struct MinimalProvider;
 
 impl ServiceProvider for MinimalProvider {
     type Config = TestConfig;
-    type Error = TestProviderError;
     type Service = dyn GreetingService;
 
     fn id(&self) -> &'static str {
         "minimal"
     }
 
-    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, Self::Error> {
+    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
         GreetingProvider::new("delegate", "hello").create(config)
     }
 }

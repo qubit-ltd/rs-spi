@@ -27,15 +27,15 @@ use crate::{
 /// provider's own id and aliases, so a selector resolves to at most one
 /// provider.
 #[derive(Debug)]
-pub struct ProviderRegistry<S, C, E>
+pub struct ProviderRegistry<S, C>
 where
     S: ?Sized + 'static,
 {
     /// Registered providers in insertion order.
-    providers: Vec<Arc<dyn ServiceProvider<Config = C, Error = E, Service = S>>>,
+    providers: Vec<Arc<dyn ServiceProvider<Config = C, Service = S>>>,
 }
 
-impl<S, C, E> ProviderRegistry<S, C, E>
+impl<S, C> ProviderRegistry<S, C>
 where
     S: ?Sized + 'static,
 {
@@ -73,9 +73,9 @@ where
     /// or an alias is empty after trimming. Returns
     /// [`ProviderRegistryError::DuplicateProviderName`] when the provider id or
     /// an alias conflicts with an existing or same-provider name.
-    pub fn register<P>(&mut self, provider: P) -> Result<(), ProviderRegistryError<E>>
+    pub fn register<P>(&mut self, provider: P) -> Result<(), ProviderRegistryError>
     where
-        P: ServiceProvider<Config = C, Error = E, Service = S> + 'static,
+        P: ServiceProvider<Config = C, Service = S> + 'static,
     {
         self.register_arc(Arc::new(provider))
     }
@@ -92,8 +92,8 @@ where
     /// an alias conflicts with an existing or same-provider name.
     pub fn register_arc(
         &mut self,
-        provider: Arc<dyn ServiceProvider<Config = C, Error = E, Service = S>>,
-    ) -> Result<(), ProviderRegistryError<E>> {
+        provider: Arc<dyn ServiceProvider<Config = C, Service = S>>,
+    ) -> Result<(), ProviderRegistryError> {
         let names = provider_names(provider.as_ref())?;
         let mut local_names = HashSet::with_capacity(names.len());
         for name in names {
@@ -127,7 +127,7 @@ where
     pub fn find_provider(
         &self,
         name: &str,
-    ) -> Option<&dyn ServiceProvider<Config = C, Error = E, Service = S>> {
+    ) -> Option<&dyn ServiceProvider<Config = C, Service = S>> {
         let selector = name.trim();
         if selector.is_empty() {
             return None;
@@ -153,7 +153,7 @@ where
     /// [`ProviderRegistryError::ProviderUnavailable`] when the provider is not
     /// available, or [`ProviderRegistryError::ProviderCreate`] when the provider
     /// factory fails.
-    pub fn create(&self, name: &str, config: &C) -> Result<Box<S>, ProviderRegistryError<E>> {
+    pub fn create(&self, name: &str, config: &C) -> Result<Box<S>, ProviderRegistryError> {
         let selector = normalize_provider_name(name)?;
         let provider = self.find_provider(&selector).ok_or_else(|| {
             ProviderRegistryError::UnknownProvider {
@@ -161,14 +161,9 @@ where
             }
         })?;
         match provider.availability(config) {
-            ProviderAvailability::Available => {
-                provider
-                    .create(config)
-                    .map_err(|error| ProviderRegistryError::ProviderCreate {
-                        name: selector,
-                        error,
-                    })
-            }
+            ProviderAvailability::Available => provider
+                .create(config)
+                .map_err(|error| error.with_provider_name(&selector)),
             ProviderAvailability::Unavailable { reason } => {
                 Err(ProviderRegistryError::ProviderUnavailable {
                     name: selector,
@@ -190,7 +185,7 @@ where
     /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
     /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when all
     /// automatic candidates fail.
-    pub fn create_auto(&self, config: &C) -> Result<Box<S>, ProviderRegistryError<E>> {
+    pub fn create_auto(&self, config: &C) -> Result<Box<S>, ProviderRegistryError> {
         self.create_default(&ProviderSelection::auto(), config)
     }
 
@@ -216,7 +211,7 @@ where
         &self,
         selection: &ProviderSelection,
         config: &C,
-    ) -> Result<Box<S>, ProviderRegistryError<E>> {
+    ) -> Result<Box<S>, ProviderRegistryError> {
         if self.providers.is_empty() {
             return Err(ProviderRegistryError::EmptyRegistry);
         }
@@ -230,7 +225,7 @@ where
             match provider.availability(config) {
                 ProviderAvailability::Available => match provider.create(config) {
                     Ok(service) => return Ok(service),
-                    Err(error) => failures.push(ProviderFailure::create_failed(&candidate, error)),
+                    Err(error) => failures.push(error.into_provider_failure(&candidate)),
                 },
                 ProviderAvailability::Unavailable { reason } => {
                     failures.push(ProviderFailure::unavailable(&candidate, &reason));
@@ -245,7 +240,7 @@ where
     /// # Returns
     /// Provider ids ordered by descending priority and then ascending id.
     fn auto_candidates(&self) -> Vec<String> {
-        let mut providers: Vec<&dyn ServiceProvider<Config = C, Error = E, Service = S>> =
+        let mut providers: Vec<&dyn ServiceProvider<Config = C, Service = S>> =
             self.providers.iter().map(Arc::as_ref).collect();
         providers.sort_by(|left, right| {
             right
@@ -260,7 +255,7 @@ where
     }
 }
 
-impl<S, C, E> Clone for ProviderRegistry<S, C, E>
+impl<S, C> Clone for ProviderRegistry<S, C>
 where
     S: ?Sized + 'static,
 {
@@ -272,7 +267,7 @@ where
     }
 }
 
-impl<S, C, E> Default for ProviderRegistry<S, C, E>
+impl<S, C> Default for ProviderRegistry<S, C>
 where
     S: ?Sized + 'static,
 {
@@ -295,9 +290,9 @@ where
 /// # Errors
 /// Returns [`ProviderRegistryError::EmptyProviderName`] when any exposed name is
 /// empty after trimming.
-fn provider_names<S, C, E>(
-    provider: &dyn ServiceProvider<Config = C, Error = E, Service = S>,
-) -> Result<Vec<String>, ProviderRegistryError<E>>
+fn provider_names<S, C>(
+    provider: &dyn ServiceProvider<Config = C, Service = S>,
+) -> Result<Vec<String>, ProviderRegistryError>
 where
     S: ?Sized + 'static,
 {
@@ -320,7 +315,7 @@ where
 /// # Errors
 /// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is empty
 /// after trimming.
-fn normalize_provider_name<E>(name: &str) -> Result<String, ProviderRegistryError<E>> {
+fn normalize_provider_name(name: &str) -> Result<String, ProviderRegistryError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         Err(ProviderRegistryError::EmptyProviderName)
@@ -348,8 +343,8 @@ fn provider_name_key(name: &str) -> String {
 ///
 /// # Returns
 /// `true` when the selector matches the provider id or any alias.
-fn provider_matches<S, C, E>(
-    provider: &dyn ServiceProvider<Config = C, Error = E, Service = S>,
+fn provider_matches<S, C>(
+    provider: &dyn ServiceProvider<Config = C, Service = S>,
     selector: &str,
 ) -> bool
 where

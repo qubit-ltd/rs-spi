@@ -1,12 +1,6 @@
 #![allow(dead_code)]
 
-use std::error::Error;
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
 use std::sync::atomic::{
     AtomicUsize,
     Ordering,
@@ -15,6 +9,7 @@ use std::sync::atomic::{
 use qubit_spi::{
     ProviderAvailability,
     ProviderRegistry,
+    ProviderRegistryError,
     ServiceProvider,
 };
 
@@ -56,29 +51,8 @@ impl GreetingService for StaticGreetingService {
     }
 }
 
-/// Error type returned by failing test providers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestProviderError {
-    message: &'static str,
-}
-
-impl TestProviderError {
-    /// Creates a provider error.
-    pub fn new(message: &'static str) -> Self {
-        Self { message }
-    }
-}
-
-impl Display for TestProviderError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(self.message)
-    }
-}
-
-impl Error for TestProviderError {}
-
 /// Provider registry type used by greeting tests.
-pub type GreetingRegistry = ProviderRegistry<dyn GreetingService, TestConfig, TestProviderError>;
+pub type GreetingRegistry = ProviderRegistry<dyn GreetingService, TestConfig>;
 
 /// Provider implementation used by registry tests.
 #[derive(Debug)]
@@ -88,7 +62,7 @@ pub struct GreetingProvider {
     message: &'static str,
     priority: i32,
     availability: ProviderAvailability,
-    failure: Option<TestProviderError>,
+    failure: Option<ProviderRegistryError>,
     created: AtomicUsize,
 }
 
@@ -126,7 +100,13 @@ impl GreetingProvider {
 
     /// Makes this provider fail during creation.
     pub fn failing(mut self, message: &'static str) -> Self {
-        self.failure = Some(TestProviderError::new(message));
+        self.failure = Some(ProviderRegistryError::create_failed(message));
+        self
+    }
+
+    /// Makes this provider fail with a specific registry error during creation.
+    pub fn failing_with(mut self, error: ProviderRegistryError) -> Self {
+        self.failure = Some(error);
         self
     }
 
@@ -138,7 +118,6 @@ impl GreetingProvider {
 
 impl ServiceProvider for GreetingProvider {
     type Config = TestConfig;
-    type Error = TestProviderError;
     type Service = dyn GreetingService;
 
     fn id(&self) -> &'static str {
@@ -157,10 +136,10 @@ impl ServiceProvider for GreetingProvider {
         self.availability.clone()
     }
 
-    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, Self::Error> {
+    fn create(&self, config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
         self.created.fetch_add(1, Ordering::SeqCst);
-        if let Some(error) = self.failure.clone() {
-            return Err(error);
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
         }
         Ok(Box::new(StaticGreetingService {
             message: format!("{}{}", config.prefix(), self.message),

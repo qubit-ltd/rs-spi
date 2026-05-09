@@ -35,11 +35,11 @@ qubit-spi = "0.1"
 ## Quick Start
 
 ```rust
-use std::convert::Infallible;
 use std::fmt::Debug;
 
 use qubit_spi::{
     ProviderRegistry,
+    ProviderRegistryError,
     ServiceProvider,
 };
 
@@ -61,7 +61,6 @@ struct EnglishProvider;
 
 impl ServiceProvider for EnglishProvider {
     type Config = ();
-    type Error = Infallible;
     type Service = dyn Greeter;
 
     fn id(&self) -> &'static str {
@@ -72,12 +71,12 @@ impl ServiceProvider for EnglishProvider {
         &["en"]
     }
 
-    fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, Self::Error> {
+    fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
         Ok(Box::new(EnglishGreeter))
     }
 }
 
-let mut registry = ProviderRegistry::<dyn Greeter, (), Infallible>::new();
+let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
 registry
     .register(EnglishProvider)
     .expect("provider names should be unique");
@@ -107,8 +106,8 @@ The associated `Service` type can be a trait object such as `dyn Greeter`.
 
 ### ProviderRegistry
 
-`ProviderRegistry<S, C, E>` stores providers for one service type `S`, one
-configuration type `C`, and one provider error type `E`.
+`ProviderRegistry<S, C>` stores providers for one service type `S` and one
+configuration type `C`.
 
 Provider ids and aliases are matched case-insensitively. Duplicate names are
 rejected during registration, including conflicts among a provider's own id and
@@ -129,28 +128,56 @@ a service.
 ## Fallback Example
 
 ```rust
-use qubit_spi::ProviderSelection;
+use std::fmt::Debug;
 
-# use std::convert::Infallible;
-# use std::fmt::Debug;
-# use qubit_spi::{ProviderRegistry, ServiceProvider};
-# trait Greeter: Debug + Send + Sync { fn greet(&self) -> &'static str; }
-# #[derive(Debug)] struct GreeterImpl(&'static str);
-# impl Greeter for GreeterImpl { fn greet(&self) -> &'static str { self.0 } }
-# #[derive(Debug)] struct Provider(&'static str, i32);
-# impl ServiceProvider for Provider {
-#     type Config = ();
-#     type Error = Infallible;
-#     type Service = dyn Greeter;
-#     fn id(&self) -> &'static str { self.0 }
-#     fn priority(&self) -> i32 { self.1 }
-#     fn create(&self, _config: &()) -> Result<Box<Self::Service>, Self::Error> {
-#         Ok(Box::new(GreeterImpl(self.0)))
-#     }
-# }
-# let mut registry = ProviderRegistry::<dyn Greeter, (), Infallible>::new();
-# registry.register(Provider("repository", 0)).expect("unique provider");
-# registry.register(Provider("native", 10)).expect("unique provider");
+use qubit_spi::{
+    ProviderRegistry,
+    ProviderRegistryError,
+    ProviderSelection,
+    ServiceProvider,
+};
+
+trait Greeter: Debug + Send + Sync {
+    fn greet(&self) -> &'static str;
+}
+
+#[derive(Debug)]
+struct GreeterImpl(&'static str);
+
+impl Greeter for GreeterImpl {
+    fn greet(&self) -> &'static str {
+        self.0
+    }
+}
+
+#[derive(Debug)]
+struct Provider(&'static str, i32);
+
+impl ServiceProvider for Provider {
+    type Config = ();
+    type Service = dyn Greeter;
+
+    fn id(&self) -> &'static str {
+        self.0
+    }
+
+    fn priority(&self) -> i32 {
+        self.1
+    }
+
+    fn create(&self, _config: &()) -> Result<Box<Self::Service>, ProviderRegistryError> {
+        Ok(Box::new(GreeterImpl(self.0)))
+    }
+}
+
+let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
+registry
+    .register(Provider("repository", 0))
+    .expect("unique provider");
+registry
+    .register(Provider("native", 10))
+    .expect("unique provider");
+
 let selection = ProviderSelection::from_names("native", &["repository"]);
 let greeter = registry
     .create_default(&selection, &())

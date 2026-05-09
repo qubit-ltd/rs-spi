@@ -14,11 +14,11 @@
 //! Register a provider and create a service by name:
 //!
 //! ```rust
-//! use std::convert::Infallible;
 //! use std::fmt::Debug;
 //!
 //! use qubit_spi::{
 //!     ProviderRegistry,
+//!     ProviderRegistryError,
 //!     ServiceProvider,
 //! };
 //!
@@ -40,7 +40,6 @@
 //!
 //! impl ServiceProvider for EnglishProvider {
 //!     type Config = ();
-//!     type Error = Infallible;
 //!     type Service = dyn Greeter;
 //!
 //!     fn id(&self) -> &'static str {
@@ -51,12 +50,12 @@
 //!         &["en"]
 //!     }
 //!
-//!     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, Self::Error> {
+//!     fn create(&self, _config: &Self::Config) -> Result<Box<Self::Service>, ProviderRegistryError> {
 //!         Ok(Box::new(EnglishGreeter))
 //!     }
 //! }
 //!
-//! let mut registry = ProviderRegistry::<dyn Greeter, (), Infallible>::new();
+//! let mut registry = ProviderRegistry::<dyn Greeter, ()>::new();
 //! registry
 //!     .register(EnglishProvider)
 //!     .expect("provider names should be unique");
