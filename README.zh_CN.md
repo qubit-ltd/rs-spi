@@ -1,7 +1,7 @@
 # Qubit SPI
 
 [![Rust CI](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-spi/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-spi?branch=main)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-spi/coverage-badge.json)](https://qubit-ltd.github.io/rs-spi/coverage/)
 [![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
 [![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
@@ -51,7 +51,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 ```toml
 [dependencies]
-qubit-spi = "0.2"
+qubit-spi = "0.2.3"
 ```
 
 ## 快速开始
