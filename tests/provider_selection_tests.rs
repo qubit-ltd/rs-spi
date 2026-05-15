@@ -52,6 +52,24 @@ fn test_from_names_rejects_invalid_provider_names() {
     ));
 }
 
+/// Test duplicated candidate names are rejected at selection construction.
+#[test]
+fn test_from_names_rejects_duplicate_candidates() {
+    let primary_error = ProviderSelection::from_names("native", &["NATIVE"])
+        .expect_err("fallbacks must not repeat the primary provider");
+    let fallback_error = ProviderSelection::from_names("native", &["fallback", "FALLBACK"])
+        .expect_err("fallbacks must not repeat earlier fallback providers");
+
+    assert!(matches!(
+        primary_error,
+        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "native"
+    ));
+    assert!(matches!(
+        fallback_error,
+        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "fallback"
+    ));
+}
+
 /// Test explicit named selections can be built without fallbacks.
 #[test]
 fn test_named_selection_has_primary_without_fallbacks() {
@@ -84,5 +102,18 @@ fn test_from_owned_names_rejects_invalid_owned_fallback_names() {
         error,
         ProviderRegistryError::InvalidProviderName { ref name, .. }
             if name == "fallback provider"
+    ));
+}
+
+/// Test duplicated owned candidate names are rejected.
+#[test]
+fn test_from_owned_names_rejects_duplicate_owned_candidates() {
+    let fallbacks = vec!["fallback".to_owned(), " FALLBACK ".to_owned()];
+    let error = ProviderSelection::from_owned_names("native", &fallbacks)
+        .expect_err("owned fallback names should be unique");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "fallback"
     ));
 }

@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Selection policy for provider resolution.
 
+use std::collections::HashSet;
+
 use crate::{
     ProviderName,
     ProviderRegistryError,
@@ -20,6 +22,9 @@ pub enum ProviderSelection {
     /// Select providers automatically by registry priority.
     Auto,
     /// Try a primary provider followed by explicit fallback providers.
+    ///
+    /// Constructor methods reject repeated normalized candidate names. Registries
+    /// also validate manually constructed named selections before execution.
     Named {
         /// Primary provider candidate.
         primary: ProviderName,
@@ -68,13 +73,13 @@ impl ProviderSelection {
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
-    /// valid provider name.
+    /// valid provider name, or when candidate names are duplicated.
     #[inline]
     pub fn from_names(primary: &str, fallbacks: &[&str]) -> Result<Self, ProviderRegistryError> {
-        Ok(Self::Named {
-            primary: ProviderName::new(primary)?,
-            fallbacks: normalize_borrowed_names(fallbacks)?,
-        })
+        let primary = ProviderName::new(primary)?;
+        let fallbacks = normalize_borrowed_names(fallbacks)?;
+        validate_unique_candidate_names(&primary, &fallbacks)?;
+        Ok(Self::Named { primary, fallbacks })
     }
 
     /// Creates a named provider selection from owned fallback names.
@@ -88,16 +93,16 @@ impl ProviderSelection {
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
-    /// valid provider name.
+    /// valid provider name, or when candidate names are duplicated.
     #[inline]
     pub fn from_owned_names(
         primary: &str,
         fallbacks: &[String],
     ) -> Result<Self, ProviderRegistryError> {
-        Ok(Self::Named {
-            primary: ProviderName::new(primary)?,
-            fallbacks: normalize_owned_names(fallbacks)?,
-        })
+        let primary = ProviderName::new(primary)?;
+        let fallbacks = normalize_owned_names(fallbacks)?;
+        validate_unique_candidate_names(&primary, &fallbacks)?;
+        Ok(Self::Named { primary, fallbacks })
     }
 
     /// Tells whether this selection requests automatic selection.
@@ -131,6 +136,20 @@ impl ProviderSelection {
         match self {
             Self::Auto => &[],
             Self::Named { fallbacks, .. } => fallbacks,
+        }
+    }
+
+    /// Validates that named selections do not repeat provider names.
+    ///
+    /// # Errors
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when the primary
+    /// provider or fallback list repeats a normalized name.
+    pub(crate) fn validate_unique_names(&self) -> Result<(), ProviderRegistryError> {
+        match self {
+            Self::Auto => Ok(()),
+            Self::Named { primary, fallbacks } => {
+                validate_unique_candidate_names(primary, fallbacks)
+            }
         }
     }
 }
@@ -173,4 +192,29 @@ fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, Provider
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
 fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
     names.iter().copied().map(ProviderName::new).collect()
+}
+
+/// Validates that candidate names are unique within one named selection.
+///
+/// # Parameters
+/// - `primary`: Primary provider name.
+/// - `fallbacks`: Ordered fallback provider names.
+///
+/// # Errors
+/// Returns [`ProviderRegistryError::DuplicateProviderName`] when a fallback
+/// duplicates the primary provider or an earlier fallback.
+fn validate_unique_candidate_names(
+    primary: &ProviderName,
+    fallbacks: &[ProviderName],
+) -> Result<(), ProviderRegistryError> {
+    let mut names = HashSet::with_capacity(fallbacks.len() + 1);
+    names.insert(primary.clone());
+    for fallback in fallbacks {
+        if !names.insert(fallback.clone()) {
+            return Err(ProviderRegistryError::DuplicateProviderName {
+                name: fallback.clone(),
+            });
+        }
+    }
+    Ok(())
 }

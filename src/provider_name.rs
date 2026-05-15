@@ -22,7 +22,7 @@ use crate::ProviderRegistryError;
 ///
 /// Provider names are normalized by trimming surrounding whitespace and folding
 /// ASCII letters to lowercase. Valid names may contain ASCII letters, digits,
-/// `.`, `_`, and `-`.
+/// `_`, and `-`, and must include at least one ASCII letter or digit.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ProviderName(String);
 
@@ -54,7 +54,13 @@ impl ProviderName {
         if !trimmed.bytes().all(is_allowed_provider_name_byte) {
             return Err(invalid_provider_name(
                 trimmed,
-                "provider names may contain only ASCII letters, digits, '.', '_' or '-'",
+                "provider names may contain only ASCII letters, digits, '_' or '-'",
+            ));
+        }
+        if !trimmed.bytes().any(|byte| byte.is_ascii_alphanumeric()) {
+            return Err(invalid_provider_name(
+                trimmed,
+                "provider names must contain at least one ASCII letter or digit",
             ));
         }
         Ok(Self(trimmed.to_ascii_lowercase()))
@@ -101,7 +107,7 @@ impl FromStr for ProviderName {
 /// # Returns
 /// `true` when the byte is accepted by the provider-name grammar.
 fn is_allowed_provider_name_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
 }
 
 /// Builds an invalid provider-name error.

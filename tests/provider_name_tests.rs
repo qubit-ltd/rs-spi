@@ -6,12 +6,12 @@ use qubit_spi::{
 /// Test provider names implement standard string conversion traits.
 #[test]
 fn test_provider_name_string_traits() {
-    let name: ProviderName = " Native.Provider_1 "
+    let name: ProviderName = " Native-Provider_1 "
         .parse()
         .expect("provider name should parse");
 
-    assert_eq!("native.provider_1", name.as_ref());
-    assert_eq!("native.provider_1", format!("{name}"));
+    assert_eq!("native-provider_1", name.as_ref());
+    assert_eq!("native-provider_1", format!("{name}"));
 }
 
 /// Test provider names are trimmed and normalized to lowercase ASCII.
@@ -40,6 +40,28 @@ fn test_new_rejects_invalid_provider_name_characters() {
     assert!(matches!(
         error,
         ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native provider"
+    ));
+}
+
+/// Test provider names reject dots because config paths may treat them as nesting.
+#[test]
+fn test_new_rejects_dotted_provider_names() {
+    let error = ProviderName::new("native.provider").expect_err("dots should fail");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native.provider"
+    ));
+}
+
+/// Test provider names require at least one alphanumeric character.
+#[test]
+fn test_new_rejects_separator_only_provider_names() {
+    let error = ProviderName::new("--__").expect_err("separator-only names should fail");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "--__"
     ));
 }
 

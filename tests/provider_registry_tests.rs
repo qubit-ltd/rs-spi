@@ -8,13 +8,16 @@ use std::sync::Once;
 
 use qubit_spi::{
     ProviderCreateError,
+    ProviderName,
     ProviderRegistryError,
     ProviderSelection,
+    ServiceProvider,
 };
 
 use crate::support::test_services::{
     GreetingProvider,
     GreetingRegistry,
+    GreetingSpec,
     TestConfig,
 };
 
@@ -204,6 +207,23 @@ fn test_register_shared_uses_shared_provider_instance() {
 
     assert_eq!("hello", service.greet());
     assert_eq!(1, provider.created_count());
+}
+
+/// Test shared registration accepts an already-erased provider trait object.
+#[test]
+fn test_register_shared_accepts_erased_provider_instance() {
+    let provider: Arc<dyn ServiceProvider<GreetingSpec>> =
+        Arc::new(GreetingProvider::new("erased", "hello"));
+    let mut registry = GreetingRegistry::new();
+
+    registry
+        .register_shared(provider)
+        .expect("erased provider should register");
+    let service = registry
+        .create_box("erased", &TestConfig::new(""))
+        .expect("erased provider should create a service");
+
+    assert_eq!("hello", service.greet());
 }
 
 /// Test duplicate ids and aliases are rejected case-insensitively.
@@ -435,6 +455,56 @@ fn test_create_selected_uses_fallback_chain() {
         .expect("fallback provider should be used");
 
     assert_eq!("fallback", service.greet());
+}
+
+/// Test manually duplicated selection candidates are rejected before execution.
+#[test]
+fn test_create_selected_rejects_duplicate_candidate_names() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("native", "hello"))
+        .expect("native provider should register");
+    let selection = ProviderSelection::Named {
+        primary: ProviderName::new("native").expect("primary name should be valid"),
+        fallbacks: vec![ProviderName::new("NATIVE").expect("fallback name should be valid")],
+    };
+
+    let error = registry
+        .create_selected_box(&selection, &TestConfig::new(""))
+        .expect_err("duplicate selection candidates should fail");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "native"
+    ));
+}
+
+/// Test aliases that resolve to an already-tried provider are not retried.
+#[test]
+fn test_create_selected_skips_aliases_for_already_tried_provider() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(
+            GreetingProvider::new("native", "hello")
+                .with_aliases(&["fast"])
+                .unavailable("not installed"),
+        )
+        .expect("native provider should register");
+    let selection = ProviderSelection::from_names("native", &["fast"])
+        .expect("distinct candidate names should be accepted");
+
+    let error = registry
+        .create_selected_box(&selection, &TestConfig::new(""))
+        .expect_err("all candidates should fail");
+
+    let ProviderRegistryError::NoAvailableProvider { failures } = error else {
+        panic!("expected NoAvailableProvider");
+    };
+    assert_eq!(1, failures.len());
+    assert_eq!(
+        "provider 'native' is unavailable: not installed",
+        failures[0].to_string(),
+    );
 }
 
 /// Test failed candidate chains report all failures.

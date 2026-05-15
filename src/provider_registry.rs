@@ -39,8 +39,9 @@ use crate::{
 /// Provider descriptors are captured during registration. Provider ids and
 /// aliases are normalized into [`ProviderName`] values and indexed
 /// case-insensitively, so lookup does not depend on provider metadata changing
-/// after registration. Registries store providers behind shared trait objects,
-/// so registered providers and service specifications must be `'static`.
+/// after registration. Automatic selection order is cached during registration
+/// updates. Registries store providers behind shared trait objects, so
+/// registered providers and service specifications must be `'static`.
 #[derive(Debug)]
 pub struct ProviderRegistry<Spec>
 where
@@ -50,6 +51,8 @@ where
     providers: Vec<ProviderEntry<Spec>>,
     /// Normalized provider id and alias lookup table.
     index: HashMap<ProviderName, usize>,
+    /// Cached automatic-selection candidates ordered by priority and id.
+    auto_candidates: Vec<ProviderName>,
     /// Keeps the service specification attached to this registry type.
     marker: PhantomData<fn() -> Spec>,
 }
@@ -122,10 +125,10 @@ where
     /// Returns [`ProviderRegistryError`] when the provider descriptor is invalid
     /// or when its id or aliases conflict with an existing provider.
     #[inline]
-    pub fn register_shared<P>(&mut self, provider: Arc<P>) -> Result<(), ProviderRegistryError>
-    where
-        P: ServiceProvider<Spec> + 'static,
-    {
+    pub fn register_shared(
+        &mut self,
+        provider: Arc<dyn ServiceProvider<Spec>>,
+    ) -> Result<(), ProviderRegistryError> {
         self.register_provider(provider)
     }
 
@@ -151,6 +154,7 @@ where
             descriptor,
             provider,
         });
+        self.rebuild_auto_candidates();
         debug!(
             "registered provider '{}' with {} aliases and priority {}",
             self.providers[provider_index].descriptor.id(),
@@ -448,9 +452,11 @@ where
     /// Boxed service created by the first successful provider candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
-    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
-    /// candidate is unknown, unavailable, or fails during creation.
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
+    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
+    /// when the registry has no providers, or
+    /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
+    /// unknown, unavailable, or fails during creation.
     #[inline]
     pub fn create_selected_box(
         &self,
@@ -478,9 +484,11 @@ where
     /// candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
-    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
-    /// candidate is unknown, unavailable, or fails during creation.
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
+    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
+    /// when the registry has no providers, or
+    /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
+    /// unknown, unavailable, or fails during creation.
     #[inline]
     pub fn create_selected_arc(
         &self,
@@ -508,9 +516,11 @@ where
     /// candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
-    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
-    /// candidate is unknown, unavailable, or fails during creation.
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
+    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
+    /// when the registry has no providers, or
+    /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
+    /// unknown, unavailable, or fails during creation.
     #[inline]
     pub fn create_selected_rc(
         &self,
@@ -533,9 +543,11 @@ where
     /// Service handle created by the first successful provider candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyRegistry`] when the registry has no
-    /// providers, or [`ProviderRegistryError::NoAvailableProvider`] when every
-    /// candidate is unknown, unavailable, or fails during creation.
+    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
+    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
+    /// when the registry has no providers, or
+    /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
+    /// unknown, unavailable, or fails during creation.
     fn create_selected_with<Handle, Create>(
         &self,
         selection: &ProviderSelection,
@@ -546,18 +558,18 @@ where
         Create:
             Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
     {
+        selection.validate_unique_names()?;
         if self.providers.is_empty() {
             trace!("provider selection failed because registry is empty");
             return Err(ProviderRegistryError::EmptyRegistry);
         }
         match selection {
             ProviderSelection::Auto => {
-                let candidates = self.auto_candidates();
                 trace!(
                     "automatic provider selection prepared {} candidate(s)",
-                    candidates.len(),
+                    self.auto_candidates().len(),
                 );
-                self.create_from_candidates_with(candidates.iter(), config, &create)
+                self.create_from_candidates_with(self.auto_candidates().iter(), config, &create)
             }
             ProviderSelection::Named { primary, fallbacks } => {
                 trace!(
@@ -586,7 +598,9 @@ where
     ///
     /// # Errors
     /// Returns [`ProviderRegistryError::NoAvailableProvider`] when every
-    /// candidate is unknown, unavailable, or fails during creation.
+    /// candidate is unknown, unavailable, or fails during creation. Candidate
+    /// names that resolve to a provider already tried earlier in the same
+    /// selection are skipped.
     fn create_from_candidates_with<'a, I, Handle, Create>(
         &self,
         candidates: I,
@@ -599,7 +613,16 @@ where
             Fn(&dyn ServiceProvider<Spec>, &Spec::Config) -> Result<Handle, ProviderCreateError>,
     {
         let mut failures = Vec::new();
+        let mut tried_provider_indices = HashSet::new();
         for candidate in candidates {
+            if let Some(provider_index) = self.index.get(candidate).copied()
+                && !tried_provider_indices.insert(provider_index)
+            {
+                trace!(
+                    "provider candidate '{candidate}' resolves to an already tried provider; skipping",
+                );
+                continue;
+            }
             match self.create_from_candidate_with(candidate, config, create) {
                 Ok(service) => {
                     debug!("provider candidate '{candidate}' created service");
@@ -692,23 +715,29 @@ where
             .and_then(|provider_index| self.providers.get(*provider_index))
     }
 
-    /// Builds automatic provider candidates.
+    /// Gets cached automatic provider candidates.
     ///
     /// # Returns
     /// Provider ids ordered by descending priority and then ascending id.
-    fn auto_candidates(&self) -> Vec<ProviderName> {
-        let mut providers: Vec<&ProviderEntry<Spec>> = self.providers.iter().collect();
-        providers.sort_by(|left, right| {
-            right
-                .descriptor
+    fn auto_candidates(&self) -> &[ProviderName] {
+        &self.auto_candidates
+    }
+
+    /// Rebuilds cached automatic provider candidates.
+    fn rebuild_auto_candidates(&mut self) {
+        let mut provider_indices: Vec<usize> = (0..self.providers.len()).collect();
+        provider_indices.sort_by(|left, right| {
+            let left_descriptor = &self.providers[*left].descriptor;
+            let right_descriptor = &self.providers[*right].descriptor;
+            right_descriptor
                 .priority()
-                .cmp(&left.descriptor.priority())
-                .then_with(|| left.descriptor.id().cmp(right.descriptor.id()))
+                .cmp(&left_descriptor.priority())
+                .then_with(|| left_descriptor.id().cmp(right_descriptor.id()))
         });
-        providers
+        self.auto_candidates = provider_indices
             .into_iter()
-            .map(|entry| entry.descriptor.id().clone())
-            .collect()
+            .map(|provider_index| self.providers[provider_index].descriptor.id().clone())
+            .collect();
     }
 }
 
@@ -722,6 +751,7 @@ where
         Self {
             providers: self.providers.clone(),
             index: self.index.clone(),
+            auto_candidates: self.auto_candidates.clone(),
             marker: PhantomData,
         }
     }
@@ -751,6 +781,7 @@ where
         Self {
             providers: Vec::new(),
             index: HashMap::new(),
+            auto_candidates: Vec::new(),
             marker: PhantomData,
         }
     }
