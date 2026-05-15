@@ -142,8 +142,8 @@ impl ProviderSelection {
     /// Validates that named selections do not repeat provider names.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when the primary
-    /// provider or fallback list repeats a normalized name.
+    /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when the
+    /// primary provider or fallback list repeats a normalized name.
     pub(crate) fn validate_unique_names(&self) -> Result<(), ProviderRegistryError> {
         match self {
             Self::Auto => Ok(()),
@@ -201,7 +201,7 @@ fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, Provide
 /// - `fallbacks`: Ordered fallback provider names.
 ///
 /// # Errors
-/// Returns [`ProviderRegistryError::DuplicateProviderName`] when a fallback
+/// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a fallback
 /// duplicates the primary provider or an earlier fallback.
 fn validate_unique_candidate_names(
     primary: &ProviderName,
@@ -211,7 +211,7 @@ fn validate_unique_candidate_names(
     names.insert(primary.clone());
     for fallback in fallbacks {
         if !names.insert(fallback.clone()) {
-            return Err(ProviderRegistryError::DuplicateProviderName {
+            return Err(ProviderRegistryError::DuplicateProviderCandidate {
                 name: fallback.clone(),
             });
         }

@@ -452,9 +452,9 @@ where
     /// Boxed service created by the first successful provider candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
-    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
-    /// when the registry has no providers, or
+    /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a
+    /// named selection repeats a candidate name,
+    /// [`ProviderRegistryError::EmptyRegistry`] when the registry has no providers, or
     /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
     /// unknown, unavailable, or fails during creation.
     #[inline]
@@ -484,9 +484,9 @@ where
     /// candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
-    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
-    /// when the registry has no providers, or
+    /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a
+    /// named selection repeats a candidate name,
+    /// [`ProviderRegistryError::EmptyRegistry`] when the registry has no providers, or
     /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
     /// unknown, unavailable, or fails during creation.
     #[inline]
@@ -516,9 +516,9 @@ where
     /// candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
-    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
-    /// when the registry has no providers, or
+    /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a
+    /// named selection repeats a candidate name,
+    /// [`ProviderRegistryError::EmptyRegistry`] when the registry has no providers, or
     /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
     /// unknown, unavailable, or fails during creation.
     #[inline]
@@ -543,9 +543,9 @@ where
     /// Service handle created by the first successful provider candidate.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::DuplicateProviderName`] when a named
-    /// selection repeats a candidate name, [`ProviderRegistryError::EmptyRegistry`]
-    /// when the registry has no providers, or
+    /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a
+    /// named selection repeats a candidate name,
+    /// [`ProviderRegistryError::EmptyRegistry`] when the registry has no providers, or
     /// [`ProviderRegistryError::NoAvailableProvider`] when every candidate is
     /// unknown, unavailable, or fails during creation.
     fn create_selected_with<Handle, Create>(

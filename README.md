@@ -40,8 +40,8 @@ The public surface is organized around three core types:
 ## Features
 
 - One-parameter registries based on a `ServiceSpec` type.
-- Stable dot-free `ProviderName` validation and normalized provider
-  descriptors.
+- Stable dot-free `ProviderName` validation with config-path-safe separators,
+  plus normalized provider descriptors.
 - Runtime availability checks for optional backends.
 - Priority-based automatic provider selection.
 - Explicit named provider plus fallback-chain selection.
@@ -56,7 +56,7 @@ Add the crate to `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-spi = "0.2.3"
+qubit-spi = "0.3.0"
 ```
 
 ## Quick Start
@@ -148,9 +148,11 @@ Provider descriptors are captured at registration time. Provider ids and aliases
 are normalized into `ProviderName` values and indexed, so lookup is stable even
 if a provider instance has mutable internal state.
 
-Provider names are ASCII-only and may contain letters, digits, `_`, and `-`.
-Dots are intentionally rejected so provider names remain safe when they are used
-as keys in configuration systems that treat dotted keys as nested paths.
+Provider names are ASCII-only, may contain letters, digits, `_`, and `-`, must
+start and end with a letter or digit, and must not contain consecutive
+separators. Dots are intentionally rejected so provider names remain safe when
+they are used as keys in configuration systems that treat dotted keys as nested
+paths.
 
 ### ProviderSelection
 
@@ -244,7 +246,8 @@ Provider errors and registry errors are separate:
 | --- | --- |
 | `EmptyProviderName` | A provider id, alias, or selector was empty |
 | `InvalidProviderName` | A provider id, alias, or selector used unsupported characters |
-| `DuplicateProviderName` | A provider id, alias, or named selection candidate conflicts with another name |
+| `DuplicateProviderName` | A provider id or alias conflicts with another name |
+| `DuplicateProviderCandidate` | A named selection repeats a normalized candidate name |
 | `UnknownProvider` | No provider matched the requested selector |
 | `ProviderUnavailable` | The selected provider reported unavailable |
 | `ProviderCreate` | The selected provider failed during creation |

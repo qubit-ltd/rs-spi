@@ -475,7 +475,7 @@ fn test_create_selected_rejects_duplicate_candidate_names() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "native"
+        ProviderRegistryError::DuplicateProviderCandidate { ref name } if name.as_str() == "native"
     ));
 }
 
@@ -624,4 +624,28 @@ fn test_clone_creates_independent_provider_list_snapshot() {
     assert!(snapshot.find_provider("first").is_some());
     assert!(snapshot.find_provider("second").is_none());
     assert!(registry.find_provider("second").is_some());
+}
+
+/// Test cloned registries keep the automatic selection order snapshot.
+#[test]
+fn test_clone_preserves_auto_selection_snapshot() {
+    let mut registry = GreetingRegistry::new();
+    registry
+        .register(GreetingProvider::new("first", "first"))
+        .expect("first provider should register");
+    let snapshot = registry.clone();
+
+    registry
+        .register(GreetingProvider::new("second", "second").with_priority(100))
+        .expect("second provider should register");
+
+    let snapshot_service = snapshot
+        .create_auto_box(&TestConfig::new(""))
+        .expect("snapshot should use first provider");
+    let registry_service = registry
+        .create_auto_box(&TestConfig::new(""))
+        .expect("registry should use higher-priority provider");
+
+    assert_eq!("first", snapshot_service.greet());
+    assert_eq!("second", registry_service.greet());
 }

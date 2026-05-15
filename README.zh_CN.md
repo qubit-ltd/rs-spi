@@ -36,7 +36,8 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 ## 功能特性
 
 - 基于 `ServiceSpec` 的单泛型 registry。
-- 稳定且不含点号的 `ProviderName` 校验和规范化 provider descriptor。
+- 稳定且不含点号、分隔符适配 config 路径的 `ProviderName` 校验，以及规范化
+  provider descriptor。
 - 可选后端的运行时可用性检查。
 - 基于 priority 的自动 provider 选择。
 - 显式 named provider 加 fallback chain 的选择机制。
@@ -51,7 +52,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 ```toml
 [dependencies]
-qubit-spi = "0.2.3"
+qubit-spi = "0.3.0"
 ```
 
 ## 快速开始
@@ -141,8 +142,9 @@ registry 在注册时捕获 provider descriptor。provider id 和 alias 会规�
 `ProviderName` 并建立索引，所以 provider 实例内部状态变化不会影响 registry 的
 名称解析不变量。
 
-provider 名称只允许 ASCII 字母、数字、`_` 和 `-`。这里刻意禁止 `.`，这样当
-provider 名称进入配置系统时，不会被支持点号路径的配置解析器误认为嵌套路径。
+provider 名称只允许 ASCII 字母、数字、`_` 和 `-`，并且必须以字母或数字开头
+和结尾，不能包含连续分隔符。这里刻意禁止 `.`，这样当 provider 名称进入配置
+系统时，不会被支持点号路径的配置解析器误认为嵌套路径。
 
 ### ProviderSelection
 
@@ -235,7 +237,8 @@ provider 错误和 registry 错误分层：
 | --- | --- |
 | `EmptyProviderName` | provider id、alias 或 selector 为空 |
 | `InvalidProviderName` | provider id、alias 或 selector 包含非法字符 |
-| `DuplicateProviderName` | provider id、alias 或 named selection 候选名称重复 |
+| `DuplicateProviderName` | provider id 或 alias 与其他名称冲突 |
+| `DuplicateProviderCandidate` | named selection 重复了规范化后的候选名称 |
 | `UnknownProvider` | 没有 provider 匹配请求的 selector |
 | `ProviderUnavailable` | 选中的 provider 报告不可用 |
 | `ProviderCreate` | 选中的 provider 创建服务失败 |

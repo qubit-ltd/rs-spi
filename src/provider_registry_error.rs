@@ -36,6 +36,12 @@ pub enum ProviderRegistryError {
         /// Conflicting provider name.
         name: ProviderName,
     },
+    /// A named selection repeats a provider candidate.
+    #[error("duplicate provider candidate in selection: {name}")]
+    DuplicateProviderCandidate {
+        /// Repeated provider candidate name.
+        name: ProviderName,
+    },
     /// No registered provider matches the requested selector.
     #[error("unknown provider: {name}")]
     UnknownProvider {

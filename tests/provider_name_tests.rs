@@ -54,14 +54,37 @@ fn test_new_rejects_dotted_provider_names() {
     ));
 }
 
-/// Test provider names require at least one alphanumeric character.
+/// Test provider names must start with an alphanumeric character.
 #[test]
-fn test_new_rejects_separator_only_provider_names() {
-    let error = ProviderName::new("--__").expect_err("separator-only names should fail");
+fn test_new_rejects_provider_names_starting_with_separator() {
+    let error = ProviderName::new("_native").expect_err("leading separators should fail");
 
     assert!(matches!(
         error,
-        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "--__"
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "_native"
+    ));
+}
+
+/// Test provider names must end with an alphanumeric character.
+#[test]
+fn test_new_rejects_provider_names_ending_with_separator() {
+    let error = ProviderName::new("native-").expect_err("trailing separators should fail");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native-"
+    ));
+}
+
+/// Test provider names reject adjacent separators.
+#[test]
+fn test_new_rejects_consecutive_provider_name_separators() {
+    let error =
+        ProviderName::new("native-_provider").expect_err("consecutive separators should fail");
+
+    assert!(matches!(
+        error,
+        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "native-_provider"
     ));
 }
 

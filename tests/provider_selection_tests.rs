@@ -62,11 +62,11 @@ fn test_from_names_rejects_duplicate_candidates() {
 
     assert!(matches!(
         primary_error,
-        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "native"
+        ProviderRegistryError::DuplicateProviderCandidate { ref name } if name.as_str() == "native"
     ));
     assert!(matches!(
         fallback_error,
-        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "fallback"
+        ProviderRegistryError::DuplicateProviderCandidate { ref name } if name.as_str() == "fallback"
     ));
 }
 
@@ -114,6 +114,6 @@ fn test_from_owned_names_rejects_duplicate_owned_candidates() {
 
     assert!(matches!(
         error,
-        ProviderRegistryError::DuplicateProviderName { ref name } if name.as_str() == "fallback"
+        ProviderRegistryError::DuplicateProviderCandidate { ref name } if name.as_str() == "fallback"
     ));
 }

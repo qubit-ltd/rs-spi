@@ -22,7 +22,8 @@ use crate::ProviderRegistryError;
 ///
 /// Provider names are normalized by trimming surrounding whitespace and folding
 /// ASCII letters to lowercase. Valid names may contain ASCII letters, digits,
-/// `_`, and `-`, and must include at least one ASCII letter or digit.
+/// `_`, and `-`, must start and end with an ASCII letter or digit, and must not
+/// contain consecutive separators.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ProviderName(String);
 
@@ -57,10 +58,25 @@ impl ProviderName {
                 "provider names may contain only ASCII letters, digits, '_' or '-'",
             ));
         }
-        if !trimmed.bytes().any(|byte| byte.is_ascii_alphanumeric()) {
+        let bytes = trimmed.as_bytes();
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if !first.is_ascii_alphanumeric() {
             return Err(invalid_provider_name(
                 trimmed,
-                "provider names must contain at least one ASCII letter or digit",
+                "provider names must start with an ASCII letter or digit",
+            ));
+        }
+        if !last.is_ascii_alphanumeric() {
+            return Err(invalid_provider_name(
+                trimmed,
+                "provider names must end with an ASCII letter or digit",
+            ));
+        }
+        if has_consecutive_separators(trimmed) {
+            return Err(invalid_provider_name(
+                trimmed,
+                "provider names must not contain consecutive separators",
             ));
         }
         Ok(Self(trimmed.to_ascii_lowercase()))
@@ -107,7 +123,31 @@ impl FromStr for ProviderName {
 /// # Returns
 /// `true` when the byte is accepted by the provider-name grammar.
 fn is_allowed_provider_name_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+    byte.is_ascii_alphanumeric() || is_separator_provider_name_byte(byte)
+}
+
+/// Tells whether one ASCII byte is a provider-name separator.
+///
+/// # Parameters
+/// - `byte`: Byte to validate.
+///
+/// # Returns
+/// `true` when the byte is a provider-name separator.
+fn is_separator_provider_name_byte(byte: u8) -> bool {
+    matches!(byte, b'_' | b'-')
+}
+
+/// Tells whether a provider name contains consecutive separators.
+///
+/// # Parameters
+/// - `name`: Provider name after trimming and character validation.
+///
+/// # Returns
+/// `true` when any two adjacent bytes are separators.
+fn has_consecutive_separators(name: &str) -> bool {
+    name.as_bytes().windows(2).any(|bytes| {
+        is_separator_provider_name_byte(bytes[0]) && is_separator_provider_name_byte(bytes[1])
+    })
 }
 
 /// Builds an invalid provider-name error.

@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-spi"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "log",
  "thiserror",

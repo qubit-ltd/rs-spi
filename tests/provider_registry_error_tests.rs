@@ -28,11 +28,11 @@ fn test_empty_provider_name_error_display() {
 fn test_invalid_provider_name_error_display() {
     let error = ProviderRegistryError::InvalidProviderName {
         name: "bad name".to_owned(),
-        reason: "provider names may contain only ASCII letters, digits, '.', '_' or '-'".to_owned(),
+        reason: "provider names may contain only ASCII letters, digits, '_' or '-'".to_owned(),
     };
 
     assert_eq!(
-        "invalid provider name 'bad name': provider names may contain only ASCII letters, digits, '.', '_' or '-'",
+        "invalid provider name 'bad name': provider names may contain only ASCII letters, digits, '_' or '-'",
         error.to_string(),
     );
 }
@@ -45,6 +45,19 @@ fn test_duplicate_provider_name_error_display() {
     };
 
     assert_eq!("duplicate provider name: native", error.to_string());
+}
+
+/// Test duplicate selection-candidate errors include the duplicated name.
+#[test]
+fn test_duplicate_provider_candidate_error_display() {
+    let error = ProviderRegistryError::DuplicateProviderCandidate {
+        name: name("native"),
+    };
+
+    assert_eq!(
+        "duplicate provider candidate in selection: native",
+        error.to_string(),
+    );
 }
 
 /// Test unknown provider errors include the requested selector.
