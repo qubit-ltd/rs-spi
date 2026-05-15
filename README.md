@@ -40,7 +40,8 @@ The public surface is organized around three core types:
 ## Features
 
 - One-parameter registries based on a `ServiceSpec` type.
-- Stable `ProviderName` validation and normalized provider descriptors.
+- Stable dot-free `ProviderName` validation and normalized provider
+  descriptors.
 - Runtime availability checks for optional backends.
 - Priority-based automatic provider selection.
 - Explicit named provider plus fallback-chain selection.
@@ -147,6 +148,10 @@ Provider descriptors are captured at registration time. Provider ids and aliases
 are normalized into `ProviderName` values and indexed, so lookup is stable even
 if a provider instance has mutable internal state.
 
+Provider names are ASCII-only and may contain letters, digits, `_`, and `-`.
+Dots are intentionally rejected so provider names remain safe when they are used
+as keys in configuration systems that treat dotted keys as nested paths.
+
 ### ProviderSelection
 
 `ProviderSelection` is an enum:
@@ -155,7 +160,9 @@ if a provider instance has mutable internal state.
 - `Named`: try a primary provider, then explicit fallbacks in order.
 
 Selection stops at the first provider that is available and successfully creates
-a service.
+a service. Named selections reject duplicated candidate names, and the registry
+does not retry a provider that was already attempted through another alias in
+the same selection.
 
 ## Fallback Example
 
@@ -237,7 +244,7 @@ Provider errors and registry errors are separate:
 | --- | --- |
 | `EmptyProviderName` | A provider id, alias, or selector was empty |
 | `InvalidProviderName` | A provider id, alias, or selector used unsupported characters |
-| `DuplicateProviderName` | A provider id or alias conflicts with another name |
+| `DuplicateProviderName` | A provider id, alias, or named selection candidate conflicts with another name |
 | `UnknownProvider` | No provider matched the requested selector |
 | `ProviderUnavailable` | The selected provider reported unavailable |
 | `ProviderCreate` | The selected provider failed during creation |
@@ -287,7 +294,7 @@ If a future crate needs linker-time discovery, it can build that layer on top of
 | `ProviderName` | Validated and normalized provider name |
 | `ProviderRegistry::new()` | Creates an empty registry |
 | `ProviderRegistry::register(provider)` | Registers an owned provider |
-| `ProviderRegistry::register_shared(provider)` | Registers a shared provider |
+| `ProviderRegistry::register_shared(provider)` | Registers a shared `Arc<dyn ServiceProvider<_>>` provider |
 | `ProviderRegistry::resolve_provider(name)` | Resolves a provider or returns a precise error |
 | `ProviderRegistry::find_provider(name)` | Option-returning provider lookup convenience |
 | `ProviderRegistry::iter_provider_names()` | Iterates provider ids without allocation |

@@ -36,7 +36,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 ## 功能特性
 
 - 基于 `ServiceSpec` 的单泛型 registry。
-- 稳定的 `ProviderName` 校验和规范化 provider descriptor。
+- 稳定且不含点号的 `ProviderName` 校验和规范化 provider descriptor。
 - 可选后端的运行时可用性检查。
 - 基于 priority 的自动 provider 选择。
 - 显式 named provider 加 fallback chain 的选择机制。
@@ -141,6 +141,9 @@ registry 在注册时捕获 provider descriptor。provider id 和 alias 会规�
 `ProviderName` 并建立索引，所以 provider 实例内部状态变化不会影响 registry 的
 名称解析不变量。
 
+provider 名称只允许 ASCII 字母、数字、`_` 和 `-`。这里刻意禁止 `.`，这样当
+provider 名称进入配置系统时，不会被支持点号路径的配置解析器误认为嵌套路径。
+
 ### ProviderSelection
 
 `ProviderSelection` 是一个枚举：
@@ -149,6 +152,8 @@ registry 在注册时捕获 provider descriptor。provider id 和 alias 会规�
 - `Named`：先尝试 primary provider，再按顺序尝试 fallbacks。
 
 只要某个 provider 可用并成功创建 service，选择过程就会停止。
+Named selection 会拒绝重复的候选名称；如果不同候选名称通过 alias 指向同一个
+provider，registry 在同一次选择过程中只会尝试该 provider 一次。
 
 ## Fallback 示例
 
@@ -230,7 +235,7 @@ provider 错误和 registry 错误分层：
 | --- | --- |
 | `EmptyProviderName` | provider id、alias 或 selector 为空 |
 | `InvalidProviderName` | provider id、alias 或 selector 包含非法字符 |
-| `DuplicateProviderName` | provider id 或 alias 与已有名称冲突 |
+| `DuplicateProviderName` | provider id、alias 或 named selection 候选名称重复 |
 | `UnknownProvider` | 没有 provider 匹配请求的 selector |
 | `ProviderUnavailable` | 选中的 provider 报告不可用 |
 | `ProviderCreate` | 选中的 provider 创建服务失败 |
@@ -276,7 +281,7 @@ Rust 标准库没有 Java `ServiceLoader` 的等价机制。`qubit-spi` 刻意�
 | `ProviderName` | 已校验并规范化的 provider 名称 |
 | `ProviderRegistry::new()` | 创建空 registry |
 | `ProviderRegistry::register(provider)` | 注册 owned provider |
-| `ProviderRegistry::register_shared(provider)` | 注册共享 provider |
+| `ProviderRegistry::register_shared(provider)` | 注册共享的 `Arc<dyn ServiceProvider<_>>` provider |
 | `ProviderRegistry::resolve_provider(name)` | 解析 provider，失败时返回精确错误 |
 | `ProviderRegistry::find_provider(name)` | 返回 `Option` 的 provider 查询便利方法 |
 | `ProviderRegistry::iter_provider_names()` | 无分配遍历 provider id |
