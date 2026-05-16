@@ -52,7 +52,7 @@ crate 提供可选实现”的场景。它面向静态链接的 Rust crate：应
 
 ```toml
 [dependencies]
-qubit-spi = "0.3.0"
+qubit-spi = "0.3"
 ```
 
 ## 快速开始

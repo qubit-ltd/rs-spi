@@ -56,7 +56,7 @@ Add the crate to `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-spi = "0.3.0"
+qubit-spi = "0.3"
 ```
 
 ## Quick Start
