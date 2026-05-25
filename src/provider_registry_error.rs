@@ -88,9 +88,5 @@ pub enum ProviderRegistryError {
 /// # Returns
 /// Candidate failure messages joined by `; `.
 fn format_provider_failures(failures: &[ProviderFailure]) -> String {
-    failures
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join("; ")
+    failures.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ")
 }

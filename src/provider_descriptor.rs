@@ -137,17 +137,12 @@ impl ProviderDescriptor {
 /// # Errors
 /// Returns [`ProviderRegistryError::DuplicateProviderName`] when an alias
 /// duplicates the id or another alias.
-fn validate_unique_names(
-    id: &ProviderName,
-    aliases: &[ProviderName],
-) -> Result<(), ProviderRegistryError> {
+fn validate_unique_names(id: &ProviderName, aliases: &[ProviderName]) -> Result<(), ProviderRegistryError> {
     let mut names = HashSet::with_capacity(aliases.len() + 1);
     names.insert(id.clone());
     for alias in aliases {
         if !names.insert(alias.clone()) {
-            return Err(ProviderRegistryError::DuplicateProviderName {
-                name: alias.clone(),
-            });
+            return Err(ProviderRegistryError::DuplicateProviderName { name: alias.clone() });
         }
     }
     Ok(())

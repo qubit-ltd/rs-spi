@@ -97,10 +97,7 @@ impl ProviderFailure {
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `name` is not valid.
     #[inline]
-    pub fn unavailable_from_error(
-        name: &str,
-        source: ProviderCreateError,
-    ) -> Result<Self, ProviderRegistryError> {
+    pub fn unavailable_from_error(name: &str, source: ProviderCreateError) -> Result<Self, ProviderRegistryError> {
         Ok(Self::unavailable_error(ProviderName::new(name)?, source))
     }
 
@@ -116,10 +113,7 @@ impl ProviderFailure {
     /// # Errors
     /// Returns [`ProviderRegistryError`] when `name` is not valid.
     #[inline]
-    pub fn create_failed_from_error(
-        name: &str,
-        source: ProviderCreateError,
-    ) -> Result<Self, ProviderRegistryError> {
+    pub fn create_failed_from_error(name: &str, source: ProviderCreateError) -> Result<Self, ProviderRegistryError> {
         Ok(Self::create_failed_error(ProviderName::new(name)?, source))
     }
 
@@ -139,9 +133,7 @@ impl ProviderFailure {
     #[inline]
     pub fn provider_name(&self) -> &ProviderName {
         match self {
-            Self::UnknownProvider { name }
-            | Self::Unavailable { name, .. }
-            | Self::CreateFailed { name, .. } => name,
+            Self::UnknownProvider { name } | Self::Unavailable { name, .. } | Self::CreateFailed { name, .. } => name,
         }
     }
 
@@ -205,11 +197,7 @@ impl Display for ProviderFailure {
                 write!(formatter, "unknown provider: {name}")
             }
             Self::Unavailable { name, source } => {
-                write!(
-                    formatter,
-                    "provider '{name}' is unavailable: {}",
-                    source.reason(),
-                )
+                write!(formatter, "provider '{name}' is unavailable: {}", source.reason(),)
             }
             Self::CreateFailed { name, source } => {
                 write!(

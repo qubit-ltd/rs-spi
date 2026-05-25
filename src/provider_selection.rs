@@ -95,10 +95,7 @@ impl ProviderSelection {
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
     /// valid provider name, or when candidate names are duplicated.
     #[inline]
-    pub fn from_owned_names(
-        primary: &str,
-        fallbacks: &[String],
-    ) -> Result<Self, ProviderRegistryError> {
+    pub fn from_owned_names(primary: &str, fallbacks: &[String]) -> Result<Self, ProviderRegistryError> {
         let primary = ProviderName::new(primary)?;
         let fallbacks = normalize_owned_names(fallbacks)?;
         validate_unique_candidate_names(&primary, &fallbacks)?;
@@ -147,9 +144,7 @@ impl ProviderSelection {
     pub(crate) fn validate_unique_names(&self) -> Result<(), ProviderRegistryError> {
         match self {
             Self::Auto => Ok(()),
-            Self::Named { primary, fallbacks } => {
-                validate_unique_candidate_names(primary, fallbacks)
-            }
+            Self::Named { primary, fallbacks } => validate_unique_candidate_names(primary, fallbacks),
         }
     }
 }
@@ -173,11 +168,7 @@ impl Default for ProviderSelection {
 /// # Errors
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
 fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
-    names
-        .iter()
-        .map(String::as_str)
-        .map(ProviderName::new)
-        .collect()
+    names.iter().map(String::as_str).map(ProviderName::new).collect()
 }
 
 /// Normalizes borrowed provider names.
@@ -211,9 +202,7 @@ fn validate_unique_candidate_names(
     names.insert(primary.clone());
     for fallback in fallbacks {
         if !names.insert(fallback.clone()) {
-            return Err(ProviderRegistryError::DuplicateProviderCandidate {
-                name: fallback.clone(),
-            });
+            return Err(ProviderRegistryError::DuplicateProviderCandidate { name: fallback.clone() });
         }
     }
     Ok(())

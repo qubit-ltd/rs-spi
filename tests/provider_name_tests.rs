@@ -6,9 +6,7 @@ use qubit_spi::{
 /// Test provider names implement standard string conversion traits.
 #[test]
 fn test_provider_name_string_traits() {
-    let name: ProviderName = " Native-Provider_1 "
-        .parse()
-        .expect("provider name should parse");
+    let name: ProviderName = " Native-Provider_1 ".parse().expect("provider name should parse");
 
     assert_eq!("native-provider_1", name.as_ref());
     assert_eq!("native-provider_1", format!("{name}"));
@@ -17,8 +15,7 @@ fn test_provider_name_string_traits() {
 /// Test provider names are trimmed and normalized to lowercase ASCII.
 #[test]
 fn test_new_trims_and_normalizes_provider_names() {
-    let name =
-        ProviderName::new(" Native-Provider_1 ").expect("provider name should be normalized");
+    let name = ProviderName::new(" Native-Provider_1 ").expect("provider name should be normalized");
 
     assert_eq!("native-provider_1", name.as_str());
     assert_eq!("native-provider_1", name.to_string());
@@ -79,8 +76,7 @@ fn test_new_rejects_provider_names_ending_with_separator() {
 /// Test provider names reject adjacent separators.
 #[test]
 fn test_new_rejects_consecutive_provider_name_separators() {
-    let error =
-        ProviderName::new("native-_provider").expect_err("consecutive separators should fail");
+    let error = ProviderName::new("native-_provider").expect_err("consecutive separators should fail");
 
     assert!(matches!(
         error,

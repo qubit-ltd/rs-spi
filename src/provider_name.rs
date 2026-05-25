@@ -47,10 +47,7 @@ impl ProviderName {
             return Err(ProviderRegistryError::EmptyProviderName);
         }
         if !trimmed.is_ascii() {
-            return Err(invalid_provider_name(
-                trimmed,
-                "provider names must be ASCII",
-            ));
+            return Err(invalid_provider_name(trimmed, "provider names must be ASCII"));
         }
         if !trimmed.bytes().all(is_allowed_provider_name_byte) {
             return Err(invalid_provider_name(
@@ -145,9 +142,9 @@ fn is_separator_provider_name_byte(byte: u8) -> bool {
 /// # Returns
 /// `true` when any two adjacent bytes are separators.
 fn has_consecutive_separators(name: &str) -> bool {
-    name.as_bytes().windows(2).any(|bytes| {
-        is_separator_provider_name_byte(bytes[0]) && is_separator_provider_name_byte(bytes[1])
-    })
+    name.as_bytes()
+        .windows(2)
+        .any(|bytes| is_separator_provider_name_byte(bytes[0]) && is_separator_provider_name_byte(bytes[1]))
 }
 
 /// Builds an invalid provider-name error.

@@ -132,9 +132,9 @@ impl ProviderCreateError {
     #[inline]
     fn source_error(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Unavailable { source, .. } | Self::Failed { source, .. } => source
-                .as_deref()
-                .map(|source| source as &(dyn Error + 'static)),
+            Self::Unavailable { source, .. } | Self::Failed { source, .. } => {
+                source.as_deref().map(|source| source as &(dyn Error + 'static))
+            }
         }
     }
 }

@@ -40,9 +40,7 @@ fn test_invalid_provider_name_error_display() {
 /// Test duplicate provider-name errors include the duplicated name.
 #[test]
 fn test_duplicate_provider_name_error_display() {
-    let error = ProviderRegistryError::DuplicateProviderName {
-        name: name("native"),
-    };
+    let error = ProviderRegistryError::DuplicateProviderName { name: name("native") };
 
     assert_eq!("duplicate provider name: native", error.to_string());
 }
@@ -50,22 +48,15 @@ fn test_duplicate_provider_name_error_display() {
 /// Test duplicate selection-candidate errors include the duplicated name.
 #[test]
 fn test_duplicate_provider_candidate_error_display() {
-    let error = ProviderRegistryError::DuplicateProviderCandidate {
-        name: name("native"),
-    };
+    let error = ProviderRegistryError::DuplicateProviderCandidate { name: name("native") };
 
-    assert_eq!(
-        "duplicate provider candidate in selection: native",
-        error.to_string(),
-    );
+    assert_eq!("duplicate provider candidate in selection: native", error.to_string(),);
 }
 
 /// Test unknown provider errors include the requested selector.
 #[test]
 fn test_unknown_provider_error_display() {
-    let error = ProviderRegistryError::UnknownProvider {
-        name: name("missing"),
-    };
+    let error = ProviderRegistryError::UnknownProvider { name: name("missing") };
 
     assert_eq!("unknown provider: missing", error.to_string());
 }
@@ -78,15 +69,10 @@ fn test_provider_unavailable_error_display() {
         source: ProviderCreateError::unavailable("not installed"),
     };
 
-    assert_eq!(
-        "provider 'native' is unavailable: not installed",
-        error.to_string(),
-    );
+    assert_eq!("provider 'native' is unavailable: not installed", error.to_string(),);
     assert_eq!(
         "provider is unavailable: not installed",
-        Error::source(&error)
-            .expect("source should exist")
-            .to_string(),
+        Error::source(&error).expect("source should exist").to_string(),
     );
 }
 
@@ -98,15 +84,10 @@ fn test_provider_create_error_display() {
         source: ProviderCreateError::failed("boom"),
     };
 
-    assert_eq!(
-        "provider 'native' failed to create service: boom",
-        error.to_string(),
-    );
+    assert_eq!("provider 'native' failed to create service: boom", error.to_string(),);
     assert_eq!(
         "provider failed to create service: boom",
-        Error::source(&error)
-            .expect("source should exist")
-            .to_string(),
+        Error::source(&error).expect("source should exist").to_string(),
     );
 }
 
@@ -119,16 +100,10 @@ fn test_provider_create_error_preserves_nested_source() {
     };
     let provider_error = Error::source(&error).expect("provider source should exist");
 
-    assert_eq!(
-        "provider 'native' failed to create service: boom",
-        error.to_string()
-    );
+    assert_eq!("provider 'native' failed to create service: boom", error.to_string());
     assert_eq!(
         "root cause",
-        provider_error
-            .source()
-            .expect("nested source should exist")
-            .to_string(),
+        provider_error.source().expect("nested source should exist").to_string(),
     );
 }
 
