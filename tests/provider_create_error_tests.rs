@@ -6,7 +6,8 @@ use qubit_spi::ProviderCreateError;
 /// Test unavailable provider creation errors preserve their reason.
 #[test]
 fn test_unavailable_preserves_reason_and_display() {
-    let error = ProviderCreateError::unavailable("native dependency is missing");
+    let error =
+        ProviderCreateError::unavailable("native dependency is missing");
 
     assert!(matches!(
         error,
@@ -41,21 +42,33 @@ fn test_failed_preserves_reason_and_display() {
 /// Test provider creation errors can preserve a lower-level source error.
 #[test]
 fn test_failed_with_source_preserves_source_error() {
-    let error = ProviderCreateError::failed_with_source("initialization failed", io::Error::other("boom"));
+    let error = ProviderCreateError::failed_with_source(
+        "initialization failed",
+        io::Error::other("boom"),
+    );
 
     assert_eq!("initialization failed", error.reason());
-    assert_eq!("boom", Error::source(&error).expect("source should exist").to_string());
+    assert_eq!(
+        "boom",
+        Error::source(&error)
+            .expect("source should exist")
+            .to_string()
+    );
 }
 
 /// Test unavailable provider errors can preserve a lower-level source error.
 #[test]
 fn test_unavailable_with_source_preserves_source_error() {
-    let error =
-        ProviderCreateError::unavailable_with_source("native dependency is missing", io::Error::other("not found"));
+    let error = ProviderCreateError::unavailable_with_source(
+        "native dependency is missing",
+        io::Error::other("not found"),
+    );
 
     assert_eq!("native dependency is missing", error.reason());
     assert_eq!(
         "not found",
-        Error::source(&error).expect("source should exist").to_string(),
+        Error::source(&error)
+            .expect("source should exist")
+            .to_string(),
     );
 }

@@ -145,7 +145,10 @@ impl ServiceProvider<GreetingSpec> for GreetingProvider {
         self.availability.clone()
     }
 
-    fn create_box(&self, config: &TestConfig) -> Result<Box<dyn GreetingService>, ProviderCreateError> {
+    fn create_box(
+        &self,
+        config: &TestConfig,
+    ) -> Result<Box<dyn GreetingService>, ProviderCreateError> {
         self.created.fetch_add(1, Ordering::SeqCst);
         if let Some(error) = &self.failure {
             return Err(error.clone());

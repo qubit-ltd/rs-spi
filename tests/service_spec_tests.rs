@@ -48,7 +48,10 @@ impl ServiceProvider<HandleSpec> for HandleProvider {
         ProviderDescriptor::new("handle")
     }
 
-    fn create_box(&self, config: &usize) -> Result<Box<dyn HandleService>, ProviderCreateError> {
+    fn create_box(
+        &self,
+        config: &usize,
+    ) -> Result<Box<dyn HandleService>, ProviderCreateError> {
         Ok(Box::new(HandleServiceImpl { value: *config }))
     }
 }
@@ -89,7 +92,10 @@ impl ServiceProvider<UnsizedConfigSpec> for UnsizedConfigProvider {
         ProviderDescriptor::new("unsized")
     }
 
-    fn create_box(&self, config: &dyn RuntimeConfig) -> Result<Box<usize>, ProviderCreateError> {
+    fn create_box(
+        &self,
+        config: &dyn RuntimeConfig,
+    ) -> Result<Box<usize>, ProviderCreateError> {
         Ok(Box::new(config.value()))
     }
 }

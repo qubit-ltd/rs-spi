@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Provider-level service creation errors.
 
 use std::error::Error;
@@ -112,7 +110,9 @@ impl ProviderCreateError {
     #[inline]
     pub fn reason(&self) -> &str {
         match self {
-            Self::Unavailable { reason, .. } | Self::Failed { reason, .. } => reason,
+            Self::Unavailable { reason, .. } | Self::Failed { reason, .. } => {
+                reason
+            }
         }
     }
 
@@ -133,7 +133,9 @@ impl ProviderCreateError {
     fn source_error(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Unavailable { source, .. } | Self::Failed { source, .. } => {
-                source.as_deref().map(|source| source as &(dyn Error + 'static))
+                source
+                    .as_deref()
+                    .map(|source| source as &(dyn Error + 'static))
             }
         }
     }

@@ -27,7 +27,8 @@ impl ServiceProvider<GreetingSpec> for MinimalProvider {
     fn create_box(
         &self,
         config: &TestConfig,
-    ) -> Result<Box<<GreetingSpec as ServiceSpec>::Service>, ProviderCreateError> {
+    ) -> Result<Box<<GreetingSpec as ServiceSpec>::Service>, ProviderCreateError>
+    {
         GreetingProvider::new("delegate", "hello").create_box(config)
     }
 }

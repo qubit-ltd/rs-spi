@@ -66,7 +66,10 @@ fn exercise_registry_diagnostics() {
         .register(GreetingProvider::new("low", "low").with_priority(1))
         .expect("low provider should register");
     registry
-        .register(GreetingProvider::new("unavailable", "hello").unavailable("disabled"))
+        .register(
+            GreetingProvider::new("unavailable", "hello")
+                .unavailable("disabled"),
+        )
         .expect("unavailable provider should register");
     registry
         .register(GreetingProvider::new("failing", "hello").failing("boom"))
@@ -76,12 +79,21 @@ fn exercise_registry_diagnostics() {
     assert!(registry.resolve_provider("missing").is_err());
     assert!(registry.resolve_provider("bad provider").is_err());
     assert!(registry.create_box("low", &TestConfig::new("")).is_ok());
-    assert!(registry.create_box("unavailable", &TestConfig::new("")).is_err());
-    assert!(registry.create_box("failing", &TestConfig::new("")).is_err());
+    assert!(
+        registry
+            .create_box("unavailable", &TestConfig::new(""))
+            .is_err()
+    );
+    assert!(
+        registry
+            .create_box("failing", &TestConfig::new(""))
+            .is_err()
+    );
     assert!(registry.create_auto_box(&TestConfig::new("")).is_ok());
 
     let failing_selection =
-        ProviderSelection::from_names("missing", &["unavailable", "failing"]).expect("selection names should be valid");
+        ProviderSelection::from_names("missing", &["unavailable", "failing"])
+            .expect("selection names should be valid");
     assert!(
         registry
             .create_selected_box(&failing_selection, &TestConfig::new(""))
@@ -89,7 +101,8 @@ fn exercise_registry_diagnostics() {
     );
 
     let fallback_selection =
-        ProviderSelection::from_names("unavailable", &["low"]).expect("selection names should be valid");
+        ProviderSelection::from_names("unavailable", &["low"])
+            .expect("selection names should be valid");
     assert!(
         registry
             .create_selected_box(&fallback_selection, &TestConfig::new(""))
@@ -120,7 +133,10 @@ fn test_diagnostic_logging_paths_do_not_change_registry_behavior() {
 fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("static", "hello").with_aliases(&["static-greeter"]))
+        .register(
+            GreetingProvider::new("static", "hello")
+                .with_aliases(&["static-greeter"]),
+        )
         .expect("provider should register");
 
     let config = TestConfig::new("say ");
@@ -152,7 +168,10 @@ fn test_register_finds_and_creates_by_id_and_alias_case_insensitively() {
 fn test_resolve_provider_reports_name_errors() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("static", "hello").with_aliases(&["static-greeter"]))
+        .register(
+            GreetingProvider::new("static", "hello")
+                .with_aliases(&["static-greeter"]),
+        )
         .expect("provider should register");
 
     let provider = registry
@@ -204,7 +223,8 @@ fn test_register_shared_uses_shared_provider_instance() {
 /// Test shared registration accepts an already-erased provider trait object.
 #[test]
 fn test_register_shared_accepts_erased_provider_instance() {
-    let provider: Arc<dyn ServiceProvider<GreetingSpec>> = Arc::new(GreetingProvider::new("erased", "hello"));
+    let provider: Arc<dyn ServiceProvider<GreetingSpec>> =
+        Arc::new(GreetingProvider::new("erased", "hello"));
     let mut registry = GreetingRegistry::new();
 
     registry
@@ -222,11 +242,15 @@ fn test_register_shared_accepts_erased_provider_instance() {
 fn test_register_rejects_duplicate_provider_names() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("native", "hello").with_aliases(&["fast"]))
+        .register(
+            GreetingProvider::new("native", "hello").with_aliases(&["fast"]),
+        )
         .expect("first provider should register");
 
     let error = registry
-        .register(GreetingProvider::new("other", "hello").with_aliases(&["FAST"]))
+        .register(
+            GreetingProvider::new("other", "hello").with_aliases(&["FAST"]),
+        )
         .expect_err("duplicate alias should be rejected");
 
     assert!(matches!(
@@ -279,7 +303,10 @@ fn test_create_reports_unknown_provider() {
 fn test_create_reports_unavailable_provider() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("native", "hello").unavailable("not installed"))
+        .register(
+            GreetingProvider::new("native", "hello")
+                .unavailable("not installed"),
+        )
         .expect("provider should register");
 
     let error = registry
@@ -317,12 +344,12 @@ fn test_create_wraps_provider_creation_error() {
 fn test_create_preserves_provider_creation_source() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(
-            GreetingProvider::new("native", "hello").failing_with(ProviderCreateError::failed_with_source(
+        .register(GreetingProvider::new("native", "hello").failing_with(
+            ProviderCreateError::failed_with_source(
                 "boom",
                 io::Error::other("root cause"),
-            )),
-        )
+            ),
+        ))
         .expect("provider should register");
 
     let error = registry
@@ -335,7 +362,9 @@ fn test_create_preserves_provider_creation_source() {
     assert_eq!("boom", source.reason());
     assert_eq!(
         "root cause",
-        Error::source(&source).expect("source should be preserved").to_string(),
+        Error::source(&source)
+            .expect("source should be preserved")
+            .to_string(),
     );
 }
 
@@ -344,7 +373,10 @@ fn test_create_preserves_provider_creation_source() {
 fn test_create_maps_provider_unavailable_creation_error() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("native", "hello").failing_unavailable("runtime missing"))
+        .register(
+            GreetingProvider::new("native", "hello")
+                .failing_unavailable("runtime missing"),
+        )
         .expect("provider should register");
 
     let error = registry
@@ -404,7 +436,8 @@ fn test_create_shared_variants_preserve_selection_behavior() {
     registry
         .register(GreetingProvider::new("high", "high").with_priority(10))
         .expect("high provider should register");
-    let selection = ProviderSelection::from_names("missing", &["low"]).expect("selection names should be valid");
+    let selection = ProviderSelection::from_names("missing", &["low"])
+        .expect("selection names should be valid");
 
     let auto_arc: Arc<_> = registry
         .create_auto_arc(&TestConfig::new(""))
@@ -425,21 +458,27 @@ fn test_create_shared_variants_preserve_selection_behavior() {
     assert_eq!("low", selected_rc.greet());
 }
 
-/// Test explicit fallback chains continue after unavailable and failing providers.
+/// Test explicit fallback chains continue after unavailable and failing
+/// providers.
 #[test]
 fn test_create_selected_uses_fallback_chain() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("primary", "primary").unavailable("disabled"))
+        .register(
+            GreetingProvider::new("primary", "primary").unavailable("disabled"),
+        )
         .expect("primary provider should register");
     registry
-        .register(GreetingProvider::new("secondary", "secondary").failing("boom"))
+        .register(
+            GreetingProvider::new("secondary", "secondary").failing("boom"),
+        )
         .expect("secondary provider should register");
     registry
         .register(GreetingProvider::new("fallback", "fallback"))
         .expect("fallback provider should register");
     let selection =
-        ProviderSelection::from_names("primary", &["secondary", "fallback"]).expect("selection names should be valid");
+        ProviderSelection::from_names("primary", &["secondary", "fallback"])
+            .expect("selection names should be valid");
 
     let service = registry
         .create_selected_box(&selection, &TestConfig::new(""))
@@ -456,8 +495,11 @@ fn test_create_selected_rejects_duplicate_candidate_names() {
         .register(GreetingProvider::new("native", "hello"))
         .expect("native provider should register");
     let selection = ProviderSelection::Named {
-        primary: ProviderName::new("native").expect("primary name should be valid"),
-        fallbacks: vec![ProviderName::new("NATIVE").expect("fallback name should be valid")],
+        primary: ProviderName::new("native")
+            .expect("primary name should be valid"),
+        fallbacks: vec![
+            ProviderName::new("NATIVE").expect("fallback name should be valid"),
+        ],
     };
 
     let error = registry
@@ -481,8 +523,8 @@ fn test_create_selected_skips_aliases_for_already_tried_provider() {
                 .unavailable("not installed"),
         )
         .expect("native provider should register");
-    let selection =
-        ProviderSelection::from_names("native", &["fast"]).expect("distinct candidate names should be accepted");
+    let selection = ProviderSelection::from_names("native", &["fast"])
+        .expect("distinct candidate names should be accepted");
 
     let error = registry
         .create_selected_box(&selection, &TestConfig::new(""))
@@ -503,13 +545,17 @@ fn test_create_selected_skips_aliases_for_already_tried_provider() {
 fn test_create_selected_reports_all_candidate_failures() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("native", "hello").unavailable("not installed"))
+        .register(
+            GreetingProvider::new("native", "hello")
+                .unavailable("not installed"),
+        )
         .expect("native provider should register");
     registry
         .register(GreetingProvider::new("fallback", "hello").failing("boom"))
         .expect("fallback provider should register");
     let selection =
-        ProviderSelection::from_names("missing", &["native", "fallback"]).expect("selection names should be valid");
+        ProviderSelection::from_names("missing", &["native", "fallback"])
+            .expect("selection names should be valid");
 
     let error = registry
         .create_selected_box(&selection, &TestConfig::new(""))
@@ -530,16 +576,19 @@ fn test_create_selected_reports_all_candidate_failures() {
     );
 }
 
-/// Test fallback aggregation maps provider creation failures to candidate failures.
+/// Test fallback aggregation maps provider creation failures to candidate
+/// failures.
 #[test]
 fn test_create_selected_converts_create_error_to_candidate_failure() {
     let mut registry = GreetingRegistry::new();
     registry
         .register(
-            GreetingProvider::new("primary", "hello").failing_with(ProviderCreateError::failed("backend exploded")),
+            GreetingProvider::new("primary", "hello")
+                .failing_with(ProviderCreateError::failed("backend exploded")),
         )
         .expect("primary provider should register");
-    let selection = ProviderSelection::from_names("primary", &[]).expect("selection names should be valid");
+    let selection = ProviderSelection::from_names("primary", &[])
+        .expect("selection names should be valid");
 
     let error = registry
         .create_selected_box(&selection, &TestConfig::new(""))
@@ -555,17 +604,22 @@ fn test_create_selected_converts_create_error_to_candidate_failure() {
     );
 }
 
-/// Test fallback aggregation preserves provider-reported unavailable creation errors.
+/// Test fallback aggregation preserves provider-reported unavailable creation
+/// errors.
 #[test]
 fn test_create_selected_converts_provider_unavailable_create_error() {
     let mut registry = GreetingRegistry::new();
     registry
-        .register(GreetingProvider::new("primary", "hello").failing_unavailable("runtime missing"))
+        .register(
+            GreetingProvider::new("primary", "hello")
+                .failing_unavailable("runtime missing"),
+        )
         .expect("primary provider should register");
     registry
         .register(GreetingProvider::new("fallback", "hello").failing("boom"))
         .expect("fallback provider should register");
-    let selection = ProviderSelection::from_names("primary", &["fallback"]).expect("selection names should be valid");
+    let selection = ProviderSelection::from_names("primary", &["fallback"])
+        .expect("selection names should be valid");
 
     let error = registry
         .create_selected_box(&selection, &TestConfig::new(""))

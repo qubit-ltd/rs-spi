@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Provider metadata captured by registries.
 
 use std::collections::HashSet;
@@ -37,7 +35,8 @@ impl ProviderDescriptor {
     /// Provider descriptor.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError`] when `id` is not a valid provider name.
+    /// Returns [`ProviderRegistryError`] when `id` is not a valid provider
+    /// name.
     #[inline]
     pub fn new(id: &str) -> Result<Self, ProviderRegistryError> {
         Ok(Self {
@@ -59,7 +58,10 @@ impl ProviderDescriptor {
     /// Returns [`ProviderRegistryError`] when any alias is not a valid provider
     /// name, or when aliases duplicate the descriptor id or each other.
     #[inline]
-    pub fn with_aliases(mut self, aliases: &[&str]) -> Result<Self, ProviderRegistryError> {
+    pub fn with_aliases(
+        mut self,
+        aliases: &[&str],
+    ) -> Result<Self, ProviderRegistryError> {
         let aliases = aliases
             .iter()
             .map(|alias| ProviderName::new(alias))
@@ -137,12 +139,17 @@ impl ProviderDescriptor {
 /// # Errors
 /// Returns [`ProviderRegistryError::DuplicateProviderName`] when an alias
 /// duplicates the id or another alias.
-fn validate_unique_names(id: &ProviderName, aliases: &[ProviderName]) -> Result<(), ProviderRegistryError> {
+fn validate_unique_names(
+    id: &ProviderName,
+    aliases: &[ProviderName],
+) -> Result<(), ProviderRegistryError> {
     let mut names = HashSet::with_capacity(aliases.len() + 1);
     names.insert(id.clone());
     for alias in aliases {
         if !names.insert(alias.clone()) {
-            return Err(ProviderRegistryError::DuplicateProviderName { name: alias.clone() });
+            return Err(ProviderRegistryError::DuplicateProviderName {
+                name: alias.clone(),
+            });
         }
     }
     Ok(())

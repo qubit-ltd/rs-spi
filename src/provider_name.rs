@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Strongly typed provider names.
 
 use std::fmt::{
@@ -37,9 +35,10 @@ impl ProviderName {
     /// Normalized provider name.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is empty
-    /// after trimming. Returns [`ProviderRegistryError::InvalidProviderName`]
-    /// when `name` is non-ASCII or contains unsupported characters.
+    /// Returns [`ProviderRegistryError::EmptyProviderName`] when `name` is
+    /// empty after trimming. Returns
+    /// [`ProviderRegistryError::InvalidProviderName`] when `name` is
+    /// non-ASCII or contains unsupported characters.
     #[inline]
     pub fn new(name: &str) -> Result<Self, ProviderRegistryError> {
         let trimmed = name.trim();
@@ -47,7 +46,10 @@ impl ProviderName {
             return Err(ProviderRegistryError::EmptyProviderName);
         }
         if !trimmed.is_ascii() {
-            return Err(invalid_provider_name(trimmed, "provider names must be ASCII"));
+            return Err(invalid_provider_name(
+                trimmed,
+                "provider names must be ASCII",
+            ));
         }
         if !trimmed.bytes().all(is_allowed_provider_name_byte) {
             return Err(invalid_provider_name(
@@ -142,9 +144,10 @@ fn is_separator_provider_name_byte(byte: u8) -> bool {
 /// # Returns
 /// `true` when any two adjacent bytes are separators.
 fn has_consecutive_separators(name: &str) -> bool {
-    name.as_bytes()
-        .windows(2)
-        .any(|bytes| is_separator_provider_name_byte(bytes[0]) && is_separator_provider_name_byte(bytes[1]))
+    name.as_bytes().windows(2).any(|bytes| {
+        is_separator_provider_name_byte(bytes[0])
+            && is_separator_provider_name_byte(bytes[1])
+    })
 }
 
 /// Builds an invalid provider-name error.

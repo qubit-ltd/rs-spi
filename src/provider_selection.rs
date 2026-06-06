@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Selection policy for provider resolution.
 
 use std::collections::HashSet;
@@ -23,8 +21,9 @@ pub enum ProviderSelection {
     Auto,
     /// Try a primary provider followed by explicit fallback providers.
     ///
-    /// Constructor methods reject repeated normalized candidate names. Registries
-    /// also validate manually constructed named selections before execution.
+    /// Constructor methods reject repeated normalized candidate names.
+    /// Registries also validate manually constructed named selections
+    /// before execution.
     Named {
         /// Primary provider candidate.
         primary: ProviderName,
@@ -72,10 +71,13 @@ impl ProviderSelection {
     /// Named provider selection.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
-    /// valid provider name, or when candidate names are duplicated.
+    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not
+    /// a valid provider name, or when candidate names are duplicated.
     #[inline]
-    pub fn from_names(primary: &str, fallbacks: &[&str]) -> Result<Self, ProviderRegistryError> {
+    pub fn from_names(
+        primary: &str,
+        fallbacks: &[&str],
+    ) -> Result<Self, ProviderRegistryError> {
         let primary = ProviderName::new(primary)?;
         let fallbacks = normalize_borrowed_names(fallbacks)?;
         validate_unique_candidate_names(&primary, &fallbacks)?;
@@ -92,10 +94,13 @@ impl ProviderSelection {
     /// Named provider selection.
     ///
     /// # Errors
-    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not a
-    /// valid provider name, or when candidate names are duplicated.
+    /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not
+    /// a valid provider name, or when candidate names are duplicated.
     #[inline]
-    pub fn from_owned_names(primary: &str, fallbacks: &[String]) -> Result<Self, ProviderRegistryError> {
+    pub fn from_owned_names(
+        primary: &str,
+        fallbacks: &[String],
+    ) -> Result<Self, ProviderRegistryError> {
         let primary = ProviderName::new(primary)?;
         let fallbacks = normalize_owned_names(fallbacks)?;
         validate_unique_candidate_names(&primary, &fallbacks)?;
@@ -141,10 +146,14 @@ impl ProviderSelection {
     /// # Errors
     /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when the
     /// primary provider or fallback list repeats a normalized name.
-    pub(crate) fn validate_unique_names(&self) -> Result<(), ProviderRegistryError> {
+    pub(crate) fn validate_unique_names(
+        &self,
+    ) -> Result<(), ProviderRegistryError> {
         match self {
             Self::Auto => Ok(()),
-            Self::Named { primary, fallbacks } => validate_unique_candidate_names(primary, fallbacks),
+            Self::Named { primary, fallbacks } => {
+                validate_unique_candidate_names(primary, fallbacks)
+            }
         }
     }
 }
@@ -167,8 +176,14 @@ impl Default for ProviderSelection {
 ///
 /// # Errors
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
-fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
-    names.iter().map(String::as_str).map(ProviderName::new).collect()
+fn normalize_owned_names(
+    names: &[String],
+) -> Result<Vec<ProviderName>, ProviderRegistryError> {
+    names
+        .iter()
+        .map(String::as_str)
+        .map(ProviderName::new)
+        .collect()
 }
 
 /// Normalizes borrowed provider names.
@@ -181,7 +196,9 @@ fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, Provider
 ///
 /// # Errors
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
-fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
+fn normalize_borrowed_names(
+    names: &[&str],
+) -> Result<Vec<ProviderName>, ProviderRegistryError> {
     names.iter().copied().map(ProviderName::new).collect()
 }
 
@@ -192,8 +209,8 @@ fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, Provide
 /// - `fallbacks`: Ordered fallback provider names.
 ///
 /// # Errors
-/// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a fallback
-/// duplicates the primary provider or an earlier fallback.
+/// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when a
+/// fallback duplicates the primary provider or an earlier fallback.
 fn validate_unique_candidate_names(
     primary: &ProviderName,
     fallbacks: &[ProviderName],
@@ -202,7 +219,9 @@ fn validate_unique_candidate_names(
     names.insert(primary.clone());
     for fallback in fallbacks {
         if !names.insert(fallback.clone()) {
-            return Err(ProviderRegistryError::DuplicateProviderCandidate { name: fallback.clone() });
+            return Err(ProviderRegistryError::DuplicateProviderCandidate {
+                name: fallback.clone(),
+            });
         }
     }
     Ok(())
