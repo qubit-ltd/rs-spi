@@ -33,17 +33,29 @@ pub struct ProviderError {
 impl ProviderError {
     /// Creates an error indicating that the request is unsupported.
     ///
-    /// `reason` explains the unsupported capability or configuration. Returns
-    /// an error classified as [`ProviderErrorKind::Unsupported`].
+    /// # Arguments
+    ///
+    /// * `reason` - Unsupported capability or configuration explanation.
+    ///
+    /// # Returns
+    ///
+    /// An error classified as [`ProviderErrorKind::Unsupported`].
+    #[inline(always)]
     #[must_use]
     pub fn unsupported(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::Unsupported, reason)
     }
 
-    /// Creates an error indicating that the provider is currently unavailable.
+    /// Creates an error indicating that the provider is unavailable.
     ///
-    /// `reason` explains the unavailable dependency or environment. Returns
-    /// an error classified as [`ProviderErrorKind::Unavailable`].
+    /// # Arguments
+    ///
+    /// * `reason` - Unavailable dependency or environment explanation.
+    ///
+    /// # Returns
+    ///
+    /// An error classified as [`ProviderErrorKind::Unavailable`].
+    #[inline(always)]
     #[must_use]
     pub fn unavailable(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::Unavailable, reason)
@@ -51,9 +63,15 @@ impl ProviderError {
 
     /// Creates an unavailable-provider error with an underlying cause.
     ///
-    /// `reason` describes the unavailable condition and `source` retains the
-    /// causal error for diagnostics. Returns an error classified as
-    /// [`ProviderErrorKind::Unavailable`].
+    /// # Arguments
+    ///
+    /// * `reason` - Human-readable unavailable condition.
+    /// * `source` - Causal error retained for diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// An unavailable error retaining its source.
+    #[inline(always)]
     #[must_use]
     pub fn unavailable_with_source(
         reason: impl AsRef<str>,
@@ -64,8 +82,14 @@ impl ProviderError {
 
     /// Creates an error for provider-specific invalid configuration.
     ///
-    /// `reason` identifies the invalid setting. Returns an error classified as
-    /// [`ProviderErrorKind::InvalidConfiguration`].
+    /// # Arguments
+    ///
+    /// * `reason` - Explanation identifying the invalid setting.
+    ///
+    /// # Returns
+    ///
+    /// An error classified as [`ProviderErrorKind::InvalidConfiguration`].
+    #[inline(always)]
     #[must_use]
     pub fn invalid_configuration(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::InvalidConfiguration, reason)
@@ -73,8 +97,14 @@ impl ProviderError {
 
     /// Creates an unexpected provider-initialization failure.
     ///
-    /// `reason` describes the initialization failure. Returns an error
-    /// classified as [`ProviderErrorKind::InitializationFailed`].
+    /// # Arguments
+    ///
+    /// * `reason` - Explanation of the initialization failure.
+    ///
+    /// # Returns
+    ///
+    /// An error classified as [`ProviderErrorKind::InitializationFailed`].
+    #[inline(always)]
     #[must_use]
     pub fn initialization_failed(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::InitializationFailed, reason)
@@ -82,8 +112,15 @@ impl ProviderError {
 
     /// Creates an initialization failure with an underlying cause.
     ///
-    /// `reason` describes the failure and `source` retains its causal error.
-    /// Returns an error classified as [`ProviderErrorKind::InitializationFailed`].
+    /// # Arguments
+    ///
+    /// * `reason` - Human-readable initialization failure.
+    /// * `source` - Causal error retained for diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// An initialization failure retaining its source.
+    #[inline(always)]
     #[must_use]
     pub fn initialization_failed_with_source(
         reason: impl AsRef<str>,
@@ -92,22 +129,17 @@ impl ProviderError {
         Self::with_source(ProviderErrorKind::InitializationFailed, reason, source)
     }
 
-    /// Returns the failure classification used by fallback policy evaluation.
-    #[must_use]
-    pub const fn kind(&self) -> ProviderErrorKind {
-        self.kind
-    }
-
-    /// Returns the provider-supplied explanation of the failure.
-    #[must_use]
-    pub fn reason(&self) -> &str {
-        &self.reason
-    }
-
     /// Creates a classified error without an underlying source.
     ///
-    /// `kind` controls fallback behavior and `reason` becomes the diagnostic
-    /// message. Returns the constructed provider error.
+    /// # Arguments
+    ///
+    /// * `kind` - Classification controlling resolver fallback behavior.
+    /// * `reason` - Human-readable diagnostic message.
+    ///
+    /// # Returns
+    ///
+    /// The classified provider error.
+    #[inline]
     fn new(kind: ProviderErrorKind, reason: impl AsRef<str>) -> Self {
         Self {
             kind,
@@ -116,10 +148,18 @@ impl ProviderError {
         }
     }
 
-    /// Creates a classified error that retains an underlying source.
+    /// Creates a classified error retaining an underlying source.
     ///
-    /// `kind` controls fallback behavior, `reason` describes the failure, and
-    /// `source` is stored for later diagnostic chaining. Returns the error.
+    /// # Arguments
+    ///
+    /// * `kind` - Classification controlling resolver fallback behavior.
+    /// * `reason` - Human-readable diagnostic message.
+    /// * `source` - Causal error retained for error chaining.
+    ///
+    /// # Returns
+    ///
+    /// The classified provider error with its source.
+    #[inline]
     fn with_source(
         kind: ProviderErrorKind,
         reason: impl AsRef<str>,
@@ -130,5 +170,27 @@ impl ProviderError {
             reason: reason.as_ref().into(),
             source: Some(Arc::new(source)),
         }
+    }
+
+    /// Returns the failure classification used by fallback policy evaluation.
+    ///
+    /// # Returns
+    ///
+    /// The provider-reported failure kind.
+    #[inline(always)]
+    #[must_use]
+    pub const fn kind(&self) -> ProviderErrorKind {
+        self.kind
+    }
+
+    /// Returns the provider-supplied explanation of the failure.
+    ///
+    /// # Returns
+    ///
+    /// The human-readable provider diagnostic.
+    #[inline(always)]
+    #[must_use]
+    pub fn reason(&self) -> &str {
+        &self.reason
     }
 }
