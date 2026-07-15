@@ -7,7 +7,9 @@
 // =============================================================================
 //! Classified errors returned by provider construction.
 
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, sync::Arc};
+
+use thiserror::Error;
 
 /// Classification of a failure reported while a provider creates a service.
 ///
@@ -31,13 +33,15 @@ pub enum ProviderErrorKind {
 /// Use the constructors to report a classified failure from a
 /// [`crate::ServiceProvider`] implementation. The resolver preserves this
 /// information in its attempt diagnostics.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error("provider {kind:?}: {reason}")]
 pub struct ProviderError {
     /// Classification consumed by the resolver's fallback policy.
     kind: ProviderErrorKind,
     /// Human-readable explanation supplied by the provider.
     reason: Box<str>,
     /// Optional underlying error retained for diagnostics and error chaining.
+    #[source]
     source: Option<Arc<dyn Error + Send + Sync>>,
 }
 
@@ -149,26 +153,5 @@ impl ProviderError {
             reason: reason.as_ref().into(),
             source: Some(Arc::new(source)),
         }
-    }
-}
-
-impl fmt::Display for ProviderError {
-    /// Formats the error classification and provider-supplied reason.
-    ///
-    /// `formatter` receives `provider <kind>: <reason>` and any formatting
-    /// failure is returned to the caller.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "provider {:?}: {}", self.kind, self.reason)
-    }
-}
-
-impl Error for ProviderError {
-    /// Returns the retained underlying error when the provider supplied one.
-    ///
-    /// Returns `None` for errors created without a source.
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn Error + 'static))
     }
 }

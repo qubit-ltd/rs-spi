@@ -7,65 +7,79 @@
 // =============================================================================
 //! Errors raised while resolving provider selections.
 
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, sync::Arc};
 
-use crate::{ProviderError, ProviderErrorKind, ProviderId, ProviderSelector};
+use thiserror::Error;
+
+use crate::{ProviderError, ProviderErrorKind, ProviderId, ProviderSelector, RegistrationError};
 
 /// Classification of a failed provider-selection resolution.
-///
-/// Inspect this value to distinguish a failed direct lookup from an exhausted
-/// automatic or explicit fallback sequence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ResolutionErrorKind {
+    /// A direct selector did not satisfy selector syntax.
+    InvalidSelector,
     /// A named selector did not resolve to any registered provider.
     UnknownProvider,
     /// The provider selection produced no service.
     NoProviderSucceeded,
 }
 
+/// Classification of one failed resolution attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum AttemptFailureKind {
+    /// Selector lookup reached no provider.
+    UnknownProvider,
+    /// A resolved provider failed to create its service.
+    ProviderError,
+}
+
 /// Diagnostic record for one candidate that could not produce a service.
-///
-/// Resolvers collect these values in attempt order so callers can determine
-/// which selector was requested, which canonical provider was reached, and why
-/// lookup or service creation failed.
 #[derive(Clone, Debug)]
 pub struct AttemptFailure {
-    /// Selector that caused this attempt, or `None` for automatic selection.
-    requested_selector: Option<ProviderSelector>,
-    /// Canonical provider reached by lookup, or `None` when lookup failed.
-    provider_id: Option<ProviderId>,
-    /// Provider-reported classification, or `None` when creation was not run.
-    provider_error_kind: Option<ProviderErrorKind>,
-    /// Human-readable explanation of the lookup or creation failure.
-    reason: Box<str>,
-    /// Optional underlying provider cause retained for error chaining.
-    source: Option<Arc<dyn Error + Send + Sync>>,
+    /// Variant-specific attempt diagnostics.
+    repr: AttemptFailureRepr,
+}
+
+/// Private representation of a failed resolution attempt.
+#[derive(Clone, Debug)]
+enum AttemptFailureRepr {
+    /// Selector lookup reached no provider.
+    UnknownProvider {
+        /// Selector retained from the request.
+        requested_selector: ProviderSelector,
+        /// Human-readable lookup failure.
+        reason: Box<str>,
+    },
+    /// A provider factory returned a classified error.
+    ProviderError {
+        /// Explicit selector, or `None` for automatic selection.
+        requested_selector: Option<ProviderSelector>,
+        /// Canonical provider reached by lookup.
+        provider_id: ProviderId,
+        /// Provider-reported failure classification.
+        provider_error_kind: ProviderErrorKind,
+        /// Provider-supplied explanation.
+        reason: Box<str>,
+        /// Optional underlying provider cause.
+        source: Option<Arc<dyn Error + Send + Sync>>,
+    },
 }
 
 impl AttemptFailure {
     /// Creates a failed attempt for a selector that matched no provider.
-    ///
-    /// `selector` is retained as the requested selector and used to construct the
-    /// reason. Returns an attempt without a provider ID, provider error kind, or
-    /// source because service creation was not reached.
     #[must_use]
     pub fn unknown_provider(selector: ProviderSelector) -> Self {
         Self {
-            reason: format!("unknown provider: {}", selector).into(),
-            requested_selector: Some(selector),
-            provider_id: None,
-            provider_error_kind: None,
-            source: None,
+            repr: AttemptFailureRepr::UnknownProvider {
+                reason: format!("unknown provider: {selector}").into(),
+                requested_selector: selector,
+            },
         }
     }
 
     /// Creates a failed attempt from an error returned by a provider factory.
-    ///
-    /// `requested_selector` identifies the explicit selector, or is `None` for
-    /// automatic selection; `provider_id` identifies the reached provider; and
-    /// `error` supplies the classification, reason, and optional source. Returns a
-    /// diagnostic record retaining those values.
     #[must_use]
     pub fn provider_error(
         requested_selector: Option<ProviderSelector>,
@@ -73,157 +87,181 @@ impl AttemptFailure {
         error: &ProviderError,
     ) -> Self {
         Self {
-            requested_selector,
-            provider_id: Some(provider_id),
-            provider_error_kind: Some(error.kind()),
-            reason: error.reason().into(),
-            source: error.source_arc(),
+            repr: AttemptFailureRepr::ProviderError {
+                requested_selector,
+                provider_id,
+                provider_error_kind: error.kind(),
+                reason: error.reason().into(),
+                source: error.source_arc(),
+            },
+        }
+    }
+
+    /// Returns the explicit attempt classification.
+    #[must_use]
+    pub const fn kind(&self) -> AttemptFailureKind {
+        match self.repr {
+            AttemptFailureRepr::UnknownProvider { .. } => AttemptFailureKind::UnknownProvider,
+            AttemptFailureRepr::ProviderError { .. } => AttemptFailureKind::ProviderError,
         }
     }
 
     /// Returns the selector that requested this attempt.
-    ///
-    /// Returns `Some` for named and chained selection attempts and `None` for an
-    /// automatically selected candidate.
     #[must_use]
     pub fn requested_selector(&self) -> Option<&ProviderSelector> {
-        self.requested_selector.as_ref()
+        match &self.repr {
+            AttemptFailureRepr::UnknownProvider {
+                requested_selector, ..
+            } => Some(requested_selector),
+            AttemptFailureRepr::ProviderError {
+                requested_selector, ..
+            } => requested_selector.as_ref(),
+        }
     }
 
     /// Returns the canonical provider reached by selector lookup.
-    ///
-    /// Returns `Some` when service creation was attempted and `None` when lookup
-    /// failed before a provider was identified.
     #[must_use]
     pub fn provider_id(&self) -> Option<&ProviderId> {
-        self.provider_id.as_ref()
+        match &self.repr {
+            AttemptFailureRepr::UnknownProvider { .. } => None,
+            AttemptFailureRepr::ProviderError { provider_id, .. } => Some(provider_id),
+        }
     }
 
     /// Returns the provider-reported creation failure classification.
-    ///
-    /// Returns `Some` when a provider factory returned an error and `None` when
-    /// service creation was not attempted.
     #[must_use]
     pub const fn provider_error_kind(&self) -> Option<ProviderErrorKind> {
-        self.provider_error_kind
+        match self.repr {
+            AttemptFailureRepr::UnknownProvider { .. } => None,
+            AttemptFailureRepr::ProviderError {
+                provider_error_kind,
+                ..
+            } => Some(provider_error_kind),
+        }
     }
 
-    /// Returns the human-readable explanation recorded for this failed attempt.
+    /// Returns the human-readable explanation for this failed attempt.
     #[must_use]
     pub fn reason(&self) -> &str {
-        &self.reason
+        match &self.repr {
+            AttemptFailureRepr::UnknownProvider { reason, .. }
+            | AttemptFailureRepr::ProviderError { reason, .. } => reason,
+        }
     }
 
     /// Returns the underlying cause retained from the provider error.
-    ///
-    /// Returns `Some` when the provider supplied a source error and `None` for an
-    /// unknown selector or a provider error without a source.
     #[must_use]
     pub fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn Error + 'static))
+        match &self.repr {
+            AttemptFailureRepr::UnknownProvider { .. } => None,
+            AttemptFailureRepr::ProviderError { source, .. } => source
+                .as_deref()
+                .map(|source| source as &(dyn Error + 'static)),
+        }
     }
 }
 
-/// Aggregate error returned when a provider selection cannot create a service.
-///
-/// Direct lookup failures retain the requested selector when it can be parsed.
-/// Failed named, automatic, and chained resolution retains ordered
-/// [`AttemptFailure`] records for unknown selectors and provider errors observed
-/// before resolution stopped. Duplicate selectors for an already attempted
-/// provider and candidates not reached after an early stop are not recorded.
-#[derive(Clone, Debug)]
-pub struct ResolutionError {
-    /// Classification of the overall resolution failure.
-    kind: ResolutionErrorKind,
-    /// Normalized direct-lookup selector, when one could be retained.
-    requested_selector: Option<ProviderSelector>,
-    /// Ordered failures recorded while candidates were considered.
-    attempts: Box<[AttemptFailure]>,
+/// Aggregate error returned when provider resolution cannot create a service.
+#[derive(Clone, Debug, Error)]
+#[error(transparent)]
+pub struct ResolutionError(
+    /// Private representation retaining variant-specific diagnostics.
+    ResolutionErrorRepr,
+);
+
+/// Private representation of aggregate resolution failures.
+#[derive(Clone, Debug, Error)]
+enum ResolutionErrorRepr {
+    /// Direct selector input was invalid.
+    #[error("invalid provider selector {input:?}")]
+    InvalidSelector {
+        /// Verbatim input supplied by the caller.
+        input: Box<str>,
+        /// Selector grammar validation failure.
+        #[source]
+        source: RegistrationError,
+    },
+    /// A valid normalized selector matched no provider.
+    #[error("unknown provider: {selector}")]
+    UnknownProvider {
+        /// Normalized unknown selector.
+        selector: ProviderSelector,
+    },
+    /// No candidate produced a service.
+    #[error("no provider succeeded after {} attempt(s)", attempts.len())]
+    NoProviderSucceeded {
+        /// Failures retained in encounter order.
+        attempts: Box<[AttemptFailure]>,
+    },
 }
 
 impl ResolutionError {
     /// Creates an error for a direct selector that matched no provider.
-    ///
-    /// `selector` is normalized and retained when it is valid. Returns an
-    /// [`ResolutionErrorKind::UnknownProvider`] error with no attempt records; an
-    /// invalid selector is represented by `None` in [`Self::requested_selector`].
     #[must_use]
     pub fn unknown_provider(selector: impl AsRef<str>) -> Self {
-        Self {
-            kind: ResolutionErrorKind::UnknownProvider,
-            requested_selector: ProviderSelector::parse(selector).ok(),
-            attempts: Box::new([]),
+        let input = selector.as_ref();
+        match ProviderSelector::parse(input) {
+            Ok(selector) => Self(ResolutionErrorRepr::UnknownProvider { selector }),
+            Err(source) => Self::invalid_selector(input, source),
         }
     }
 
+    /// Creates an error for invalid direct selector input.
+    #[must_use]
+    pub(crate) fn invalid_selector(input: impl AsRef<str>, source: RegistrationError) -> Self {
+        Self(ResolutionErrorRepr::InvalidSelector {
+            input: input.as_ref().into(),
+            source,
+        })
+    }
+
     /// Creates an aggregate error when a selection produces no service.
-    ///
-    /// `attempts` contains the unknown selectors and provider creation failures
-    /// recorded before resolution stopped, in encounter order. It may be empty
-    /// when no candidate exists. Returns a
-    /// [`ResolutionErrorKind::NoProviderSucceeded`] error without a direct
-    /// requested selector.
     #[must_use]
     pub fn no_provider_succeeded(attempts: impl Into<Box<[AttemptFailure]>>) -> Self {
-        Self {
-            kind: ResolutionErrorKind::NoProviderSucceeded,
-            requested_selector: None,
+        Self(ResolutionErrorRepr::NoProviderSucceeded {
             attempts: attempts.into(),
-        }
+        })
     }
 
     /// Returns the overall resolution failure classification.
     #[must_use]
     pub const fn kind(&self) -> ResolutionErrorKind {
-        self.kind
-    }
-
-    /// Returns the normalized selector retained for a direct lookup failure.
-    ///
-    /// Returns `Some` for a valid unknown selector and `None` for invalid input or
-    /// an aggregate candidate failure.
-    #[must_use]
-    pub fn requested_selector(&self) -> Option<&ProviderSelector> {
-        self.requested_selector.as_ref()
-    }
-
-    /// Returns failed attempts in the order candidates were considered.
-    ///
-    /// The slice contains only unknown selectors and actual provider failures;
-    /// duplicate selectors and candidates not reached after an early stop are
-    /// omitted. It is empty for a direct unknown-provider error or when no
-    /// candidate exists.
-    #[must_use]
-    pub fn attempts(&self) -> &[AttemptFailure] {
-        &self.attempts
-    }
-}
-
-impl fmt::Display for ResolutionError {
-    /// Formats the overall resolution failure for human-readable diagnostics.
-    ///
-    /// `formatter` receives either the unknown selector or the number of recorded
-    /// attempts. Returns a formatting error if the formatter rejects the message.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.kind {
-            ResolutionErrorKind::UnknownProvider => write!(
-                formatter,
-                "unknown provider: {}",
-                self.requested_selector
-                    .as_ref()
-                    .map_or("<invalid>", ProviderSelector::as_str),
-            ),
-            ResolutionErrorKind::NoProviderSucceeded => {
-                write!(
-                    formatter,
-                    "no provider succeeded after {} attempt(s)",
-                    self.attempts.len()
-                )
+        match self.0 {
+            ResolutionErrorRepr::InvalidSelector { .. } => ResolutionErrorKind::InvalidSelector,
+            ResolutionErrorRepr::UnknownProvider { .. } => ResolutionErrorKind::UnknownProvider,
+            ResolutionErrorRepr::NoProviderSucceeded { .. } => {
+                ResolutionErrorKind::NoProviderSucceeded
             }
         }
     }
-}
 
-impl Error for ResolutionError {}
+    /// Returns the original direct selector input, when one exists.
+    #[must_use]
+    pub fn selector_input(&self) -> Option<&str> {
+        match &self.0 {
+            ResolutionErrorRepr::InvalidSelector { input, .. } => Some(input),
+            ResolutionErrorRepr::UnknownProvider { selector } => Some(selector.as_str()),
+            ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
+        }
+    }
+
+    /// Returns the normalized selector retained for a direct lookup failure.
+    #[must_use]
+    pub fn requested_selector(&self) -> Option<&ProviderSelector> {
+        match &self.0 {
+            ResolutionErrorRepr::UnknownProvider { selector } => Some(selector),
+            ResolutionErrorRepr::InvalidSelector { .. }
+            | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
+        }
+    }
+
+    /// Returns failed attempts in the order candidates were considered.
+    #[must_use]
+    pub fn attempts(&self) -> &[AttemptFailure] {
+        match &self.0 {
+            ResolutionErrorRepr::NoProviderSucceeded { attempts } => attempts,
+            ResolutionErrorRepr::InvalidSelector { .. }
+            | ResolutionErrorRepr::UnknownProvider { .. } => &[],
+        }
+    }
+}

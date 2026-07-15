@@ -7,7 +7,7 @@
 // =============================================================================
 //! Policy-driven provider selection and service creation.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 use crate::{
     AttemptFailure, CreatedService, FallbackPolicy, ProviderErrorKind, ProviderRegistry,
@@ -42,6 +42,18 @@ where
             registry,
             fallback_policy,
         }
+    }
+
+    /// Returns the immutable provider registry used by this resolver.
+    #[must_use]
+    pub const fn registry(&self) -> &ProviderRegistry<S> {
+        &self.registry
+    }
+
+    /// Returns the fallback policy applied after provider creation failures.
+    #[must_use]
+    pub const fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
     }
 
     /// Creates a service using the requested provider selection.
@@ -182,5 +194,32 @@ where
                 )
             }
         }
+    }
+}
+
+impl<S> Clone for ProviderResolver<S>
+where
+    S: ServiceSpec,
+{
+    /// Clones the resolver and its shared immutable registry handle.
+    fn clone(&self) -> Self {
+        Self {
+            registry: self.registry.clone(),
+            fallback_policy: self.fallback_policy,
+        }
+    }
+}
+
+impl<S> fmt::Debug for ProviderResolver<S>
+where
+    S: ServiceSpec,
+{
+    /// Formats the registry metadata and fallback policy.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderResolver")
+            .field("registry", &self.registry)
+            .field("fallback_policy", &self.fallback_policy)
+            .finish()
     }
 }

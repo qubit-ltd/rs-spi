@@ -7,7 +7,7 @@
 // =============================================================================
 //! Errors raised while building a provider registry.
 
-use std::fmt;
+use thiserror::Error;
 
 /// Classification of a failure detected while validating registry metadata.
 ///
@@ -31,16 +31,37 @@ pub enum RegistrationErrorKind {
 /// builder also returns it before mutation when a canonical ID or alias is
 /// already owned. The optional diagnostic fields expose the values relevant to
 /// the specific [`Self::kind`].
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RegistrationError {
-    /// Classification identifying the registration rule that failed.
-    kind: RegistrationErrorKind,
-    /// Invalid or conflicting identifier, when the error concerns one.
-    identifier: Option<Box<str>>,
-    /// Canonical ID of the provider that already owns a conflicting selector.
-    existing_provider: Option<Box<str>>,
-    /// Canonical ID of the provider that attempted to claim the selector.
-    provider: Option<Box<str>>,
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[error(transparent)]
+pub struct RegistrationError(
+    /// Private representation retaining variant-specific diagnostics.
+    RegistrationErrorRepr,
+);
+
+/// Private representation of registration validation failures.
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+enum RegistrationErrorRepr {
+    /// An identifier was empty after input processing.
+    #[error("provider identifier must not be empty")]
+    EmptyIdentifier,
+    /// An identifier violated the canonical grammar.
+    #[error("invalid provider identifier: {identifier}")]
+    InvalidIdentifier {
+        /// Verbatim invalid identifier.
+        identifier: Box<str>,
+    },
+    /// A selector was already owned by a registered provider.
+    #[error(
+        "provider selector {identifier} claimed by {provider} is already owned by {existing_provider}"
+    )]
+    DuplicateSelector {
+        /// Conflicting canonical ID or alias.
+        identifier: Box<str>,
+        /// Canonical ID that already owns the selector.
+        existing_provider: Box<str>,
+        /// Canonical ID attempting the new claim.
+        provider: Box<str>,
+    },
 }
 
 impl RegistrationError {
@@ -50,12 +71,7 @@ impl RegistrationError {
     /// identifier or provider ownership details.
     #[must_use]
     pub fn empty_identifier() -> Self {
-        Self {
-            kind: RegistrationErrorKind::EmptyIdentifier,
-            identifier: None,
-            existing_provider: None,
-            provider: None,
-        }
+        Self(RegistrationErrorRepr::EmptyIdentifier)
     }
 
     /// Creates an error for an identifier that violates the canonical grammar.
@@ -64,12 +80,9 @@ impl RegistrationError {
     /// [`RegistrationErrorKind::InvalidIdentifier`] error containing that value.
     #[must_use]
     pub fn invalid_identifier(identifier: impl AsRef<str>) -> Self {
-        Self {
-            kind: RegistrationErrorKind::InvalidIdentifier,
-            identifier: Some(identifier.as_ref().into()),
-            existing_provider: None,
-            provider: None,
-        }
+        Self(RegistrationErrorRepr::InvalidIdentifier {
+            identifier: identifier.as_ref().into(),
+        })
     }
 
     /// Creates an error for a selector already claimed by another provider.
@@ -84,18 +97,25 @@ impl RegistrationError {
         existing_provider: impl AsRef<str>,
         provider: impl AsRef<str>,
     ) -> Self {
-        Self {
-            kind: RegistrationErrorKind::DuplicateSelector,
-            identifier: Some(identifier.as_ref().into()),
-            existing_provider: Some(existing_provider.as_ref().into()),
-            provider: Some(provider.as_ref().into()),
-        }
+        Self(RegistrationErrorRepr::DuplicateSelector {
+            identifier: identifier.as_ref().into(),
+            existing_provider: existing_provider.as_ref().into(),
+            provider: provider.as_ref().into(),
+        })
     }
 
     /// Returns the registration rule that failed.
     #[must_use]
     pub const fn kind(&self) -> RegistrationErrorKind {
-        self.kind
+        match self.0 {
+            RegistrationErrorRepr::EmptyIdentifier => RegistrationErrorKind::EmptyIdentifier,
+            RegistrationErrorRepr::InvalidIdentifier { .. } => {
+                RegistrationErrorKind::InvalidIdentifier
+            }
+            RegistrationErrorRepr::DuplicateSelector { .. } => {
+                RegistrationErrorKind::DuplicateSelector
+            }
+        }
     }
 
     /// Returns the invalid or conflicting identifier, when one was recorded.
@@ -104,7 +124,11 @@ impl RegistrationError {
     /// `None` for an empty-identifier error.
     #[must_use]
     pub fn identifier(&self) -> Option<&str> {
-        self.identifier.as_deref()
+        match &self.0 {
+            RegistrationErrorRepr::EmptyIdentifier => None,
+            RegistrationErrorRepr::InvalidIdentifier { identifier }
+            | RegistrationErrorRepr::DuplicateSelector { identifier, .. } => Some(identifier),
+        }
     }
 
     /// Returns the canonical provider that already owns a conflicting selector.
@@ -112,7 +136,13 @@ impl RegistrationError {
     /// Returns `Some` for a duplicate-selector error and `None` for other kinds.
     #[must_use]
     pub fn existing_provider(&self) -> Option<&str> {
-        self.existing_provider.as_deref()
+        match &self.0 {
+            RegistrationErrorRepr::DuplicateSelector {
+                existing_provider, ..
+            } => Some(existing_provider),
+            RegistrationErrorRepr::EmptyIdentifier
+            | RegistrationErrorRepr::InvalidIdentifier { .. } => None,
+        }
     }
 
     /// Returns the canonical provider that attempted to claim a selector.
@@ -120,33 +150,10 @@ impl RegistrationError {
     /// Returns `Some` for a duplicate-selector error and `None` for other kinds.
     #[must_use]
     pub fn provider(&self) -> Option<&str> {
-        self.provider.as_deref()
-    }
-}
-
-impl fmt::Display for RegistrationError {
-    /// Formats the failed registration rule and its available diagnostic values.
-    ///
-    /// `formatter` receives a human-readable message selected from [`Self::kind`].
-    /// Returns a formatting error if the formatter cannot accept the message.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.kind {
-            RegistrationErrorKind::EmptyIdentifier => {
-                formatter.write_str("provider identifier must not be empty")
-            }
-            RegistrationErrorKind::InvalidIdentifier => write!(
-                formatter,
-                "invalid provider identifier: {}",
-                self.identifier().unwrap_or("<missing>"),
-            ),
-            RegistrationErrorKind::DuplicateSelector => write!(
-                formatter,
-                "provider selector {} is already owned by {}",
-                self.identifier().unwrap_or("<missing>"),
-                self.existing_provider().unwrap_or("<missing>"),
-            ),
+        match &self.0 {
+            RegistrationErrorRepr::DuplicateSelector { provider, .. } => Some(provider),
+            RegistrationErrorRepr::EmptyIdentifier
+            | RegistrationErrorRepr::InvalidIdentifier { .. } => None,
         }
     }
 }
-
-impl std::error::Error for RegistrationError {}

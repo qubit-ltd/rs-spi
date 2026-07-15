@@ -69,7 +69,6 @@ mod created_service;
 mod provider_descriptor;
 mod provider_error;
 mod provider_id;
-mod provider_registration;
 mod provider_registry;
 mod provider_registry_builder;
 mod provider_resolver;
@@ -84,13 +83,14 @@ pub use created_service::CreatedService;
 pub use provider_descriptor::ProviderDescriptor;
 pub use provider_error::{ProviderError, ProviderErrorKind};
 pub use provider_id::ProviderId;
-pub use provider_registration::ProviderRegistration;
 pub use provider_registry::{ProviderRegistry, ResolvedProvider};
 pub use provider_registry_builder::ProviderRegistryBuilder;
 pub use provider_resolver::ProviderResolver;
 pub use provider_selection::{FallbackPolicy, ProviderSelection};
 pub use provider_selector::ProviderSelector;
 pub use registration_error::{RegistrationError, RegistrationErrorKind};
-pub use resolution_error::{AttemptFailure, ResolutionError, ResolutionErrorKind};
+pub use resolution_error::{
+    AttemptFailure, AttemptFailureKind, ResolutionError, ResolutionErrorKind,
+};
 pub use service_provider::ServiceProvider;
 pub use service_spec::ServiceSpec;
