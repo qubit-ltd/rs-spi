@@ -9,85 +9,83 @@
 
 use thiserror::Error;
 
-use crate::ProviderSelectorError;
-
-/// Classification of a provider descriptor construction failure.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum ProviderDescriptorErrorKind {
-    /// An alias cannot be parsed as a provider selector.
-    InvalidAlias,
-    /// Two aliases normalize to the same selector.
-    DuplicateAlias,
-    /// An alias normalizes to the canonical provider ID.
-    AliasMatchesId,
-}
+use crate::internal::ProviderDescriptorErrorRepr;
+use crate::{ProviderDescriptorErrorKind, ProviderSelectorError};
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[error(transparent)]
-pub struct ProviderDescriptorError(ProviderDescriptorErrorRepr);
-
-/// Private representation of provider descriptor construction failures.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-enum ProviderDescriptorErrorRepr {
-    /// An alias cannot be parsed as a selector.
-    #[error("invalid provider alias at index {alias_index}: {alias:?}")]
-    InvalidAlias {
-        /// Zero-based position of the invalid alias.
-        alias_index: usize,
-        /// Verbatim invalid alias.
-        alias: Box<str>,
-        /// Selector parsing failure.
-        #[source]
-        source: ProviderSelectorError,
-    },
-    /// Two aliases normalize to the same selector.
-    #[error("duplicate provider alias: {alias}")]
-    DuplicateAlias {
-        /// Normalized duplicate alias.
-        alias: Box<str>,
-    },
-    /// An alias normalizes to the canonical provider ID.
-    #[error("provider alias matches canonical ID: {alias}")]
-    AliasMatchesId {
-        /// Normalized alias matching the canonical ID.
-        alias: Box<str>,
-    },
-}
+pub struct ProviderDescriptorError(
+    /// Variant-specific descriptor construction failure.
+    ProviderDescriptorErrorRepr,
+);
 
 impl ProviderDescriptorError {
     /// Creates an error for an alias that cannot be parsed.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias_index` - Zero-based alias position.
+    /// * `alias` - Verbatim invalid alias.
+    /// * `source` - Selector parsing error that rejected the alias.
+    ///
+    /// # Returns
+    ///
+    /// An invalid-alias descriptor error retaining the parse source.
+    #[inline]
     #[must_use]
     pub(crate) fn invalid_alias(
         alias_index: usize,
-        alias: impl AsRef<str>,
+        alias: &str,
         source: ProviderSelectorError,
     ) -> Self {
         Self(ProviderDescriptorErrorRepr::InvalidAlias {
             alias_index,
-            alias: alias.as_ref().into(),
+            alias: alias.into(),
             source,
         })
     }
 
     /// Creates an error for aliases that normalize to the same selector.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias` - Normalized duplicate alias.
+    ///
+    /// # Returns
+    ///
+    /// A duplicate-alias descriptor error.
+    #[inline]
     #[must_use]
-    pub(crate) fn duplicate_alias(alias: impl AsRef<str>) -> Self {
+    pub(crate) fn duplicate_alias(alias: &str) -> Self {
         Self(ProviderDescriptorErrorRepr::DuplicateAlias {
-            alias: alias.as_ref().into(),
+            alias: alias.into(),
         })
     }
 
-    /// Creates an error for an alias that matches the canonical provider ID.
+    /// Creates an error for an alias matching the canonical provider ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias` - Normalized alias matching the canonical ID.
+    ///
+    /// # Returns
+    ///
+    /// An alias-matches-ID descriptor error.
+    #[inline]
     #[must_use]
-    pub(crate) fn alias_matches_id(alias: impl AsRef<str>) -> Self {
+    pub(crate) fn alias_matches_id(alias: &str) -> Self {
         Self(ProviderDescriptorErrorRepr::AliasMatchesId {
-            alias: alias.as_ref().into(),
+            alias: alias.into(),
         })
     }
 
     /// Returns the descriptor construction rule that failed.
+    ///
+    /// # Returns
+    ///
+    /// The classification corresponding to the retained descriptor failure.
+    #[inline(always)]
     #[must_use]
     pub const fn kind(&self) -> ProviderDescriptorErrorKind {
         match self.0 {
@@ -103,7 +101,12 @@ impl ProviderDescriptorError {
         }
     }
 
-    /// Returns the zero-based invalid alias position, when applicable.
+    /// Returns the zero-based invalid alias position.
+    ///
+    /// # Returns
+    ///
+    /// `Some` for an invalid alias, or `None` for alias conflicts.
+    #[inline(always)]
     #[must_use]
     pub const fn alias_index(&self) -> Option<usize> {
         match self.0 {
@@ -114,6 +117,11 @@ impl ProviderDescriptorError {
     }
 
     /// Returns the invalid or conflicting alias retained by this error.
+    ///
+    /// # Returns
+    ///
+    /// The alias associated with this descriptor failure.
+    #[inline(always)]
     #[must_use]
     pub fn alias(&self) -> Option<&str> {
         match &self.0 {

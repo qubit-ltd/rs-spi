@@ -9,62 +9,60 @@
 
 use thiserror::Error;
 
-/// Classification of a provider registration conflict.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum RegistrationErrorKind {
-    /// A canonical ID or alias is already owned by another registration.
-    DuplicateSelector,
-}
+use crate::internal::RegistrationErrorRepr;
+use crate::RegistrationErrorKind;
 
 /// Error returned when a provider registration conflicts with registry state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[error(transparent)]
-pub struct RegistrationError(RegistrationErrorRepr);
-
-/// Private representation of provider registration conflicts.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-enum RegistrationErrorRepr {
-    /// A selector is already owned by a registered provider.
-    #[error(
-        "provider selector {selector} claimed by {provider} is already owned by {existing_provider}"
-    )]
-    DuplicateSelector {
-        /// Conflicting canonical ID or alias.
-        selector: Box<str>,
-        /// Canonical ID that already owns the selector.
-        existing_provider: Box<str>,
-        /// Canonical ID attempting the new claim.
-        provider: Box<str>,
-    },
-}
+pub struct RegistrationError(
+    /// Variant-specific provider registration conflict.
+    RegistrationErrorRepr,
+);
 
 impl RegistrationError {
-    /// Creates an error for a selector already claimed by another provider.
+    /// Creates an error for a selector claimed by another provider.
     ///
-    /// `selector` is the conflicting canonical ID or alias,
-    /// `existing_provider` is its current canonical owner, and `provider` is the
-    /// canonical ID attempting the new claim.
+    /// # Arguments
+    ///
+    /// * `selector` - Conflicting canonical ID or alias.
+    /// * `existing_provider` - Canonical provider currently owning the selector.
+    /// * `provider` - Canonical provider attempting the new claim.
+    ///
+    /// # Returns
+    ///
+    /// A registry-owned duplicate-selector error.
+    #[inline]
     #[must_use]
-    pub fn duplicate_selector(
-        selector: impl AsRef<str>,
-        existing_provider: impl AsRef<str>,
-        provider: impl AsRef<str>,
+    pub(crate) fn duplicate_selector(
+        selector: &str,
+        existing_provider: &str,
+        provider: &str,
     ) -> Self {
         Self(RegistrationErrorRepr::DuplicateSelector {
-            selector: selector.as_ref().into(),
-            existing_provider: existing_provider.as_ref().into(),
-            provider: provider.as_ref().into(),
+            selector: selector.into(),
+            existing_provider: existing_provider.into(),
+            provider: provider.into(),
         })
     }
 
     /// Returns the registration conflict classification.
+    ///
+    /// # Returns
+    ///
+    /// [`RegistrationErrorKind::DuplicateSelector`].
+    #[inline(always)]
     #[must_use]
     pub const fn kind(&self) -> RegistrationErrorKind {
         RegistrationErrorKind::DuplicateSelector
     }
 
     /// Returns the canonical ID or alias that conflicts.
+    ///
+    /// # Returns
+    ///
+    /// The conflicting normalized selector.
+    #[inline(always)]
     #[must_use]
     pub fn selector(&self) -> &str {
         match &self.0 {
@@ -73,6 +71,11 @@ impl RegistrationError {
     }
 
     /// Returns the canonical provider that already owns the selector.
+    ///
+    /// # Returns
+    ///
+    /// The existing provider's canonical ID.
+    #[inline(always)]
     #[must_use]
     pub fn existing_provider(&self) -> &str {
         match &self.0 {
@@ -82,7 +85,12 @@ impl RegistrationError {
         }
     }
 
-    /// Returns the canonical provider that attempted to claim the selector.
+    /// Returns the canonical provider that attempted the conflicting claim.
+    ///
+    /// # Returns
+    ///
+    /// The new provider's canonical ID.
+    #[inline(always)]
     #[must_use]
     pub fn provider(&self) -> &str {
         match &self.0 {

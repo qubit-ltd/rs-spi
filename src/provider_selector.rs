@@ -24,11 +24,16 @@ pub struct ProviderSelector(
 impl ProviderSelector {
     /// Parses and normalizes a provider selector from configuration input.
     ///
-    /// `value` is trimmed and ASCII-lowercased before validation. Returns the
-    /// normalized selector used for registry lookup.
-    ///
     /// Surrounding whitespace is removed and ASCII letters are lowercased
     /// before the canonical identifier grammar is validated.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - Raw configuration or user input.
+    ///
+    /// # Returns
+    ///
+    /// The normalized selector used for registry lookup.
     ///
     /// # Errors
     ///
@@ -47,6 +52,11 @@ impl ProviderSelector {
     }
 
     /// Returns the normalized selector text.
+    ///
+    /// # Returns
+    ///
+    /// The validated lowercase selector token.
+    #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -55,6 +65,7 @@ impl ProviderSelector {
 
 impl AsRef<str> for ProviderSelector {
     /// Forwards to [`ProviderSelector::as_str`].
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
@@ -63,7 +74,14 @@ impl AsRef<str> for ProviderSelector {
 impl fmt::Display for ProviderSelector {
     /// Writes the normalized selector text to `formatter`.
     ///
-    /// Returns a formatting error if `formatter` cannot accept the text.
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    #[inline(always)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
@@ -75,13 +93,19 @@ impl FromStr for ProviderSelector {
 
     /// Parses a provider selector from configuration-style input.
     ///
-    /// `value` is trimmed and ASCII-lowercased before validation. Returns the
-    /// normalized selector used for registry lookup.
+    /// # Arguments
+    ///
+    /// * `value` - Input trimmed and ASCII-lowercased before validation.
+    ///
+    /// # Returns
+    ///
+    /// The normalized selector used for registry lookup.
     ///
     /// # Errors
     ///
     /// Returns [`ProviderSelectorError`] when the normalized input is empty or
     /// violates selector syntax.
+    #[inline(always)]
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::parse(value)
     }

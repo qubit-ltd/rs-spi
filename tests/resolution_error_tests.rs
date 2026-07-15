@@ -6,45 +6,24 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AttemptFailure, AttemptFailureKind, ProviderError, ProviderId, ProviderSelector,
-    ResolutionError, ResolutionErrorKind,
-};
+use qubit_spi::{ProviderRegistry, ResolutionErrorKind, ServiceSpec};
 
+/// Empty service family used to exercise registry resolution failures.
+struct EmptySpec;
+
+impl ServiceSpec for EmptySpec {
+    type Config = ();
+    type Output = ();
+}
+
+/// Verifies that direct lookup exposes the unknown-provider classification.
 #[test]
-fn resolution_error_exposes_its_kind_and_attempts() {
-    let error = ResolutionError::unknown_provider("missing");
+fn test_resolution_error_exposes_its_kind_and_attempts() {
+    let error = match ProviderRegistry::<EmptySpec>::default().resolve("missing") {
+        Ok(_) => panic!("an empty registry cannot resolve a provider"),
+        Err(error) => error,
+    };
 
     assert_eq!(ResolutionErrorKind::UnknownProvider, error.kind());
     assert!(error.attempts().is_empty());
-}
-
-#[test]
-fn attempt_failure_preserves_provider_error_source() {
-    let error = ProviderError::unavailable_with_source(
-        "file executable is absent",
-        std::io::Error::other("ENOENT"),
-    );
-    let attempt =
-        AttemptFailure::provider_error(None, ProviderId::new("file-command").unwrap(), &error);
-
-    assert_eq!(AttemptFailureKind::ProviderError, attempt.kind());
-    assert!(attempt.source().is_some());
-    assert!(std::error::Error::source(&attempt).is_some());
-    assert!(attempt.to_string().contains("file-command"));
-    assert!(attempt.to_string().contains("file executable is absent"));
-}
-
-#[test]
-fn unknown_attempt_has_an_explicit_kind() {
-    let attempt = AttemptFailure::unknown_provider(ProviderSelector::parse("missing").unwrap());
-
-    assert_eq!(AttemptFailureKind::UnknownProvider, attempt.kind());
-    assert_eq!(
-        Some("missing"),
-        attempt.requested_selector().map(ProviderSelector::as_str)
-    );
-    assert!(attempt.provider_id().is_none());
-    assert!(attempt.provider_error_kind().is_none());
-    assert!(attempt.source().is_none());
 }

@@ -21,8 +21,13 @@ where
 {
     /// Creates one service output from the supplied configuration.
     ///
-    /// `config` is the service-family configuration declared by `S`. Returns
-    /// the complete `S::Output` handle on success.
+    /// # Arguments
+    ///
+    /// * `config` - Service-family configuration declared by `S`.
+    ///
+    /// # Returns
+    ///
+    /// The complete `S::Output` handle.
     ///
     /// # Errors
     ///

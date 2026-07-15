@@ -11,22 +11,7 @@ use std::{error::Error, sync::Arc};
 
 use thiserror::Error;
 
-/// Classification of a failure reported while a provider creates a service.
-///
-/// Providers return these variants so [`crate::ProviderResolver`] can decide
-/// whether its fallback policy permits another provider to be tried.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum ProviderErrorKind {
-    /// The provider does not support this request or configuration.
-    Unsupported,
-    /// The provider cannot run in the current environment.
-    Unavailable,
-    /// The provider-specific configuration is invalid.
-    InvalidConfiguration,
-    /// Provider initialization failed unexpectedly.
-    InitializationFailed,
-}
+use crate::ProviderErrorKind;
 
 /// Error returned by one provider while creating a service.
 ///
@@ -117,14 +102,6 @@ impl ProviderError {
     #[must_use]
     pub fn reason(&self) -> &str {
         &self.reason
-    }
-
-    /// Clones the optional source error for internal diagnostic aggregation.
-    ///
-    /// Returns `Some` with a new [`Arc`] reference when a source was supplied,
-    /// and `None` otherwise.
-    pub(crate) fn source_arc(&self) -> Option<Arc<dyn Error + Send + Sync>> {
-        self.source.clone()
     }
 
     /// Creates a classified error without an underlying source.

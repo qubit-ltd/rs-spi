@@ -9,21 +9,11 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use crate::internal::{BuilderEntry, RegistryEntry, RegistryInner};
 use crate::{
     ProviderDescriptor, ProviderRegistry, ProviderSelector, RegistrationError, ServiceProvider,
-    ServiceSpec, provider_registry::RegistryInner,
+    ServiceSpec,
 };
-
-/// Private descriptor/factory pair retained until registry construction.
-struct BuilderEntry<S>
-where
-    S: ServiceSpec,
-{
-    /// Immutable ID, aliases, and priority used during registration.
-    descriptor: ProviderDescriptor,
-    /// Shared factory that creates the service for this entry.
-    provider: Arc<dyn ServiceProvider<S>>,
-}
 
 /// Mutable startup-only builder for an immutable provider registry.
 ///
@@ -36,8 +26,8 @@ where
 {
     /// Registrations retained until they are transformed into immutable entries.
     registrations: Vec<BuilderEntry<S>>,
-    /// Current canonical owner of every claimed canonical ID and alias.
-    selector_owners: HashMap<ProviderSelector, crate::ProviderId>,
+    /// Mapping from every claimed selector to its pending registration index.
+    selector_indices: HashMap<ProviderSelector, usize>,
 }
 
 impl<S> ProviderRegistryBuilder<S>
@@ -46,24 +36,30 @@ where
 {
     /// Creates an empty provider-registry builder.
     ///
-    /// Returns a builder with no registrations or claimed selectors.
+    /// # Returns
+    ///
+    /// A builder with no registrations or claimed selectors.
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
             registrations: Vec::new(),
-            selector_owners: HashMap::new(),
+            selector_indices: HashMap::new(),
         }
     }
 
     /// Registers an owned provider factory.
     ///
-    /// `descriptor` supplies IDs, aliases, and priority; `provider` is moved
-    /// into shared storage. Returns `Ok(())` after recording the registration.
+    /// # Arguments
+    ///
+    /// * `descriptor` - Provider ID, aliases, and automatic priority.
+    /// * `provider` - Owned factory moved into shared registry storage.
     ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] when the descriptor conflicts with an
     /// earlier registration.
+    #[inline(always)]
     pub fn register<P>(
         &mut self,
         descriptor: ProviderDescriptor,
@@ -77,13 +73,16 @@ where
 
     /// Registers an already shared provider factory.
     ///
-    /// `descriptor` supplies IDs, aliases, and priority; `provider` is retained
-    /// as the shared factory. Returns `Ok(())` after recording the registration.
+    /// # Arguments
+    ///
+    /// * `descriptor` - Provider ID, aliases, and automatic priority.
+    /// * `provider` - Shared factory retained by the immutable registry.
     ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] when the descriptor conflicts with an
     /// earlier registration.
+    #[inline(always)]
     pub fn register_shared(
         &mut self,
         descriptor: ProviderDescriptor,
@@ -94,25 +93,23 @@ where
 
     /// Builds the immutable provider catalog.
     ///
-    /// Consumes this builder, preserves registration order for iteration, and
-    /// computes descending-priority automatic order. Returns the immutable
-    /// registry; no further registrations can be made through this builder.
+    /// # Returns
+    ///
+    /// A registry preserving registration order, the already validated
+    /// selector index, and deterministic automatic-selection order.
     #[must_use]
     pub fn build(self) -> ProviderRegistry<S> {
-        let mut entries = Vec::with_capacity(self.registrations.len());
-        let mut selector_indices = HashMap::with_capacity(self.selector_owners.len());
-        for (index, registration) in self.registrations.into_iter().enumerate() {
-            let BuilderEntry {
-                descriptor,
-                provider,
-            } = registration;
-            let canonical_selector = ProviderSelector::parse(descriptor.id().as_str())
-                .expect("canonical provider IDs are valid selectors");
-            selector_indices.insert(canonical_selector, index);
-            for alias in descriptor.aliases() {
-                selector_indices.insert(alias.clone(), index);
-            }
-            entries.push(crate::provider_registry::RegistryEntry {
+        let Self {
+            registrations,
+            selector_indices,
+        } = self;
+        let mut entries = Vec::with_capacity(registrations.len());
+        for BuilderEntry {
+            descriptor,
+            provider,
+        } in registrations
+        {
+            entries.push(RegistryEntry {
                 descriptor,
                 provider,
             });
@@ -133,12 +130,17 @@ where
         }))
     }
 
-    /// Validates and records one descriptor/factory pair.
+    /// Validates and records one descriptor and factory.
     ///
-    /// `descriptor` supplies metadata and `provider` supplies its shared
-    /// factory. Returns `Ok(())` when all canonical IDs and aliases are
-    /// unclaimed, otherwise returns the corresponding [`RegistrationError`]
-    /// without modifying the builder.
+    /// # Arguments
+    ///
+    /// * `descriptor` - Provider metadata whose selectors must be unclaimed.
+    /// * `provider` - Shared factory stored after validation succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] without modifying the builder when any
+    /// selector is already registered.
     fn insert(
         &mut self,
         descriptor: ProviderDescriptor,
@@ -150,11 +152,13 @@ where
         for alias in descriptor.aliases() {
             self.validate_selector(alias, descriptor.id().as_str())?;
         }
-        self.selector_owners
-            .insert(canonical_selector, descriptor.id().clone());
+
+        let registration_index = self.registrations.len();
+        self.selector_indices
+            .insert(canonical_selector, registration_index);
         for alias in descriptor.aliases() {
-            self.selector_owners
-                .insert(alias.clone(), descriptor.id().clone());
+            self.selector_indices
+                .insert(alias.clone(), registration_index);
         }
         self.registrations.push(BuilderEntry {
             descriptor,
@@ -165,15 +169,27 @@ where
 
     /// Ensures a normalized selector has not been claimed by another provider.
     ///
-    /// `selector` is the candidate ID or alias and `provider` identifies the
-    /// prospective owner. Returns `Ok(())` when unclaimed, otherwise returns a
-    /// [`RegistrationError`] naming the conflicting owner.
+    /// # Arguments
+    ///
+    /// * `selector` - Candidate canonical ID or alias.
+    /// * `provider` - Canonical ID attempting to claim the selector.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] naming the existing owner when claimed.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the builder's private selector index refers outside its
+    /// registration vector, which public builder operations cannot produce.
+    #[inline]
     fn validate_selector(
         &self,
         selector: &ProviderSelector,
         provider: &str,
     ) -> Result<(), RegistrationError> {
-        if let Some(existing) = self.selector_owners.get(selector) {
+        if let Some(existing_index) = self.selector_indices.get(selector) {
+            let existing = self.registrations[*existing_index].descriptor.id();
             return Err(RegistrationError::duplicate_selector(
                 selector.as_str(),
                 existing.as_str(),
@@ -188,7 +204,8 @@ impl<S> Default for ProviderRegistryBuilder<S>
 where
     S: ServiceSpec,
 {
-    /// Creates an empty builder by forwarding to [`ProviderRegistryBuilder::new`].
+    /// Creates an empty provider-registry builder.
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }

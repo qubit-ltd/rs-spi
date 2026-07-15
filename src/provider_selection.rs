@@ -5,21 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Explicit provider selection inputs and fallback policy.
+//! Validated provider selection inputs.
 
-use crate::{ProviderSelectionError, ProviderSelector};
-
-/// Classification of a validated provider selection.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum ProviderSelectionKind {
-    /// Providers are tried in deterministic automatic order.
-    Auto,
-    /// Exactly one normalized selector is used.
-    Named,
-    /// Normalized selectors are tried in caller-supplied order.
-    Chain,
-}
+use crate::internal::ProviderSelectionRepr;
+use crate::{
+    ProviderSelectionError, ProviderSelectionKind, ProviderSelector,
+};
 
 /// Validated request for the providers a resolver may try.
 ///
@@ -27,21 +18,18 @@ pub enum ProviderSelectionKind {
 /// [`Self::chain`]. The opaque representation prevents invalid selectors and
 /// empty chains from reaching a resolver.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProviderSelection(ProviderSelectionRepr);
-
-/// Private invariant-safe provider selection representation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ProviderSelectionRepr {
-    /// Providers are tried in deterministic automatic order.
-    Auto,
-    /// Exactly one normalized selector is used.
-    Named(ProviderSelector),
-    /// A nonempty ordered selector chain is used.
-    Chain(Box<[ProviderSelector]>),
-}
+pub struct ProviderSelection(
+    /// Invariant-safe provider selection consumed by a resolver.
+    ProviderSelectionRepr,
+);
 
 impl ProviderSelection {
     /// Creates an automatic provider selection.
+    ///
+    /// # Returns
+    ///
+    /// A selection using deterministic registry priority order.
+    #[inline]
     #[must_use]
     pub const fn auto() -> Self {
         Self(ProviderSelectionRepr::Auto)
@@ -49,8 +37,13 @@ impl ProviderSelection {
 
     /// Creates a one-provider selection from configuration input.
     ///
-    /// `value` is normalized as a provider selector. Returns a validated named
-    /// selection containing that selector.
+    /// # Arguments
+    ///
+    /// * `value` - Raw selector normalized and validated at construction.
+    ///
+    /// # Returns
+    ///
+    /// A validated named provider selection.
     ///
     /// # Errors
     ///
@@ -65,8 +58,13 @@ impl ProviderSelection {
 
     /// Creates a nonempty ordered candidate chain from configuration input.
     ///
-    /// Each item in `values` is normalized as a provider selector. Returns a
-    /// validated chain preserving selector order.
+    /// # Arguments
+    ///
+    /// * `values` - Raw selectors normalized in encounter order.
+    ///
+    /// # Returns
+    ///
+    /// A validated nonempty selector chain preserving input order.
     ///
     /// # Errors
     ///
@@ -94,6 +92,11 @@ impl ProviderSelection {
     }
 
     /// Returns this validated selection's classification.
+    ///
+    /// # Returns
+    ///
+    /// The automatic, named, or chained selection kind.
+    #[inline(always)]
     #[must_use]
     pub const fn kind(&self) -> ProviderSelectionKind {
         match self.0 {
@@ -103,7 +106,13 @@ impl ProviderSelection {
         }
     }
 
-    /// Returns the named selector, when this is a named selection.
+    /// Returns the named selector.
+    ///
+    /// # Returns
+    ///
+    /// `Some` for a named selection, or `None` for automatic and chained
+    /// selections.
+    #[inline(always)]
     #[must_use]
     pub fn selector(&self) -> Option<&ProviderSelector> {
         match &self.0 {
@@ -112,7 +121,13 @@ impl ProviderSelection {
         }
     }
 
-    /// Returns the ordered selector chain, or an empty slice for other kinds.
+    /// Returns the ordered selector chain.
+    ///
+    /// # Returns
+    ///
+    /// The nonempty chain slice, or an empty slice for automatic and named
+    /// selections.
+    #[inline(always)]
     #[must_use]
     pub fn selectors(&self) -> &[ProviderSelector] {
         match &self.0 {
@@ -121,7 +136,12 @@ impl ProviderSelection {
         }
     }
 
-    /// Returns the private representation used by the resolver.
+    /// Returns the validated representation consumed by the resolver.
+    ///
+    /// # Returns
+    ///
+    /// A shared reference to the invariant-safe private representation.
+    #[inline(always)]
     pub(crate) const fn repr(&self) -> &ProviderSelectionRepr {
         &self.0
     }
@@ -129,21 +149,8 @@ impl ProviderSelection {
 
 impl Default for ProviderSelection {
     /// Creates the default automatic provider selection.
+    #[inline(always)]
     fn default() -> Self {
         Self::auto()
     }
-}
-
-/// Controls which provider creation failures permit trying another candidate.
-///
-/// This policy applies to automatic and chained selection after a provider
-/// factory returns an error. Named selection always uses exactly one provider
-/// and never falls back.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum FallbackPolicy {
-    /// Continues only after an unsupported or unavailable provider.
-    #[default]
-    OnAbsence,
-    /// Continues after every provider creation failure.
-    OnAnyError,
 }

@@ -1,3 +1,10 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! # Qubit SPI
 //!
 //! Typed, explicitly assembled service-provider infrastructure for Qubit Rust
@@ -64,40 +71,63 @@
 //! # }
 //! ~~~
 
+mod attempt_failure;
+mod attempt_failure_kind;
 mod created_service;
+mod fallback_policy;
+mod internal;
 mod provider_descriptor;
 mod provider_descriptor_error;
+mod provider_descriptor_error_kind;
 mod provider_error;
+mod provider_error_kind;
 mod provider_id;
 mod provider_id_error;
+mod provider_id_error_kind;
 mod provider_registry;
 mod provider_registry_builder;
 mod provider_resolver;
 mod provider_selection;
 mod provider_selection_error;
+mod provider_selection_error_kind;
+mod provider_selection_kind;
 mod provider_selector;
 mod provider_selector_error;
+mod provider_selector_error_kind;
 mod registration_error;
+mod registration_error_kind;
 mod resolution_error;
+mod resolution_error_kind;
+mod resolved_provider;
 mod service_provider;
 mod service_spec;
 
+pub use attempt_failure::AttemptFailure;
+pub use attempt_failure_kind::AttemptFailureKind;
 pub use created_service::CreatedService;
+pub use fallback_policy::FallbackPolicy;
 pub use provider_descriptor::ProviderDescriptor;
-pub use provider_descriptor_error::{ProviderDescriptorError, ProviderDescriptorErrorKind};
-pub use provider_error::{ProviderError, ProviderErrorKind};
+pub use provider_descriptor_error::ProviderDescriptorError;
+pub use provider_descriptor_error_kind::ProviderDescriptorErrorKind;
+pub use provider_error::ProviderError;
+pub use provider_error_kind::ProviderErrorKind;
 pub use provider_id::ProviderId;
-pub use provider_id_error::{ProviderIdError, ProviderIdErrorKind};
-pub use provider_registry::{ProviderRegistry, ResolvedProvider};
+pub use provider_id_error::ProviderIdError;
+pub use provider_id_error_kind::ProviderIdErrorKind;
+pub use provider_registry::ProviderRegistry;
 pub use provider_registry_builder::ProviderRegistryBuilder;
 pub use provider_resolver::ProviderResolver;
-pub use provider_selection::{FallbackPolicy, ProviderSelection, ProviderSelectionKind};
-pub use provider_selection_error::{ProviderSelectionError, ProviderSelectionErrorKind};
+pub use provider_selection::ProviderSelection;
+pub use provider_selection_error::ProviderSelectionError;
+pub use provider_selection_error_kind::ProviderSelectionErrorKind;
+pub use provider_selection_kind::ProviderSelectionKind;
 pub use provider_selector::ProviderSelector;
-pub use provider_selector_error::{ProviderSelectorError, ProviderSelectorErrorKind};
-pub use registration_error::{RegistrationError, RegistrationErrorKind};
-pub use resolution_error::{
-    AttemptFailure, AttemptFailureKind, ResolutionError, ResolutionErrorKind,
-};
+pub use provider_selector_error::ProviderSelectorError;
+pub use provider_selector_error_kind::ProviderSelectorErrorKind;
+pub use registration_error::RegistrationError;
+pub use registration_error_kind::RegistrationErrorKind;
+pub use resolution_error::ResolutionError;
+pub use resolution_error_kind::ResolutionErrorKind;
+pub use resolved_provider::ResolvedProvider;
 pub use service_provider::ServiceProvider;
 pub use service_spec::ServiceSpec;

@@ -29,9 +29,14 @@ pub struct ProviderDescriptor {
 impl ProviderDescriptor {
     /// Creates metadata for a canonical provider ID.
     ///
-    /// `id` is the provider's stable identity. The returned descriptor has no
-    /// aliases and priority zero, and can be refined with the builder-style
-    /// methods before registration.
+    /// # Arguments
+    ///
+    /// * `id` - Stable canonical identity of the provider.
+    ///
+    /// # Returns
+    ///
+    /// A descriptor with no aliases and priority zero.
+    #[inline]
     #[must_use]
     pub fn new(id: ProviderId) -> Self {
         Self {
@@ -43,13 +48,23 @@ impl ProviderDescriptor {
 
     /// Replaces the descriptor's aliases with normalized lookup selectors.
     ///
-    /// Each item in `aliases` is trimmed, lowercased, and validated. On
-    /// success, returns this descriptor with the resulting aliases.
+    /// # Arguments
+    ///
+    /// * `aliases` - Raw aliases trimmed, lowercased, and validated in order.
+    ///
+    /// # Returns
+    ///
+    /// This descriptor with the resulting normalized aliases.
     ///
     /// # Errors
     ///
     /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
     /// another alias, or duplicates the canonical provider ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if a previously validated canonical provider ID cannot be
+    /// parsed as a selector, which safe construction cannot produce.
     pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
@@ -78,8 +93,14 @@ impl ProviderDescriptor {
 
     /// Sets the priority used by automatic selection.
     ///
-    /// `priority` is ordered descending; providers with equal priorities are
-    /// ordered by canonical ID. Returns the updated descriptor.
+    /// # Arguments
+    ///
+    /// * `priority` - Descending automatic-selection sort key.
+    ///
+    /// # Returns
+    ///
+    /// This descriptor with the replacement priority.
+    #[inline]
     #[must_use]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
@@ -87,18 +108,33 @@ impl ProviderDescriptor {
     }
 
     /// Returns the canonical provider ID.
+    ///
+    /// # Returns
+    ///
+    /// The descriptor's stable provider identity.
+    #[inline(always)]
     #[must_use]
     pub fn id(&self) -> &ProviderId {
         &self.id
     }
 
     /// Returns the normalized aliases that resolve to the canonical ID.
+    ///
+    /// # Returns
+    ///
+    /// The immutable alias slice in descriptor order.
+    #[inline(always)]
     #[must_use]
     pub fn aliases(&self) -> &[ProviderSelector] {
         &self.aliases
     }
 
     /// Returns the priority used to order automatic selection candidates.
+    ///
+    /// # Returns
+    ///
+    /// The descending automatic-selection sort key.
+    #[inline(always)]
     #[must_use]
     pub const fn priority(&self) -> i32 {
         self.priority

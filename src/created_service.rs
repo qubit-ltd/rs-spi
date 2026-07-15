@@ -24,11 +24,17 @@ pub struct CreatedService<T> {
 impl<T> CreatedService<T> {
     /// Creates a service result with its winning provider identity.
     ///
-    /// `provider_id` identifies the provider that produced `service`.
-    /// Returns a value that retains both inputs without performing validation
-    /// or service creation.
+    /// # Arguments
+    ///
+    /// * `provider_id` - Canonical provider that produced `service`.
+    /// * `service` - Successfully created output value.
+    ///
+    /// # Returns
+    ///
+    /// A result retaining both inputs without further service creation.
+    #[inline]
     #[must_use]
-    pub fn new(provider_id: ProviderId, service: T) -> Self {
+    pub(crate) fn new(provider_id: ProviderId, service: T) -> Self {
         Self {
             provider_id,
             service,
@@ -37,7 +43,10 @@ impl<T> CreatedService<T> {
 
     /// Returns the canonical ID of the provider that created the service.
     ///
-    /// The returned reference is valid for as long as this result is retained.
+    /// # Returns
+    ///
+    /// The winning provider's canonical ID.
+    #[inline(always)]
     #[must_use]
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
@@ -45,7 +54,10 @@ impl<T> CreatedService<T> {
 
     /// Returns the created service handle or value.
     ///
-    /// The returned reference is valid for as long as this result is retained.
+    /// # Returns
+    ///
+    /// A shared reference to the created service output.
+    #[inline(always)]
     #[must_use]
     pub fn service(&self) -> &T {
         &self.service
@@ -53,16 +65,20 @@ impl<T> CreatedService<T> {
 
     /// Consumes this result and returns the created service.
     ///
-    /// Use this when provider identity is no longer needed and ownership of the
-    /// service must be transferred to the caller.
+    /// # Returns
+    ///
+    /// The owned service output without its provider identity.
+    #[inline(always)]
     pub fn into_service(self) -> T {
         self.service
     }
 
     /// Consumes this result and returns its provider identity and service.
     ///
-    /// Returns both owned fields in provider-ID then service order, allowing
-    /// callers to retain observability metadata without cloning it.
+    /// # Returns
+    ///
+    /// Both owned fields in provider-ID then service order.
+    #[inline(always)]
     pub fn into_parts(self) -> (ProviderId, T) {
         (self.provider_id, self.service)
     }

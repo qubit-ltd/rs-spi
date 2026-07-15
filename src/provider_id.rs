@@ -24,12 +24,17 @@ pub struct ProviderId(
 impl ProviderId {
     /// Creates a canonical provider identifier from already canonical text.
     ///
-    /// `value` becomes the stable provider ID when it satisfies the documented
-    /// canonical-token grammar. Returns the validated identifier.
-    ///
     /// The value must already be lowercase ASCII and may contain alphanumeric
     /// characters plus hyphen, underscore, period, and plus between
     /// alphanumeric endpoints.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - Candidate canonical identifier text.
+    ///
+    /// # Returns
+    ///
+    /// The validated stable provider identifier.
     ///
     /// # Errors
     ///
@@ -46,6 +51,11 @@ impl ProviderId {
     }
 
     /// Returns the canonical identifier text.
+    ///
+    /// # Returns
+    ///
+    /// The validated canonical token.
+    #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -54,6 +64,7 @@ impl ProviderId {
 
 impl AsRef<str> for ProviderId {
     /// Forwards to [`ProviderId::as_str`].
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
@@ -62,7 +73,14 @@ impl AsRef<str> for ProviderId {
 impl fmt::Display for ProviderId {
     /// Writes the canonical identifier text to `formatter`.
     ///
-    /// Returns a formatting error if `formatter` cannot accept the text.
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    #[inline(always)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
@@ -74,12 +92,18 @@ impl FromStr for ProviderId {
 
     /// Parses an already canonical provider identifier.
     ///
-    /// `value` is validated without trimming or case normalization. Returns the
-    /// canonical provider ID when validation succeeds.
+    /// # Arguments
+    ///
+    /// * `value` - Input validated without trimming or case normalization.
+    ///
+    /// # Returns
+    ///
+    /// The canonical provider ID.
     ///
     /// # Errors
     ///
     /// Returns [`ProviderIdError`] when `value` is empty or noncanonical.
+    #[inline(always)]
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
     }
@@ -87,9 +111,14 @@ impl FromStr for ProviderId {
 
 /// Tests the shared canonical-token grammar for IDs and selectors.
 ///
-/// `value` must be nonempty lowercase ASCII, start and end with an
-/// alphanumeric byte, and use only the permitted separators. Returns `true`
-/// exactly when all requirements are satisfied.
+/// # Arguments
+///
+/// * `value` - Candidate token to validate without normalization.
+///
+/// # Returns
+///
+/// `true` when the input is nonempty lowercase ASCII, has alphanumeric
+/// endpoints, and contains only permitted separators; otherwise, `false`.
 pub(crate) fn is_canonical_token(value: &str) -> bool {
     !value.is_empty()
         && value.is_ascii()

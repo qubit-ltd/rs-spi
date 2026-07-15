@@ -9,7 +9,7 @@
 
 use std::{collections::HashSet, fmt};
 
-use crate::provider_selection::ProviderSelectionRepr;
+use crate::internal::ProviderSelectionRepr;
 use crate::{
     AttemptFailure, CreatedService, FallbackPolicy, ProviderErrorKind, ProviderRegistry,
     ProviderSelection, ProviderSelector, ResolutionError, ServiceSpec,
@@ -177,8 +177,9 @@ where
                 }
                 Err(error) => {
                     let provider_id = resolved.descriptor().id().clone();
-                    failures.push(AttemptFailure::provider_error(None, provider_id, &error));
-                    if !self.should_continue(error.kind()) {
+                    let error_kind = error.kind();
+                    failures.push(AttemptFailure::provider_error(None, provider_id, error));
+                    if !self.should_continue(error_kind) {
                         return Err(ResolutionError::no_provider_succeeded(failures));
                     }
                 }
@@ -198,14 +199,14 @@ where
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
         let Some(index) = self.registry.index_for(selector) else {
-            return Err(ResolutionError::unknown_provider(selector.as_str()));
+            return Err(ResolutionError::unknown_provider(selector.clone()));
         };
         let resolved = self.registry.resolved_at(index);
         let provider_id = resolved.descriptor().id().clone();
         match resolved.create(config) {
             Ok(service) => Ok(CreatedService::new(provider_id, service)),
             Err(error) => Err(ResolutionError::no_provider_succeeded(vec![
-                AttemptFailure::provider_error(Some(selector.clone()), provider_id, &error),
+                AttemptFailure::provider_error(Some(selector.clone()), provider_id, error),
             ])),
         }
     }
@@ -242,12 +243,13 @@ where
             match resolved.create(config) {
                 Ok(service) => return Ok(CreatedService::new(provider_id, service)),
                 Err(error) => {
+                    let error_kind = error.kind();
                     failures.push(AttemptFailure::provider_error(
                         Some(selector.clone()),
                         provider_id,
-                        &error,
+                        error,
                     ));
-                    if !self.should_continue(error.kind()) {
+                    if !self.should_continue(error_kind) {
                         return Err(ResolutionError::no_provider_succeeded(failures));
                     }
                 }
