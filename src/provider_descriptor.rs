@@ -9,7 +9,7 @@
 
 use std::collections::HashSet;
 
-use crate::{ProviderId, ProviderSelector, RegistrationError};
+use crate::{ProviderDescriptorError, ProviderId, ProviderSelector};
 
 /// Immutable metadata that identifies and ranks a registered provider.
 ///
@@ -48,25 +48,27 @@ impl ProviderDescriptor {
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when an alias is invalid, duplicates
+    /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
     /// another alias, or duplicates the canonical provider ID.
-    pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, RegistrationError>
+    pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
         let canonical_selector = ProviderSelector::parse(self.id.as_str())
             .expect("canonical provider IDs are valid selectors");
-        let mut seen = HashSet::from([canonical_selector]);
+        let mut seen = HashSet::new();
         let mut normalized = Vec::new();
-        for alias in aliases {
-            let alias = ProviderSelector::parse(alias)?;
+        for (alias_index, alias) in aliases.into_iter().enumerate() {
+            let input = alias.as_ref();
+            let alias = ProviderSelector::parse(input).map_err(|source| {
+                ProviderDescriptorError::invalid_alias(alias_index, input, source)
+            })?;
+            if alias == canonical_selector {
+                return Err(ProviderDescriptorError::alias_matches_id(alias.as_str()));
+            }
             if !seen.insert(alias.clone()) {
-                return Err(RegistrationError::duplicate_selector(
-                    alias.as_str(),
-                    self.id.as_str(),
-                    self.id.as_str(),
-                ));
+                return Err(ProviderDescriptorError::duplicate_alias(alias.as_str()));
             }
             normalized.push(alias);
         }

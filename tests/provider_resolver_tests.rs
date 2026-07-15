@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::error::Error;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -14,7 +15,7 @@ use std::thread;
 
 use qubit_spi::{
     FallbackPolicy, ProviderDescriptor, ProviderError, ProviderId, ProviderRegistry,
-    ProviderResolver, ProviderSelection, ServiceProvider, ServiceSpec,
+    ProviderResolver, ProviderSelection, ResolutionErrorKind, ServiceProvider, ServiceSpec,
 };
 
 trait Greeting: Send + Sync {
@@ -64,7 +65,7 @@ fn on_absence_uses_the_next_automatic_provider_and_reports_the_winner() {
         .unwrap();
 
     let created = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence)
-        .create(&ProviderSelection::Auto, &())
+        .create(&ProviderSelection::auto(), &())
         .unwrap();
 
     assert_eq!("memory", created.provider_id().as_str());
@@ -88,7 +89,7 @@ fn on_absence_stops_after_an_initialization_failure() {
         .unwrap();
 
     let result = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence)
-        .create(&ProviderSelection::Auto, &());
+        .create(&ProviderSelection::auto(), &());
     let error = match result {
         Ok(_) => panic!("initialization failure must stop fallback"),
         Err(error) => error,
@@ -145,7 +146,7 @@ fn on_any_error_continues_after_initialization_failure() {
         .unwrap();
 
     let created = ProviderResolver::new(builder.build(), FallbackPolicy::OnAnyError)
-        .create(&ProviderSelection::Auto, &())
+        .create(&ProviderSelection::auto(), &())
         .unwrap();
 
     assert_eq!("memory", created.provider_id().as_str());
@@ -286,6 +287,96 @@ fn cloned_resolver_supports_concurrent_service_creation() {
     }
 }
 
+#[test]
+fn raw_named_resolution_preserves_invalid_selector_input() {
+    let resolver = ProviderResolver::<GreetingSpec>::new(
+        ProviderRegistry::default(),
+        FallbackPolicy::OnAbsence,
+    );
+    let error = match resolver.create_named(" Bad Selector ", &()) {
+        Ok(_) => panic!("invalid raw selector should fail"),
+        Err(error) => error,
+    };
+
+    assert_eq!(ResolutionErrorKind::InvalidSelector, error.kind());
+    assert_eq!(Some(" Bad Selector "), error.selector_input());
+    assert_eq!(None, error.selector_index());
+    assert!(Error::source(&error).is_some());
+}
+
+#[test]
+fn raw_chain_reports_invalid_selector_position_and_empty_input() {
+    let resolver = ProviderResolver::<GreetingSpec>::new(
+        ProviderRegistry::default(),
+        FallbackPolicy::OnAbsence,
+    );
+    let invalid = match resolver.create_chain(["valid", "bad selector"], &()) {
+        Ok(_) => panic!("invalid raw chain selector should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(ResolutionErrorKind::InvalidSelector, invalid.kind());
+    assert_eq!(Some(1), invalid.selector_index());
+    assert_eq!(Some("bad selector"), invalid.selector_input());
+
+    let empty = match resolver.create_chain(Vec::<&str>::new(), &()) {
+        Ok(_) => panic!("empty raw chain should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(ResolutionErrorKind::EmptySelection, empty.kind());
+}
+
+#[test]
+fn automatic_resolution_distinguishes_an_empty_registry() {
+    let resolver = ProviderResolver::<GreetingSpec>::new(
+        ProviderRegistry::default(),
+        FallbackPolicy::OnAbsence,
+    );
+    let error = match resolver.create_auto(&()) {
+        Ok(_) => panic!("empty registry should fail"),
+        Err(error) => error,
+    };
+
+    assert_eq!(ResolutionErrorKind::EmptyRegistry, error.kind());
+    assert!(error.attempts().is_empty());
+    assert!(error.to_string().contains("empty"));
+}
+
+#[test]
+fn aggregate_resolution_display_contains_ordered_attempt_diagnostics() {
+    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+    for (id, reason) in [
+        ("first", "first unavailable"),
+        ("second", "second unsupported"),
+    ] {
+        let error = if id == "first" {
+            ProviderError::unavailable(reason)
+        } else {
+            ProviderError::unsupported(reason)
+        };
+        builder
+            .register(
+                ProviderDescriptor::new(ProviderId::new(id).expect("valid provider ID")),
+                TestProvider(Err(error)),
+            )
+            .expect("unique provider should register");
+    }
+    let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
+    let error = match resolver.create_chain(["first", "second"], &()) {
+        Ok(_) => panic!("exhausted chain should fail"),
+        Err(error) => error,
+    };
+    let message = error.to_string();
+
+    let first = message.find("first unavailable").expect("first reason");
+    let second = message.find("second unsupported").expect("second reason");
+    assert!(message.contains("first"));
+    assert!(message.contains("second"));
+    assert!(
+        first < second,
+        "attempts should be formatted in encounter order"
+    );
+}
+
 fn automatic_reaches_fallback(first_error: ProviderError, policy: FallbackPolicy) -> bool {
     let mut builder = ProviderRegistry::<GreetingSpec>::builder();
     builder
@@ -302,6 +393,6 @@ fn automatic_reaches_fallback(first_error: ProviderError, policy: FallbackPolicy
         .unwrap();
 
     ProviderResolver::new(builder.build(), policy)
-        .create(&ProviderSelection::Auto, &())
+        .create(&ProviderSelection::auto(), &())
         .is_ok()
 }

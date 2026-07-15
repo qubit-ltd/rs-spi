@@ -9,8 +9,8 @@
 use std::{error::Error, sync::Arc, thread};
 
 use qubit_spi::{
-    ProviderDescriptor, ProviderError, ProviderId, ProviderRegistry, RegistrationError,
-    RegistrationErrorKind, ResolutionErrorKind, ServiceProvider, ServiceSpec,
+    ProviderDescriptor, ProviderError, ProviderId, ProviderRegistry, ProviderSelectorError,
+    ProviderSelectorErrorKind, ResolutionErrorKind, ServiceProvider, ServiceSpec,
 };
 
 struct TextSpec;
@@ -63,6 +63,24 @@ fn registry_reports_unknown_provider() {
 }
 
 #[test]
+fn registry_length_matches_emptiness_and_registration_count() {
+    let empty = ProviderRegistry::<TextSpec>::default();
+    assert_eq!(0, empty.len());
+    assert!(empty.is_empty());
+
+    let mut builder = ProviderRegistry::<TextSpec>::builder();
+    builder
+        .register(
+            ProviderDescriptor::new(ProviderId::new("english").expect("valid ID")),
+            TextProvider,
+        )
+        .expect("unique provider should register");
+    let registry = builder.build();
+    assert_eq!(1, registry.len());
+    assert!(!registry.is_empty());
+}
+
+#[test]
 fn registry_preserves_invalid_selector_input_and_source() {
     let registry = ProviderRegistry::<TextSpec>::default();
 
@@ -75,9 +93,9 @@ fn registry_preserves_invalid_selector_input_and_source() {
     assert_eq!(Some(" Bad Selector "), error.selector_input());
     assert_eq!(None, error.requested_selector());
     let source = Error::source(&error)
-        .and_then(|source| source.downcast_ref::<RegistrationError>())
-        .expect("invalid selector must retain its registration error source");
-    assert_eq!(RegistrationErrorKind::InvalidIdentifier, source.kind());
+        .and_then(|source| source.downcast_ref::<ProviderSelectorError>())
+        .expect("invalid selector must retain its selector error source");
+    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
     assert!(error.to_string().contains(" Bad Selector "));
 }
 

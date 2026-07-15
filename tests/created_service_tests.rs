@@ -15,3 +15,12 @@ fn created_service_contains_the_winning_provider() {
     assert_eq!("memory", created.provider_id().as_str());
     assert_eq!(42, created.into_service());
 }
+
+#[test]
+fn created_service_decomposes_into_owned_parts() {
+    let created = CreatedService::new(ProviderId::new("memory").expect("valid ID"), 42_u8);
+    let (provider_id, service) = created.into_parts();
+
+    assert_eq!("memory", provider_id.as_str());
+    assert_eq!(42, service);
+}

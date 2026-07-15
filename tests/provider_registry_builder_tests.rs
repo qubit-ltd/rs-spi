@@ -50,9 +50,9 @@ fn builder_rejects_a_selector_owned_by_another_provider() {
         .unwrap_err();
 
     assert_eq!(RegistrationErrorKind::DuplicateSelector, error.kind());
-    assert_eq!(Some("en"), error.identifier());
-    assert_eq!(Some("english"), error.existing_provider());
-    assert_eq!(Some("spanish"), error.provider());
+    assert_eq!("en", error.selector());
+    assert_eq!("english", error.existing_provider());
+    assert_eq!("spanish", error.provider());
     assert_eq!(
         "provider selector en claimed by spanish is already owned by english",
         error.to_string(),
@@ -88,9 +88,9 @@ fn builder_rejects_a_duplicate_canonical_id_without_mutation() {
         )
         .unwrap_err();
 
-    assert_eq!(Some("english"), error.identifier());
-    assert_eq!(Some("english"), error.existing_provider());
-    assert_eq!(Some("english"), error.provider());
+    assert_eq!("english", error.selector());
+    assert_eq!("english", error.existing_provider());
+    assert_eq!("english", error.provider());
     let registry = builder.build();
     assert_eq!(
         "hello",
@@ -160,7 +160,7 @@ fn automatic_order_uses_priority_then_canonical_id() {
     let resolver =
         qubit_spi::ProviderResolver::new(registry, qubit_spi::FallbackPolicy::OnAnyError);
     let created = resolver
-        .create(&qubit_spi::ProviderSelection::Auto, &())
+        .create(&qubit_spi::ProviderSelection::auto(), &())
         .unwrap();
     assert_eq!("alpha", created.provider_id().as_str());
 }

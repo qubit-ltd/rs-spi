@@ -9,7 +9,7 @@
 
 use std::{fmt, str::FromStr};
 
-use crate::{RegistrationError, provider_id::validate_canonical_token};
+use crate::{ProviderSelectorError, provider_id::is_canonical_token};
 
 /// Normalized token used to look up a provider by ID or alias.
 ///
@@ -32,11 +32,17 @@ impl ProviderSelector {
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when the normalized selector is empty or
+    /// Returns [`ProviderSelectorError`] when the normalized selector is empty or
     /// invalid.
-    pub fn parse(value: impl AsRef<str>) -> Result<Self, RegistrationError> {
-        let normalized = value.as_ref().trim().to_ascii_lowercase();
-        validate_canonical_token(&normalized)?;
+    pub fn parse(value: impl AsRef<str>) -> Result<Self, ProviderSelectorError> {
+        let input = value.as_ref();
+        let normalized = input.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            return Err(ProviderSelectorError::empty(input));
+        }
+        if !is_canonical_token(&normalized) {
+            return Err(ProviderSelectorError::invalid(input, &normalized));
+        }
         Ok(Self(normalized.into()))
     }
 
@@ -65,7 +71,7 @@ impl fmt::Display for ProviderSelector {
 
 impl FromStr for ProviderSelector {
     /// Error returned when the normalized input is empty or invalid.
-    type Err = RegistrationError;
+    type Err = ProviderSelectorError;
 
     /// Parses a provider selector from configuration-style input.
     ///
@@ -74,7 +80,7 @@ impl FromStr for ProviderSelector {
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when the normalized input is empty or
+    /// Returns [`ProviderSelectorError`] when the normalized input is empty or
     /// violates selector syntax.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::parse(value)

@@ -30,6 +30,9 @@ fn attempt_failure_preserves_provider_error_source() {
 
     assert_eq!(AttemptFailureKind::ProviderError, attempt.kind());
     assert!(attempt.source().is_some());
+    assert!(std::error::Error::source(&attempt).is_some());
+    assert!(attempt.to_string().contains("file-command"));
+    assert!(attempt.to_string().contains("file executable is absent"));
 }
 
 #[test]

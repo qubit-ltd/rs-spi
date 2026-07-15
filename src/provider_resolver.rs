@@ -9,6 +9,7 @@
 
 use std::{collections::HashSet, fmt};
 
+use crate::provider_selection::ProviderSelectionRepr;
 use crate::{
     AttemptFailure, CreatedService, FallbackPolicy, ProviderErrorKind, ProviderRegistry,
     ProviderSelection, ProviderSelector, ResolutionError, ServiceSpec,
@@ -71,11 +72,82 @@ where
         selection: &ProviderSelection,
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
-        match selection {
-            ProviderSelection::Auto => self.create_automatic(config),
-            ProviderSelection::Named(selector) => self.create_named(selector, config),
-            ProviderSelection::Chain(selectors) => self.create_chain(selectors, config),
+        match selection.repr() {
+            ProviderSelectionRepr::Auto => self.create_automatic(config),
+            ProviderSelectionRepr::Named(selector) => self.create_named_selector(selector, config),
+            ProviderSelectionRepr::Chain(selectors) => {
+                self.create_selector_chain(selectors, config)
+            }
         }
+    }
+
+    /// Creates a service using deterministic automatic provider order.
+    ///
+    /// `config` is forwarded to each provider candidate. Returns the first
+    /// successfully created service and its canonical provider ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when the registry is empty, no provider
+    /// succeeds, or fallback policy stops after a provider failure.
+    pub fn create_auto(
+        &self,
+        config: &S::Config,
+    ) -> Result<CreatedService<S::Output>, ResolutionError> {
+        self.create_automatic(config)
+    }
+
+    /// Creates a service through one raw provider selector.
+    ///
+    /// `selector` is normalized and validated before lookup. `config` is
+    /// forwarded only to the matching provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when `selector` is invalid or unknown, or
+    /// when the selected provider cannot create its service.
+    pub fn create_named(
+        &self,
+        selector: impl AsRef<str>,
+        config: &S::Config,
+    ) -> Result<CreatedService<S::Output>, ResolutionError> {
+        let input = selector.as_ref();
+        let selector = ProviderSelector::parse(input)
+            .map_err(|source| ResolutionError::invalid_selector(input, None, source))?;
+        self.create_named_selector(&selector, config)
+    }
+
+    /// Creates a service through a nonempty sequence of raw selectors.
+    ///
+    /// Each selector is normalized and validated before any provider is tried.
+    /// Providers are attempted in input order and aliases resolving to an
+    /// already attempted provider are skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when the chain is empty, one selector is
+    /// invalid, no provider succeeds, or fallback policy stops resolution.
+    pub fn create_chain<I, T>(
+        &self,
+        selectors: I,
+        config: &S::Config,
+    ) -> Result<CreatedService<S::Output>, ResolutionError>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<str>,
+    {
+        let mut parsed = Vec::new();
+        for (selector_index, selector) in selectors.into_iter().enumerate() {
+            let input = selector.as_ref();
+            let selector = ProviderSelector::parse(input).map_err(|source| {
+                ResolutionError::invalid_selector(input, Some(selector_index), source)
+            })?;
+            parsed.push(selector);
+        }
+        if parsed.is_empty() {
+            return Err(ResolutionError::empty_selection());
+        }
+        self.create_selector_chain(&parsed, config)
     }
 
     /// Creates a service by trying providers in automatic order.
@@ -92,15 +164,19 @@ where
         &self,
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
+        if self.registry.is_empty() {
+            return Err(ResolutionError::empty_registry());
+        }
         let mut failures = Vec::new();
         for &index in self.registry.automatic_indices() {
-            match self.registry.resolved_at(index).create(config) {
+            let resolved = self.registry.resolved_at(index);
+            match resolved.create(config) {
                 Ok(service) => {
-                    let provider_id = self.registry.resolved_at(index).descriptor().id().clone();
+                    let provider_id = resolved.descriptor().id().clone();
                     return Ok(CreatedService::new(provider_id, service));
                 }
                 Err(error) => {
-                    let provider_id = self.registry.resolved_at(index).descriptor().id().clone();
+                    let provider_id = resolved.descriptor().id().clone();
                     failures.push(AttemptFailure::provider_error(None, provider_id, &error));
                     if !self.should_continue(error.kind()) {
                         return Err(ResolutionError::no_provider_succeeded(failures));
@@ -116,7 +192,7 @@ where
     /// `selector` is normalized and `config` is forwarded to the matching
     /// factory. Returns its service, or a [`ResolutionError`] if it is unknown
     /// or creation fails; named selections never fall back.
-    fn create_named(
+    fn create_named_selector(
         &self,
         selector: &ProviderSelector,
         config: &S::Config,
@@ -146,7 +222,7 @@ where
     /// Returns [`ResolutionError`] when no provider succeeds or the fallback
     /// policy stops the chain. The error records unknown selectors and actual
     /// provider failures encountered before resolution stopped.
-    fn create_chain(
+    fn create_selector_chain(
         &self,
         selectors: &[ProviderSelector],
         config: &S::Config,

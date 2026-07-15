@@ -9,7 +9,7 @@
 
 use std::{fmt, str::FromStr};
 
-use crate::RegistrationError;
+use crate::ProviderIdError;
 
 /// Stable canonical identifier of a provider.
 ///
@@ -33,10 +33,15 @@ impl ProviderId {
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when `value` is empty or noncanonical.
-    pub fn new(value: impl AsRef<str>) -> Result<Self, RegistrationError> {
+    /// Returns [`ProviderIdError`] when `value` is empty or noncanonical.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, ProviderIdError> {
         let value = value.as_ref();
-        validate_canonical_token(value)?;
+        if value.is_empty() {
+            return Err(ProviderIdError::empty(value));
+        }
+        if !is_canonical_token(value) {
+            return Err(ProviderIdError::noncanonical(value));
+        }
         Ok(Self(value.into()))
     }
 
@@ -65,7 +70,7 @@ impl fmt::Display for ProviderId {
 
 impl FromStr for ProviderId {
     /// Error returned when the input is empty or violates canonical ID syntax.
-    type Err = RegistrationError;
+    type Err = ProviderIdError;
 
     /// Parses an already canonical provider identifier.
     ///
@@ -74,37 +79,31 @@ impl FromStr for ProviderId {
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when `value` is empty or noncanonical.
+    /// Returns [`ProviderIdError`] when `value` is empty or noncanonical.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
     }
 }
 
-/// Validates the shared canonical-token grammar for IDs and selectors.
+/// Tests the shared canonical-token grammar for IDs and selectors.
 ///
 /// `value` must be nonempty lowercase ASCII, start and end with an
-/// alphanumeric byte, and use only the permitted separators. Returns `Ok(())`
-/// when valid; otherwise returns [`RegistrationError`] with the invalid input.
-pub(crate) fn validate_canonical_token(value: &str) -> Result<(), RegistrationError> {
-    if value.is_empty() {
-        return Err(RegistrationError::empty_identifier());
-    }
-    if !value.is_ascii()
-        || value != value.trim()
-        || value.bytes().any(|byte| byte.is_ascii_uppercase())
-        || !value
+/// alphanumeric byte, and use only the permitted separators. Returns `true`
+/// exactly when all requirements are satisfied.
+pub(crate) fn is_canonical_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.is_ascii()
+        && value == value.trim()
+        && !value.bytes().any(|byte| byte.is_ascii_uppercase())
+        && value
             .bytes()
             .next()
             .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        || !value
+        && value
             .bytes()
             .last()
             .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        || value
+        && !value
             .bytes()
             .any(|byte| !byte.is_ascii_alphanumeric() && !matches!(byte, b'-' | b'_' | b'.' | b'+'))
-    {
-        return Err(RegistrationError::invalid_identifier(value));
-    }
-    Ok(())
 }

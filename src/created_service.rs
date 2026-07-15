@@ -58,4 +58,12 @@ impl<T> CreatedService<T> {
     pub fn into_service(self) -> T {
         self.service
     }
+
+    /// Consumes this result and returns its provider identity and service.
+    ///
+    /// Returns both owned fields in provider-ID then service order, allowing
+    /// callers to retain observability metadata without cloning it.
+    pub fn into_parts(self) -> (ProviderId, T) {
+        (self.provider_id, self.service)
+    }
 }

@@ -7,21 +7,25 @@
 // =============================================================================
 //! Errors raised while resolving provider selections.
 
-use std::{error::Error, sync::Arc};
+use std::{error::Error, fmt, sync::Arc};
 
-use thiserror::Error;
-
-use crate::{ProviderError, ProviderErrorKind, ProviderId, ProviderSelector, RegistrationError};
+use crate::{
+    ProviderError, ProviderErrorKind, ProviderId, ProviderSelector, ProviderSelectorError,
+};
 
 /// Classification of a failed provider-selection resolution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ResolutionErrorKind {
-    /// A direct selector did not satisfy selector syntax.
+    /// A raw selector does not satisfy selector syntax.
     InvalidSelector,
-    /// A named selector did not resolve to any registered provider.
+    /// A raw chained selection contains no selectors.
+    EmptySelection,
+    /// A named selector does not resolve to a registered provider.
     UnknownProvider,
-    /// The provider selection produced no service.
+    /// Automatic selection was requested from an empty registry.
+    EmptyRegistry,
+    /// At least one candidate was considered but no service was produced.
     NoProviderSucceeded,
 }
 
@@ -161,34 +165,64 @@ impl AttemptFailure {
     }
 }
 
+impl fmt::Display for AttemptFailure {
+    /// Formats this failed attempt with selector or provider context.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.repr {
+            AttemptFailureRepr::UnknownProvider { reason, .. } => formatter.write_str(reason),
+            AttemptFailureRepr::ProviderError {
+                requested_selector,
+                provider_id,
+                provider_error_kind,
+                reason,
+                ..
+            } => {
+                write!(
+                    formatter,
+                    "provider {provider_id} failed with {provider_error_kind:?}: {reason}"
+                )?;
+                if let Some(selector) = requested_selector {
+                    write!(formatter, " (requested as {selector})")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Error for AttemptFailure {
+    /// Returns the retained provider cause, when one exists.
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Self::source(self)
+    }
+}
+
 /// Aggregate error returned when provider resolution cannot create a service.
-#[derive(Clone, Debug, Error)]
-#[error(transparent)]
-pub struct ResolutionError(
-    /// Private representation retaining variant-specific diagnostics.
-    ResolutionErrorRepr,
-);
+#[derive(Clone, Debug)]
+pub struct ResolutionError(ResolutionErrorRepr);
 
 /// Private representation of aggregate resolution failures.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug)]
 enum ResolutionErrorRepr {
-    /// Direct selector input was invalid.
-    #[error("invalid provider selector {input:?}")]
+    /// Raw selector input was invalid.
     InvalidSelector {
         /// Verbatim input supplied by the caller.
         input: Box<str>,
-        /// Selector grammar validation failure.
-        #[source]
-        source: RegistrationError,
+        /// Zero-based chain position, or `None` for named selection.
+        selector_index: Option<usize>,
+        /// Selector parsing failure.
+        source: ProviderSelectorError,
     },
+    /// A raw chained selection contains no inputs.
+    EmptySelection,
     /// A valid normalized selector matched no provider.
-    #[error("unknown provider: {selector}")]
     UnknownProvider {
         /// Normalized unknown selector.
         selector: ProviderSelector,
     },
-    /// No candidate produced a service.
-    #[error("no provider succeeded after {} attempt(s)", attempts.len())]
+    /// Automatic selection was requested from an empty registry.
+    EmptyRegistry,
+    /// No considered candidate produced a service.
     NoProviderSucceeded {
         /// Failures retained in encounter order.
         attempts: Box<[AttemptFailure]>,
@@ -202,20 +236,37 @@ impl ResolutionError {
         let input = selector.as_ref();
         match ProviderSelector::parse(input) {
             Ok(selector) => Self(ResolutionErrorRepr::UnknownProvider { selector }),
-            Err(source) => Self::invalid_selector(input, source),
+            Err(source) => Self::invalid_selector(input, None, source),
         }
     }
 
-    /// Creates an error for invalid direct selector input.
+    /// Creates an error for invalid raw selector input.
     #[must_use]
-    pub(crate) fn invalid_selector(input: impl AsRef<str>, source: RegistrationError) -> Self {
+    pub(crate) fn invalid_selector(
+        input: impl AsRef<str>,
+        selector_index: Option<usize>,
+        source: ProviderSelectorError,
+    ) -> Self {
         Self(ResolutionErrorRepr::InvalidSelector {
             input: input.as_ref().into(),
+            selector_index,
             source,
         })
     }
 
-    /// Creates an aggregate error when a selection produces no service.
+    /// Creates an error for an empty raw chained selection.
+    #[must_use]
+    pub(crate) const fn empty_selection() -> Self {
+        Self(ResolutionErrorRepr::EmptySelection)
+    }
+
+    /// Creates an error for automatic resolution from an empty registry.
+    #[must_use]
+    pub(crate) const fn empty_registry() -> Self {
+        Self(ResolutionErrorRepr::EmptyRegistry)
+    }
+
+    /// Creates an aggregate error when considered candidates produce no service.
     #[must_use]
     pub fn no_provider_succeeded(attempts: impl Into<Box<[AttemptFailure]>>) -> Self {
         Self(ResolutionErrorRepr::NoProviderSucceeded {
@@ -228,20 +279,48 @@ impl ResolutionError {
     pub const fn kind(&self) -> ResolutionErrorKind {
         match self.0 {
             ResolutionErrorRepr::InvalidSelector { .. } => ResolutionErrorKind::InvalidSelector,
+            ResolutionErrorRepr::EmptySelection => ResolutionErrorKind::EmptySelection,
             ResolutionErrorRepr::UnknownProvider { .. } => ResolutionErrorKind::UnknownProvider,
+            ResolutionErrorRepr::EmptyRegistry => ResolutionErrorKind::EmptyRegistry,
             ResolutionErrorRepr::NoProviderSucceeded { .. } => {
                 ResolutionErrorKind::NoProviderSucceeded
             }
         }
     }
 
-    /// Returns the original direct selector input, when one exists.
+    /// Returns the original selector input, when one exists.
     #[must_use]
     pub fn selector_input(&self) -> Option<&str> {
         match &self.0 {
             ResolutionErrorRepr::InvalidSelector { input, .. } => Some(input),
             ResolutionErrorRepr::UnknownProvider { selector } => Some(selector.as_str()),
-            ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
+            ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::EmptyRegistry
+            | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
+        }
+    }
+
+    /// Returns the invalid selector's zero-based chain position, when present.
+    #[must_use]
+    pub const fn selector_index(&self) -> Option<usize> {
+        match self.0 {
+            ResolutionErrorRepr::InvalidSelector { selector_index, .. } => selector_index,
+            ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::UnknownProvider { .. }
+            | ResolutionErrorRepr::EmptyRegistry
+            | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
+        }
+    }
+
+    /// Returns the selector parsing failure for invalid raw input.
+    #[must_use]
+    pub fn selector_error(&self) -> Option<&ProviderSelectorError> {
+        match &self.0 {
+            ResolutionErrorRepr::InvalidSelector { source, .. } => Some(source),
+            ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::UnknownProvider { .. }
+            | ResolutionErrorRepr::EmptyRegistry
+            | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
         }
     }
 
@@ -251,6 +330,8 @@ impl ResolutionError {
         match &self.0 {
             ResolutionErrorRepr::UnknownProvider { selector } => Some(selector),
             ResolutionErrorRepr::InvalidSelector { .. }
+            | ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::EmptyRegistry
             | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
         }
     }
@@ -261,7 +342,61 @@ impl ResolutionError {
         match &self.0 {
             ResolutionErrorRepr::NoProviderSucceeded { attempts } => attempts,
             ResolutionErrorRepr::InvalidSelector { .. }
-            | ResolutionErrorRepr::UnknownProvider { .. } => &[],
+            | ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::UnknownProvider { .. }
+            | ResolutionErrorRepr::EmptyRegistry => &[],
+        }
+    }
+}
+
+impl fmt::Display for ResolutionError {
+    /// Formats the resolution failure and ordered attempt diagnostics.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            ResolutionErrorRepr::InvalidSelector {
+                input,
+                selector_index,
+                ..
+            } => match selector_index {
+                Some(index) => write!(
+                    formatter,
+                    "invalid provider selector at chain index {index}: {input:?}"
+                ),
+                None => write!(formatter, "invalid provider selector {input:?}"),
+            },
+            ResolutionErrorRepr::EmptySelection => {
+                formatter.write_str("provider selection chain must not be empty")
+            }
+            ResolutionErrorRepr::UnknownProvider { selector } => {
+                write!(formatter, "unknown provider: {selector}")
+            }
+            ResolutionErrorRepr::EmptyRegistry => {
+                formatter.write_str("cannot resolve a provider from an empty registry")
+            }
+            ResolutionErrorRepr::NoProviderSucceeded { attempts } => {
+                write!(
+                    formatter,
+                    "no provider succeeded after {} attempt(s)",
+                    attempts.len()
+                )?;
+                for (index, attempt) in attempts.iter().enumerate() {
+                    write!(formatter, "; attempt {}: {attempt}", index + 1)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Error for ResolutionError {
+    /// Returns the selector parsing source for invalid raw input.
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.0 {
+            ResolutionErrorRepr::InvalidSelector { source, .. } => Some(source),
+            ResolutionErrorRepr::EmptySelection
+            | ResolutionErrorRepr::UnknownProvider { .. }
+            | ResolutionErrorRepr::EmptyRegistry
+            | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
         }
     }
 }
