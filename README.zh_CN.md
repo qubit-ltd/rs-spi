@@ -1,15 +1,23 @@
 # Qubit SPI
 
+[![Rust CI](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
+[![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
+[![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
+
 面向 Rust 的类型安全、显式装配式服务提供者基础设施。
 
 ## 模型
 
-应用在启动阶段使用 ProviderRegistryBuilder 注册 Provider，随后调用 build()
-得到不可变且可低成本克隆的 ProviderRegistry。运行期通过 ProviderResolver、
-ProviderSelection 和 FallbackPolicy 创建服务。
+应用在启动阶段通过 ProviderRegistryBuilder 注册 Provider。调用 build() 后得到
+不可变且可低成本克隆的 ProviderRegistry。ProviderResolver 将该目录与
+ProviderSelection、FallbackPolicy 组合起来创建服务。Resolver 持有 registry，
+通过 `registry()` 提供只读访问，并通过 `fallback_policy()` 暴露当前回退策略。
 
-ServiceSpec 同时定义配置类型和完整输出句柄；核心不会在 Box、Arc、Rc 之间
-转换。已知下游应在自己的 Spec 中统一选择所需句柄，例如 Arc trait object。
+ServiceSpec 同时定义配置类型和完整输出句柄；SPI 核心不会在 Box、Arc 和 Rc 之间
+转换。
 
 ## 安装
 
@@ -18,32 +26,84 @@ ServiceSpec 同时定义配置类型和完整输出句柄；核心不会在 Box�
 qubit-spi = "0.4"
 ~~~
 
-## 核心 API
+## 快速开始
 
-- ServiceSpec::Output：Provider 返回的完整服务句柄。
-- ServiceProvider::create：唯一的 Provider 工厂方法。
-- ProviderDescriptor：注册时提供 canonical ID、别名和自动选择优先级。
-- ProviderRegistryBuilder：仅用于启动期装配。
-- ProviderRegistry：不可变 Provider 目录，支持 ID/别名查询。
-- ProviderResolver：按选择与回退策略完成创建。
-- CreatedService：包含实际胜出的 Provider ID 和服务实例。
+~~~rust
+use std::sync::Arc;
 
-自动选择按 priority 降序、Provider ID 升序进行。默认
-FallbackPolicy::OnAbsence 只在 Provider 不存在、不支持请求或不可用时继续回退；
-初始化失败和配置错误会立即停止。若业务明确要求尽力而为，可选择
-FallbackPolicy::OnAnyError。
+use qubit_spi::{
+    FallbackPolicy,
+    ProviderDescriptor,
+    ProviderError,
+    ProviderId,
+    ProviderRegistry,
+    ProviderResolver,
+    ProviderSelection,
+    ServiceProvider,
+    ServiceSpec,
+};
 
-## 0.4 破坏性迁移
+trait Greeter: Send + Sync {
+    fn greet(&self) -> &'static str;
+}
 
-| 0.3 API | 0.4 替代方案 |
-| --- | --- |
-| ServiceSpec::Service | ServiceSpec::Output |
-| create_box / create_arc / create_rc | 单一 ServiceProvider::create |
-| Provider 的 descriptor() | 向 Builder 注册时传入 ProviderDescriptor |
-| availability() | create() 返回分类的 ProviderError |
-| 可变 ProviderRegistry::register | Builder 注册后调用 build() |
-| create_auto_* / create_selected_* | ProviderResolver::create |
-| register_default | 应用启动期显式装配 |
+struct EnglishGreeter;
 
-本版本不提供兼容层。qubit-fs、qubit-mime 与 qubit-magika 的迁移将在各自工作区
-独立进行；rs-llmsdk-core 保持 Provider-neutral，不依赖 qubit-spi。
+impl Greeter for EnglishGreeter {
+    fn greet(&self) -> &'static str {
+        "hello"
+    }
+}
+
+struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = ();
+    type Output = Arc<dyn Greeter>;
+}
+
+struct EnglishProvider;
+
+impl ServiceProvider<GreeterSpec> for EnglishProvider {
+    fn create(&self, _config: &()) -> Result<Arc<dyn Greeter>, ProviderError> {
+        Ok(Arc::new(EnglishGreeter))
+    }
+}
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let mut builder = ProviderRegistry::<GreeterSpec>::builder();
+builder.register(
+    ProviderDescriptor::new(ProviderId::new("english")?).with_aliases(["en"])?,
+    EnglishProvider,
+)?;
+let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
+let created = resolver.create(&ProviderSelection::named("en")?, &())?;
+assert_eq!("hello", created.service().greet());
+# Ok(())
+# }
+~~~
+
+## 选择与失败
+
+- ProviderSelection::Auto 按 descriptor priority 降序、canonical Provider ID
+  升序选择。
+- ProviderSelection::Named 只选择一个 Provider。
+- ProviderSelection::Chain 按配置顺序尝试候选项，并避免通过多个别名重复尝试同一
+  Provider。
+- FallbackPolicy::OnAbsence 会在未知、不支持或不可用时继续回退；遇到无效配置和
+  初始化失败时停止。
+- FallbackPolicy::OnAnyError 用于明确要求尽力而为的回退链。
+
+ProviderError 对单次工厂失败分类。ResolutionError 会记录已尝试的候选项，保留
+无效 selector 的原始输入及校验错误链。每个 AttemptFailure 会显式区分未知 selector
+与 Provider 创建失败。CreatedService 暴露实际胜出的 canonical Provider ID。
+
+## 注册
+
+Provider 身份属于注册过程，而不是 Provider 工厂本身。持有具体 Provider 时使用
+`register(descriptor, provider)`；已经持有 `Arc` 工厂时使用
+`register_shared(descriptor, provider)`。Builder 会在修改内部状态前完整校验
+canonical ID 和全部别名，因此失败的注册不会占用部分 selector。
+
+核心不提供全局 registry。应用应在启动阶段显式装配所需 Provider，并共享构建出的
+不可变 registry 或 resolver。

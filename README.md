@@ -14,7 +14,9 @@ Typed, explicitly assembled service-provider infrastructure for Rust.
 Applications register providers during startup through ProviderRegistryBuilder.
 Build produces an immutable, cheaply cloneable ProviderRegistry. A
 ProviderResolver combines that catalog with a ProviderSelection and
-FallbackPolicy to create a service.
+FallbackPolicy to create a service. The resolver owns its registry handle and
+offers read-only access through `registry()` together with its configured
+`fallback_policy()`.
 
 ServiceSpec owns both the configuration and complete output handle. The SPI
 core does not convert between Box, Arc, and Rc.
@@ -96,21 +98,19 @@ assert_eq!("hello", created.service().greet());
 - FallbackPolicy::OnAnyError is available for explicitly best-effort chains.
 
 ProviderError classifies a single factory failure. ResolutionError records all
-attempted candidates. CreatedService exposes the canonical ID of the provider
-that won selection.
+attempted candidates and preserves invalid selector input and its validation
+source. Each AttemptFailure explicitly distinguishes an unknown selector from a
+provider creation error. CreatedService exposes the canonical ID of the
+provider that won selection.
 
-## 0.4 migration
+## Registration
 
-| 0.3 API | 0.4 replacement |
-| --- | --- |
-| ServiceSpec::Service | ServiceSpec::Output |
-| create_box, create_arc, create_rc | One ServiceProvider::create; the spec chooses its output handle |
-| Provider descriptor() | ProviderDescriptor passed to builder registration |
-| availability() | Classified ProviderError returned by create() |
-| Mutable ProviderRegistry::register | ProviderRegistryBuilder::register, then build() |
-| create_auto_* and create_selected_* | ProviderResolver::create |
-| register_default in a domain crate | Explicit application startup assembly |
+Provider identity belongs to registration rather than to the provider factory.
+Use `register(descriptor, provider)` for an owned provider and
+`register_shared(descriptor, provider)` when the factory is already held in an
+`Arc`. Registration validates every canonical ID and alias before mutating the
+builder, so a rejected registration never reserves a partial set of selectors.
 
-This release intentionally provides no compatibility layer. Downstream crates
-such as qubit-fs, qubit-mime, and qubit-magika migrate in separate changes.
-rs-llmsdk-core remains provider-neutral and does not depend on this crate.
+The core exports no global registry. Applications explicitly assemble the
+providers they need during startup and share the resulting immutable registry
+or resolver.
