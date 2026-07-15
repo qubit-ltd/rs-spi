@@ -9,7 +9,10 @@
 
 use std::{error::Error, fmt, sync::Arc};
 
-/// Classification of a provider creation failure.
+/// Classification of a failure reported while a provider creates a service.
+///
+/// Providers return these variants so [`crate::ProviderResolver`] can decide
+/// whether its fallback policy permits another provider to be tried.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderErrorKind {
@@ -24,27 +27,44 @@ pub enum ProviderErrorKind {
 }
 
 /// Error returned by one provider while creating a service.
+///
+/// Use the constructors to report a classified failure from a
+/// [`crate::ServiceProvider`] implementation. The resolver preserves this
+/// information in its attempt diagnostics.
 #[derive(Clone, Debug)]
 pub struct ProviderError {
+    /// Classification consumed by the resolver's fallback policy.
     kind: ProviderErrorKind,
+    /// Human-readable explanation supplied by the provider.
     reason: Box<str>,
+    /// Optional underlying error retained for diagnostics and error chaining.
     source: Option<Arc<dyn Error + Send + Sync>>,
 }
 
 impl ProviderError {
-    /// Creates an unsupported-request error.
+    /// Creates an error indicating that the request is unsupported.
+    ///
+    /// `reason` explains the unsupported capability or configuration. Returns
+    /// an error classified as [`ProviderErrorKind::Unsupported`].
     #[must_use]
     pub fn unsupported(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::Unsupported, reason)
     }
 
-    /// Creates an unavailable-provider error.
+    /// Creates an error indicating that the provider is currently unavailable.
+    ///
+    /// `reason` explains the unavailable dependency or environment. Returns
+    /// an error classified as [`ProviderErrorKind::Unavailable`].
     #[must_use]
     pub fn unavailable(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::Unavailable, reason)
     }
 
-    /// Creates an unavailable-provider error with a source.
+    /// Creates an unavailable-provider error with an underlying cause.
+    ///
+    /// `reason` describes the unavailable condition and `source` retains the
+    /// causal error for diagnostics. Returns an error classified as
+    /// [`ProviderErrorKind::Unavailable`].
     #[must_use]
     pub fn unavailable_with_source(
         reason: impl AsRef<str>,
@@ -53,19 +73,28 @@ impl ProviderError {
         Self::with_source(ProviderErrorKind::Unavailable, reason, source)
     }
 
-    /// Creates an invalid-provider-configuration error.
+    /// Creates an error for provider-specific invalid configuration.
+    ///
+    /// `reason` identifies the invalid setting. Returns an error classified as
+    /// [`ProviderErrorKind::InvalidConfiguration`].
     #[must_use]
     pub fn invalid_configuration(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::InvalidConfiguration, reason)
     }
 
-    /// Creates a provider-initialization failure.
+    /// Creates an unexpected provider-initialization failure.
+    ///
+    /// `reason` describes the initialization failure. Returns an error
+    /// classified as [`ProviderErrorKind::InitializationFailed`].
     #[must_use]
     pub fn initialization_failed(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::InitializationFailed, reason)
     }
 
-    /// Creates a provider-initialization failure with a source.
+    /// Creates an initialization failure with an underlying cause.
+    ///
+    /// `reason` describes the failure and `source` retains its causal error.
+    /// Returns an error classified as [`ProviderErrorKind::InitializationFailed`].
     #[must_use]
     pub fn initialization_failed_with_source(
         reason: impl AsRef<str>,
@@ -74,22 +103,34 @@ impl ProviderError {
         Self::with_source(ProviderErrorKind::InitializationFailed, reason, source)
     }
 
-    /// Gets the failure classification.
+    /// Returns the failure classification used by fallback policy evaluation.
     #[must_use]
+    #[inline]
     pub const fn kind(&self) -> ProviderErrorKind {
         self.kind
     }
 
-    /// Gets the provider-supplied reason.
+    /// Returns the provider-supplied explanation of the failure.
     #[must_use]
+    #[inline]
     pub fn reason(&self) -> &str {
         &self.reason
     }
 
+    /// Clones the optional source error for internal diagnostic aggregation.
+    ///
+    /// Returns `Some` with a new [`Arc`] reference when a source was supplied,
+    /// and `None` otherwise.
+    #[inline]
     pub(crate) fn source_arc(&self) -> Option<Arc<dyn Error + Send + Sync>> {
         self.source.clone()
     }
 
+    /// Creates a classified error without an underlying source.
+    ///
+    /// `kind` controls fallback behavior and `reason` becomes the diagnostic
+    /// message. Returns the constructed provider error.
+    #[inline]
     fn new(kind: ProviderErrorKind, reason: impl AsRef<str>) -> Self {
         Self {
             kind,
@@ -98,6 +139,11 @@ impl ProviderError {
         }
     }
 
+    /// Creates a classified error that retains an underlying source.
+    ///
+    /// `kind` controls fallback behavior, `reason` describes the failure, and
+    /// `source` is stored for later diagnostic chaining. Returns the error.
+    #[inline]
     fn with_source(
         kind: ProviderErrorKind,
         reason: impl AsRef<str>,
@@ -112,12 +158,21 @@ impl ProviderError {
 }
 
 impl fmt::Display for ProviderError {
+    /// Formats the error classification and provider-supplied reason.
+    ///
+    /// `formatter` receives `provider <kind>: <reason>` and any formatting
+    /// failure is returned to the caller.
+    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "provider {:?}: {}", self.kind, self.reason)
     }
 }
 
 impl Error for ProviderError {
+    /// Returns the retained underlying error when the provider supplied one.
+    ///
+    /// Returns `None` for errors created without a source.
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.source
             .as_deref()

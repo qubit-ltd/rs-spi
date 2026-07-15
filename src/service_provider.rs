@@ -9,19 +9,25 @@
 
 use crate::{ProviderError, ServiceSpec};
 
-/// Factory contract for one service implementation.
+/// Factory contract for one pluggable service implementation.
 ///
 /// Registration owns provider identity and selection metadata. A provider only
-/// creates the output handle selected by its service specification.
+/// creates the output handle selected by its service specification. Implement
+/// this trait when an application needs to provide one selectable backend for
+/// a [`ServiceSpec`] family.
 pub trait ServiceProvider<S>: Send + Sync + 'static
 where
     S: ServiceSpec,
 {
-    /// Creates one service output.
+    /// Creates one service output from the supplied configuration.
+    ///
+    /// `config` is the service-family configuration declared by `S`. Returns
+    /// the complete `S::Output` handle on success.
     ///
     /// # Errors
     ///
-    /// Returns ProviderError when the provider cannot create the requested
-    /// service.
+    /// Returns [`ProviderError`] when the provider cannot create the requested
+    /// service. Its classification must accurately reflect whether fallback is
+    /// appropriate.
     fn create(&self, config: &S::Config) -> Result<S::Output, ProviderError>;
 }

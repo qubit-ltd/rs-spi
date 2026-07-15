@@ -11,11 +11,18 @@
 ///
 /// A service specification gives a registry one type parameter that carries the
 /// configuration type accepted by providers and the complete handle returned
-/// by provider factories.
+/// by provider factories. Define one marker type implementing this trait for
+/// each service family that needs independently typed provider registration.
 pub trait ServiceSpec: 'static {
     /// Configuration type passed to provider factories.
+    ///
+    /// This may be unsized when providers operate on a dynamically sized
+    /// configuration view.
     type Config: ?Sized;
 
-    /// Complete output handle returned by providers.
+    /// Complete output handle returned by provider factories.
+    ///
+    /// This is the service value wrapped in [`crate::CreatedService`] after
+    /// successful resolution.
     type Output;
 }

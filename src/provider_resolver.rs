@@ -15,11 +15,16 @@ use crate::{
 };
 
 /// Creates services from an immutable registry using explicit fallback policy.
+///
+/// Applications construct a resolver after startup and use it at runtime to
+/// apply per-call [`ProviderSelection`] values to a typed service registry.
 pub struct ProviderResolver<S>
 where
     S: ServiceSpec,
 {
+    /// Immutable catalog searched for provider candidates.
     registry: ProviderRegistry<S>,
+    /// Policy deciding which provider failures permit fallback.
     fallback_policy: FallbackPolicy,
 }
 
@@ -28,6 +33,9 @@ where
     S: ServiceSpec,
 {
     /// Creates a resolver over an immutable provider registry.
+    ///
+    /// `registry` supplies the selectable providers and `fallback_policy`
+    /// controls which failed attempts may continue. Returns the resolver.
     #[must_use]
     pub fn new(registry: ProviderRegistry<S>, fallback_policy: FallbackPolicy) -> Self {
         Self {
@@ -36,12 +44,16 @@ where
         }
     }
 
-    /// Creates a service using the requested selection.
+    /// Creates a service using the requested provider selection.
+    ///
+    /// `selection` controls candidate ordering and `config` is passed unchanged
+    /// to each attempted provider. Returns the service and its winning provider
+    /// identity on success.
     ///
     /// # Errors
     ///
-    /// Returns ResolutionError when no candidate succeeds or a non-fallback
-    /// provider failure occurs.
+    /// Returns [`ResolutionError`] when a named selector is unknown, no
+    /// candidate succeeds, or a failure is disallowed by the fallback policy.
     pub fn create(
         &self,
         selection: &ProviderSelection,
@@ -54,6 +66,10 @@ where
         }
     }
 
+    /// Creates a service by trying all providers in automatic order.
+    ///
+    /// `config` is forwarded to each candidate. Returns the first successful
+    /// service or a [`ResolutionError`] containing every recorded failure.
     fn create_automatic(
         &self,
         config: &S::Config,
@@ -77,6 +93,11 @@ where
         Err(ResolutionError::no_provider_succeeded(failures))
     }
 
+    /// Creates a service through one explicitly selected provider.
+    ///
+    /// `selector` is normalized and `config` is forwarded to the matching
+    /// factory. Returns its service, or a [`ResolutionError`] if it is unknown
+    /// or creation fails; named selections never fall back.
     fn create_named(
         &self,
         selector: &ProviderSelector,
@@ -95,6 +116,12 @@ where
         }
     }
 
+    /// Creates a service by trying the supplied selectors in order.
+    ///
+    /// `selectors` may contain aliases for the same provider, which is tried
+    /// only once; `config` is forwarded to each attempted factory. Returns the
+    /// first success or a [`ResolutionError`] containing skipped and failed
+    /// attempts.
     fn create_chain(
         &self,
         selectors: &[ProviderSelector],
@@ -129,6 +156,11 @@ where
         Err(ResolutionError::no_provider_succeeded(failures))
     }
 
+    /// Determines whether this resolver may fall back after an error kind.
+    ///
+    /// `kind` is the provider-reported failure classification. Returns `true`
+    /// exactly when this resolver's fallback policy permits another attempt.
+    #[inline]
     fn should_continue(&self, kind: ProviderErrorKind) -> bool {
         match self.fallback_policy {
             FallbackPolicy::OnAnyError => true,

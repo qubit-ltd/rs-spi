@@ -11,19 +11,28 @@ use std::{fmt, str::FromStr};
 
 use crate::{RegistrationError, provider_id::validate_canonical_token};
 
-/// Normalized provider lookup token.
+/// Normalized token used to look up a provider by ID or alias.
+///
+/// This type is used at configuration and request boundaries, where inputs are
+/// trimmed and ASCII-lowercased before registry lookup.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ProviderSelector(Box<str>);
+pub struct ProviderSelector(
+    /// Normalized selector text accepted by registry lookup.
+    Box<str>,
+);
 
 impl ProviderSelector {
-    /// Parses a provider selector from configuration input.
+    /// Parses and normalizes a provider selector from configuration input.
+    ///
+    /// `value` is trimmed and ASCII-lowercased before validation. Returns the
+    /// normalized selector used for registry lookup.
     ///
     /// Surrounding whitespace is removed and ASCII letters are lowercased
     /// before the canonical identifier grammar is validated.
     ///
     /// # Errors
     ///
-    /// Returns RegistrationError when the normalized selector is empty or
+    /// Returns [`RegistrationError`] when the normalized selector is empty or
     /// invalid.
     pub fn parse(value: impl AsRef<str>) -> Result<Self, RegistrationError> {
         let normalized = value.as_ref().trim().to_ascii_lowercase();
@@ -31,20 +40,27 @@ impl ProviderSelector {
         Ok(Self(normalized.into()))
     }
 
-    /// Gets the normalized selector text.
+    /// Returns the normalized selector text.
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl AsRef<str> for ProviderSelector {
+    /// Forwards to [`ProviderSelector::as_str`].
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl fmt::Display for ProviderSelector {
+    /// Writes the normalized selector text to `formatter`.
+    ///
+    /// Returns a formatting error if `formatter` cannot accept the text.
+    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }

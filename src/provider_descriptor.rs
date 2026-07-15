@@ -11,16 +11,27 @@ use std::collections::HashSet;
 
 use crate::{ProviderId, ProviderSelector, RegistrationError};
 
-/// Stable metadata used to register and select a provider.
+/// Immutable metadata that identifies and ranks a registered provider.
+///
+/// Construct a descriptor while assembling a [`crate::ProviderRegistry`]: its
+/// ID and aliases control explicit lookup, while its priority controls
+/// automatic selection order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderDescriptor {
+    /// Canonical, globally unique identifier of the provider.
     id: ProviderId,
+    /// Normalized alternative selectors that resolve to `id`.
     aliases: Box<[ProviderSelector]>,
+    /// Descending sort key used during automatic provider selection.
     priority: i32,
 }
 
 impl ProviderDescriptor {
     /// Creates metadata for a canonical provider ID.
+    ///
+    /// `id` is the provider's stable identity. The returned descriptor has no
+    /// aliases and priority zero, and can be refined with the builder-style
+    /// methods before registration.
     #[must_use]
     pub fn new(id: ProviderId) -> Self {
         Self {
@@ -30,12 +41,15 @@ impl ProviderDescriptor {
         }
     }
 
-    /// Adds normalized aliases.
+    /// Replaces the descriptor's aliases with normalized lookup selectors.
+    ///
+    /// Each item in `aliases` is trimmed, lowercased, and validated. On
+    /// success, returns this descriptor with the resulting aliases.
     ///
     /// # Errors
     ///
-    /// Returns RegistrationError when an alias is invalid, duplicates another
-    /// alias, or duplicates the canonical provider ID.
+    /// Returns [`RegistrationError`] when an alias is invalid, duplicates
+    /// another alias, or duplicates the canonical provider ID.
     pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, RegistrationError>
     where
         I: IntoIterator<Item = T>,
@@ -61,26 +75,32 @@ impl ProviderDescriptor {
     }
 
     /// Sets the priority used by automatic selection.
+    ///
+    /// `priority` is ordered descending; providers with equal priorities are
+    /// ordered by canonical ID. Returns the updated descriptor.
     #[must_use]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self
     }
 
-    /// Gets the canonical provider ID.
+    /// Returns the canonical provider ID.
     #[must_use]
+    #[inline]
     pub fn id(&self) -> &ProviderId {
         &self.id
     }
 
-    /// Gets normalized aliases.
+    /// Returns the normalized aliases that resolve to the canonical ID.
     #[must_use]
+    #[inline]
     pub fn aliases(&self) -> &[ProviderSelector] {
         &self.aliases
     }
 
-    /// Gets automatic-selection priority.
+    /// Returns the priority used to order automatic selection candidates.
     #[must_use]
+    #[inline]
     pub const fn priority(&self) -> i32 {
         self.priority
     }

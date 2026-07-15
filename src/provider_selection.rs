@@ -9,34 +9,43 @@
 
 use crate::{ProviderSelector, RegistrationError};
 
-/// Requested provider candidates.
+/// Explicit request for the providers a resolver may try.
+///
+/// Use this type to choose automatic selection, one named provider, or an
+/// ordered fallback chain at each service-creation call.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ProviderSelection {
-    /// Use every registered provider in deterministic automatic order.
+    /// Uses every registered provider in deterministic automatic order.
     #[default]
     Auto,
-    /// Use one named provider.
+    /// Uses exactly one normalized selector.
     Named(ProviderSelector),
-    /// Try named providers in the supplied order.
+    /// Tries normalized selectors in the supplied order.
     Chain(Box<[ProviderSelector]>),
 }
 
 impl ProviderSelection {
-    /// Creates a named selection from configuration input.
+    /// Creates a one-provider selection from configuration input.
+    ///
+    /// `value` is normalized as a provider selector. Returns a `Named`
+    /// selection containing that selector.
     ///
     /// # Errors
     ///
-    /// Returns RegistrationError when the selector is invalid.
+    /// Returns [`RegistrationError`] when `value` cannot form a valid selector.
     pub fn named(value: impl AsRef<str>) -> Result<Self, RegistrationError> {
         Ok(Self::Named(ProviderSelector::parse(value)?))
     }
 
     /// Creates an ordered candidate chain from configuration input.
     ///
+    /// Each item in `values` is normalized as a provider selector. Returns a
+    /// `Chain` preserving the resulting selector order.
+    ///
     /// # Errors
     ///
-    /// Returns RegistrationError when any selector is invalid or no selectors
-    /// are supplied.
+    /// Returns [`RegistrationError`] when any selector is invalid or `values`
+    /// produces no selectors.
     pub fn chain<I, T>(values: I) -> Result<Self, RegistrationError>
     where
         I: IntoIterator<Item = T>,
@@ -53,12 +62,15 @@ impl ProviderSelection {
     }
 }
 
-/// Controls which failures permit the resolver to continue to a fallback.
+/// Controls which provider failures permit a resolver to try a fallback.
+///
+/// Choose [`FallbackPolicy::OnAbsence`] for conservative fallback across
+/// optional backends, or [`FallbackPolicy::OnAnyError`] for best-effort chains.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum FallbackPolicy {
-    /// Continue only after a missing, unsupported, or unavailable provider.
+    /// Continues only after a missing, unsupported, or unavailable provider.
     #[default]
     OnAbsence,
-    /// Continue after every provider failure.
+    /// Continues after every provider failure.
     OnAnyError,
 }

@@ -12,11 +12,20 @@ use std::{fmt, str::FromStr};
 use crate::RegistrationError;
 
 /// Stable canonical identifier of a provider.
+///
+/// Use this type to assign a provider its unique registry identity. Unlike a
+/// selector, an ID must already be canonical and is never normalized.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ProviderId(Box<str>);
+pub struct ProviderId(
+    /// Canonical ASCII identifier text.
+    Box<str>,
+);
 
 impl ProviderId {
-    /// Creates a canonical provider identifier.
+    /// Creates a canonical provider identifier from already canonical text.
+    ///
+    /// `value` becomes the stable provider ID when it satisfies the documented
+    /// canonical-token grammar. Returns the validated identifier.
     ///
     /// The value must already be lowercase ASCII and may contain alphanumeric
     /// characters plus hyphen, underscore, period, and plus between
@@ -24,27 +33,34 @@ impl ProviderId {
     ///
     /// # Errors
     ///
-    /// Returns RegistrationError when the value is empty or noncanonical.
+    /// Returns [`RegistrationError`] when `value` is empty or noncanonical.
     pub fn new(value: impl AsRef<str>) -> Result<Self, RegistrationError> {
         let value = value.as_ref();
         validate_canonical_token(value)?;
         Ok(Self(value.into()))
     }
 
-    /// Gets the canonical identifier text.
+    /// Returns the canonical identifier text.
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl AsRef<str> for ProviderId {
+    /// Forwards to [`ProviderId::as_str`].
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl fmt::Display for ProviderId {
+    /// Writes the canonical identifier text to `formatter`.
+    ///
+    /// Returns a formatting error if `formatter` cannot accept the text.
+    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
@@ -58,6 +74,11 @@ impl FromStr for ProviderId {
     }
 }
 
+/// Validates the shared canonical-token grammar for IDs and selectors.
+///
+/// `value` must be nonempty lowercase ASCII, start and end with an
+/// alphanumeric byte, and use only the permitted separators. Returns `Ok(())`
+/// when valid; otherwise returns [`RegistrationError`] with the invalid input.
 pub(crate) fn validate_canonical_token(value: &str) -> Result<(), RegistrationError> {
     if value.is_empty() {
         return Err(RegistrationError::empty_identifier());
