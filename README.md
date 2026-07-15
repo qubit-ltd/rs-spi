@@ -40,7 +40,6 @@ use qubit_spi::{
     ProviderId,
     ProviderRegistry,
     ProviderResolver,
-    ProviderSelection,
     ServiceProvider,
     ServiceSpec,
 };
@@ -79,7 +78,7 @@ builder.register(
     EnglishProvider,
 )?;
 let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-let created = resolver.create(&ProviderSelection::named("en")?, &())?;
+let created = resolver.create_named("en", &())?;
 assert_eq!("hello", created.service().greet());
 # Ok(())
 # }
@@ -87,21 +86,32 @@ assert_eq!("hello", created.service().greet());
 
 ## Selection and failures
 
-- ProviderSelection::Auto uses descending descriptor priority and then
+- `ProviderSelection::auto()` uses descending descriptor priority and then
   ascending canonical provider ID.
-- ProviderSelection::Named selects exactly one provider.
-- ProviderSelection::Chain tries configuration-provided candidates in order and
+- `ProviderSelection::named(...)` selects exactly one provider.
+- `ProviderSelection::chain(...)` tries configuration-provided candidates in order and
   does not attempt the same provider twice through aliases.
+- `ProviderResolver::create_auto`, `create_named`, and `create_chain` accept raw
+  runtime input and report parsing failures as `ResolutionError` values.
 - FallbackPolicy::OnAbsence continues after unknown, unsupported, or
   unavailable optional providers; it stops at invalid configuration and
   initialization failures.
 - FallbackPolicy::OnAnyError is available for explicitly best-effort chains.
 
-ProviderError classifies a single factory failure. ResolutionError records all
-attempted candidates and preserves invalid selector input and its validation
-source. Each AttemptFailure explicitly distinguishes an unknown selector from a
-provider creation error. CreatedService exposes the canonical ID of the
-provider that won selection.
+`ProviderError` classifies a single factory failure. `ResolutionError` records
+all attempted candidates, preserves invalid selector input and its validation
+source, and distinguishes empty registries and empty raw chains. Its display
+text includes ordered attempt diagnostics. Each `AttemptFailure` explicitly
+distinguishes an unknown selector from a provider creation error.
+
+Validation and assembly errors are separated by lifecycle:
+`ProviderIdError`, `ProviderSelectorError`, `ProviderDescriptorError`,
+`ProviderSelectionError`, and `RegistrationError`. Registration errors now
+represent registry conflicts only.
+
+`CreatedService` exposes the winning canonical provider ID and can be consumed
+through `into_service()` or `into_parts()`. `ProviderRegistry::len()` and
+`is_empty()` expose catalog size without allocation.
 
 ## Registration
 

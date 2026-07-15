@@ -38,7 +38,6 @@ use qubit_spi::{
     ProviderId,
     ProviderRegistry,
     ProviderResolver,
-    ProviderSelection,
     ServiceProvider,
     ServiceSpec,
 };
@@ -77,7 +76,7 @@ builder.register(
     EnglishProvider,
 )?;
 let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-let created = resolver.create(&ProviderSelection::named("en")?, &())?;
+let created = resolver.create_named("en", &())?;
 assert_eq!("hello", created.service().greet());
 # Ok(())
 # }
@@ -85,18 +84,28 @@ assert_eq!("hello", created.service().greet());
 
 ## 选择与失败
 
-- ProviderSelection::Auto 按 descriptor priority 降序、canonical Provider ID
+- `ProviderSelection::auto()` 按 descriptor priority 降序、canonical Provider ID
   升序选择。
-- ProviderSelection::Named 只选择一个 Provider。
-- ProviderSelection::Chain 按配置顺序尝试候选项，并避免通过多个别名重复尝试同一
+- `ProviderSelection::named(...)` 只选择一个 Provider。
+- `ProviderSelection::chain(...)` 按配置顺序尝试候选项，并避免通过多个别名重复尝试同一
   Provider。
+- `ProviderResolver::create_auto`、`create_named`、`create_chain` 可直接接收运行时
+  原始输入，并把解析失败统一报告为 `ResolutionError`。
 - FallbackPolicy::OnAbsence 会在未知、不支持或不可用时继续回退；遇到无效配置和
   初始化失败时停止。
 - FallbackPolicy::OnAnyError 用于明确要求尽力而为的回退链。
 
-ProviderError 对单次工厂失败分类。ResolutionError 会记录已尝试的候选项，保留
-无效 selector 的原始输入及校验错误链。每个 AttemptFailure 会显式区分未知 selector
-与 Provider 创建失败。CreatedService 暴露实际胜出的 canonical Provider ID。
+`ProviderError` 对单次工厂失败分类。`ResolutionError` 会记录已尝试的候选项，保留
+无效 selector 的原始输入及校验错误链，并明确区分空 registry 与空原始 chain；其
+显示文本包含按顺序排列的尝试诊断。每个 `AttemptFailure` 会显式区分未知 selector
+与 Provider 创建失败。
+
+校验和装配错误按生命周期拆分为 `ProviderIdError`、`ProviderSelectorError`、
+`ProviderDescriptorError`、`ProviderSelectionError` 与 `RegistrationError`；其中
+registration error 只表示 registry 内部的 selector 冲突。
+
+`CreatedService` 暴露实际胜出的 canonical Provider ID，可通过 `into_service()` 或
+`into_parts()` 消费。`ProviderRegistry::len()` 与 `is_empty()` 可无分配查看目录大小。
 
 ## 注册
 
