@@ -42,7 +42,6 @@ impl ProviderSelector {
 
     /// Returns the normalized selector text.
     #[must_use]
-    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -50,7 +49,6 @@ impl ProviderSelector {
 
 impl AsRef<str> for ProviderSelector {
     /// Forwards to [`ProviderSelector::as_str`].
-    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
@@ -60,15 +58,24 @@ impl fmt::Display for ProviderSelector {
     /// Writes the normalized selector text to `formatter`.
     ///
     /// Returns a formatting error if `formatter` cannot accept the text.
-    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
 
 impl FromStr for ProviderSelector {
+    /// Error returned when the normalized input is empty or invalid.
     type Err = RegistrationError;
 
+    /// Parses a provider selector from configuration-style input.
+    ///
+    /// `value` is trimmed and ASCII-lowercased before validation. Returns the
+    /// normalized selector used for registry lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] when the normalized input is empty or
+    /// violates selector syntax.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::parse(value)
     }

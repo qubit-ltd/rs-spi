@@ -42,7 +42,6 @@ impl ProviderId {
 
     /// Returns the canonical identifier text.
     #[must_use]
-    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -50,7 +49,6 @@ impl ProviderId {
 
 impl AsRef<str> for ProviderId {
     /// Forwards to [`ProviderId::as_str`].
-    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
@@ -60,15 +58,23 @@ impl fmt::Display for ProviderId {
     /// Writes the canonical identifier text to `formatter`.
     ///
     /// Returns a formatting error if `formatter` cannot accept the text.
-    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
 
 impl FromStr for ProviderId {
+    /// Error returned when the input is empty or violates canonical ID syntax.
     type Err = RegistrationError;
 
+    /// Parses an already canonical provider identifier.
+    ///
+    /// `value` is validated without trimming or case normalization. Returns the
+    /// canonical provider ID when validation succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] when `value` is empty or noncanonical.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
     }

@@ -105,14 +105,12 @@ impl ProviderError {
 
     /// Returns the failure classification used by fallback policy evaluation.
     #[must_use]
-    #[inline]
     pub const fn kind(&self) -> ProviderErrorKind {
         self.kind
     }
 
     /// Returns the provider-supplied explanation of the failure.
     #[must_use]
-    #[inline]
     pub fn reason(&self) -> &str {
         &self.reason
     }
@@ -121,7 +119,6 @@ impl ProviderError {
     ///
     /// Returns `Some` with a new [`Arc`] reference when a source was supplied,
     /// and `None` otherwise.
-    #[inline]
     pub(crate) fn source_arc(&self) -> Option<Arc<dyn Error + Send + Sync>> {
         self.source.clone()
     }
@@ -130,7 +127,6 @@ impl ProviderError {
     ///
     /// `kind` controls fallback behavior and `reason` becomes the diagnostic
     /// message. Returns the constructed provider error.
-    #[inline]
     fn new(kind: ProviderErrorKind, reason: impl AsRef<str>) -> Self {
         Self {
             kind,
@@ -143,7 +139,6 @@ impl ProviderError {
     ///
     /// `kind` controls fallback behavior, `reason` describes the failure, and
     /// `source` is stored for later diagnostic chaining. Returns the error.
-    #[inline]
     fn with_source(
         kind: ProviderErrorKind,
         reason: impl AsRef<str>,
@@ -162,7 +157,6 @@ impl fmt::Display for ProviderError {
     ///
     /// `formatter` receives `provider <kind>: <reason>` and any formatting
     /// failure is returned to the caller.
-    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "provider {:?}: {}", self.kind, self.reason)
     }
@@ -172,7 +166,6 @@ impl Error for ProviderError {
     /// Returns the retained underlying error when the provider supplied one.
     ///
     /// Returns `None` for errors created without a source.
-    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.source
             .as_deref()

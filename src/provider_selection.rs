@@ -15,13 +15,19 @@ use crate::{ProviderSelector, RegistrationError};
 /// ordered fallback chain at each service-creation call.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ProviderSelection {
-    /// Uses every registered provider in deterministic automatic order.
+    /// Tries providers in deterministic automatic order until resolution stops.
     #[default]
     Auto,
     /// Uses exactly one normalized selector.
-    Named(ProviderSelector),
+    Named(
+        /// Selector that must resolve to the single provider used.
+        ProviderSelector,
+    ),
     /// Tries normalized selectors in the supplied order.
-    Chain(Box<[ProviderSelector]>),
+    Chain(
+        /// Ordered selectors tried until a provider succeeds or fallback stops.
+        Box<[ProviderSelector]>,
+    ),
 }
 
 impl ProviderSelection {
@@ -62,15 +68,16 @@ impl ProviderSelection {
     }
 }
 
-/// Controls which provider failures permit a resolver to try a fallback.
+/// Controls which provider creation failures permit trying another candidate.
 ///
-/// Choose [`FallbackPolicy::OnAbsence`] for conservative fallback across
-/// optional backends, or [`FallbackPolicy::OnAnyError`] for best-effort chains.
+/// This policy applies to automatic and chained selection after a provider
+/// factory returns an error. Named selection always uses exactly one provider
+/// and never falls back.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum FallbackPolicy {
-    /// Continues only after a missing, unsupported, or unavailable provider.
+    /// Continues only after an unsupported or unavailable provider.
     #[default]
     OnAbsence,
-    /// Continues after every provider failure.
+    /// Continues after every provider creation failure.
     OnAnyError,
 }

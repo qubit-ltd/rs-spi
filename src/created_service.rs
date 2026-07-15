@@ -39,7 +39,6 @@ impl<T> CreatedService<T> {
     ///
     /// The returned reference is valid for as long as this result is retained.
     #[must_use]
-    #[inline]
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
     }
@@ -48,7 +47,6 @@ impl<T> CreatedService<T> {
     ///
     /// The returned reference is valid for as long as this result is retained.
     #[must_use]
-    #[inline]
     pub fn service(&self) -> &T {
         &self.service
     }
@@ -57,7 +55,6 @@ impl<T> CreatedService<T> {
     ///
     /// Use this when provider identity is no longer needed and ownership of the
     /// service must be transferred to the caller.
-    #[inline]
     pub fn into_service(self) -> T {
         self.service
     }

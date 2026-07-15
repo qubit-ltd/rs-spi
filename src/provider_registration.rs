@@ -13,8 +13,10 @@ use crate::{ProviderDescriptor, ServiceProvider, ServiceSpec};
 
 /// One provider factory paired with the metadata needed to register it.
 ///
-/// Use this type when registration metadata and a provider factory must travel
-/// together before being consumed by [`crate::ProviderRegistryBuilder`].
+/// [`crate::ProviderRegistryBuilder`] registration methods create this container
+/// internally and consume it while building the immutable registry. Callers
+/// normally register a descriptor and factory through the builder instead of
+/// constructing this intermediate value directly.
 pub struct ProviderRegistration<S>
 where
     S: ServiceSpec,
@@ -58,7 +60,6 @@ where
 
     /// Returns the immutable registration metadata.
     #[must_use]
-    #[inline]
     pub fn descriptor(&self) -> &ProviderDescriptor {
         &self.descriptor
     }
@@ -66,7 +67,6 @@ where
     /// Splits this registration into the metadata and shared factory it owns.
     ///
     /// Returns the pair consumed by registry construction.
-    #[inline]
     pub(crate) fn into_parts(self) -> (ProviderDescriptor, Arc<dyn ServiceProvider<S>>) {
         (self.descriptor, self.provider)
     }

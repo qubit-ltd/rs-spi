@@ -171,7 +171,6 @@ where
     S: ServiceSpec,
 {
     /// Creates an empty builder by forwarding to [`ProviderRegistryBuilder::new`].
-    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }

@@ -86,21 +86,18 @@ impl ProviderDescriptor {
 
     /// Returns the canonical provider ID.
     #[must_use]
-    #[inline]
     pub fn id(&self) -> &ProviderId {
         &self.id
     }
 
     /// Returns the normalized aliases that resolve to the canonical ID.
     #[must_use]
-    #[inline]
     pub fn aliases(&self) -> &[ProviderSelector] {
         &self.aliases
     }
 
     /// Returns the priority used to order automatic selection candidates.
     #[must_use]
-    #[inline]
     pub const fn priority(&self) -> i32 {
         self.priority
     }

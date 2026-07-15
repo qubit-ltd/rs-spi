@@ -114,7 +114,6 @@ where
 
     /// Returns whether this registry contains no registered providers.
     #[must_use]
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.inner.entries.is_empty()
     }
@@ -123,7 +122,6 @@ where
     ///
     /// `inner` must contain mutually consistent entries and indexes. Returns a
     /// registry sharing that storage; callers are responsible for the invariant.
-    #[inline]
     pub(crate) fn from_inner(inner: Arc<RegistryInner<S>>) -> Self {
         Self { inner }
     }
@@ -132,16 +130,19 @@ where
     ///
     /// Returns `Some` with the internal entry position when found, and `None`
     /// otherwise.
-    #[inline]
     pub(crate) fn index_for(&self, selector: &ProviderSelector) -> Option<usize> {
         self.inner.selector_indices.get(selector).copied()
     }
 
-    /// Borrows the resolved provider at a valid internal entry position.
+    /// Borrows the resolved provider at an internal entry position.
     ///
-    /// `index` must refer to an existing entry. Returns its lookup wrapper and
-    /// panics if the caller violates that internal invariant.
-    #[inline]
+    /// `index` identifies an entry in this registry. Returns a lookup wrapper
+    /// borrowing that entry.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index` is outside the registry's entry array. Registry-owned
+    /// indexes satisfy this invariant.
     pub(crate) fn resolved_at(&self, index: usize) -> ResolvedProvider<'_, S> {
         ResolvedProvider {
             entry: &self.inner.entries[index],
@@ -151,7 +152,6 @@ where
     /// Returns provider entry positions in automatic-selection order.
     ///
     /// Each position is valid for this registry's internal entry array.
-    #[inline]
     pub(crate) fn automatic_indices(&self) -> &[usize] {
         &self.inner.automatic_indices
     }
@@ -159,7 +159,6 @@ where
     /// Resolves a normalized selector by forwarding through the selector index.
     ///
     /// Returns `Some` for a registered selector and `None` otherwise.
-    #[inline(always)]
     fn resolve_selector(&self, selector: &ProviderSelector) -> Option<ResolvedProvider<'_, S>> {
         self.index_for(selector)
             .map(|index| self.resolved_at(index))
@@ -173,7 +172,6 @@ where
     /// Clones the registry by incrementing its shared immutable-storage count.
     ///
     /// Returns another registry handle; entries and indexes are not copied.
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -186,7 +184,6 @@ where
     S: ServiceSpec,
 {
     /// Creates an empty registry by forwarding to the builder's default build.
-    #[inline(always)]
     fn default() -> Self {
         Self::builder().build()
     }
@@ -225,7 +222,6 @@ where
 {
     /// Returns the selected provider's registration metadata.
     #[must_use]
-    #[inline]
     pub fn descriptor(&self) -> &ProviderDescriptor {
         &self.entry.descriptor
     }

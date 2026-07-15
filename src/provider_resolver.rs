@@ -66,10 +66,16 @@ where
         }
     }
 
-    /// Creates a service by trying all providers in automatic order.
+    /// Creates a service by trying providers in automatic order.
     ///
     /// `config` is forwarded to each candidate. Returns the first successful
-    /// service or a [`ResolutionError`] containing every recorded failure.
+    /// service and stops without invoking later candidates.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when the registry is empty, every attempted
+    /// provider fails, or the fallback policy stops resolution after a provider
+    /// failure. The error contains failures recorded before resolution stopped.
     fn create_automatic(
         &self,
         config: &S::Config,
@@ -119,9 +125,15 @@ where
     /// Creates a service by trying the supplied selectors in order.
     ///
     /// `selectors` may contain aliases for the same provider, which is tried
-    /// only once; `config` is forwarded to each attempted factory. Returns the
-    /// first success or a [`ResolutionError`] containing skipped and failed
-    /// attempts.
+    /// only once; later selectors resolving to that provider are omitted without
+    /// a failure record. `config` is forwarded to each attempted factory. Returns
+    /// the first successful service.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when no provider succeeds or the fallback
+    /// policy stops the chain. The error records unknown selectors and actual
+    /// provider failures encountered before resolution stopped.
     fn create_chain(
         &self,
         selectors: &[ProviderSelector],
@@ -160,7 +172,6 @@ where
     ///
     /// `kind` is the provider-reported failure classification. Returns `true`
     /// exactly when this resolver's fallback policy permits another attempt.
-    #[inline]
     fn should_continue(&self, kind: ProviderErrorKind) -> bool {
         match self.fallback_policy {
             FallbackPolicy::OnAnyError => true,
