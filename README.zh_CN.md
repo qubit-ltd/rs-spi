@@ -23,7 +23,7 @@ ServiceSpec 同时定义配置类型和完整输出句柄；SPI 核心不会在 
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.4"
+qubit-spi = "0.5"
 ~~~
 
 ## 快速开始

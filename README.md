@@ -25,7 +25,7 @@ core does not convert between Box, Arc, and Rc.
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.4"
+qubit-spi = "0.5"
 ~~~
 
 ## Quick Start
