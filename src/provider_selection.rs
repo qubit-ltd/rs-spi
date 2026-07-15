@@ -9,10 +9,7 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    ProviderName,
-    ProviderRegistryError,
-};
+use crate::{ProviderName, ProviderRegistryError};
 
 /// Provider candidates used by registry selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,10 +71,7 @@ impl ProviderSelection {
     /// Returns [`ProviderRegistryError`] when `primary` or any fallback is not
     /// a valid provider name, or when candidate names are duplicated.
     #[inline]
-    pub fn from_names(
-        primary: &str,
-        fallbacks: &[&str],
-    ) -> Result<Self, ProviderRegistryError> {
+    pub fn from_names(primary: &str, fallbacks: &[&str]) -> Result<Self, ProviderRegistryError> {
         let primary = ProviderName::new(primary)?;
         let fallbacks = normalize_borrowed_names(fallbacks)?;
         validate_unique_candidate_names(&primary, &fallbacks)?;
@@ -146,9 +140,7 @@ impl ProviderSelection {
     /// # Errors
     /// Returns [`ProviderRegistryError::DuplicateProviderCandidate`] when the
     /// primary provider or fallback list repeats a normalized name.
-    pub(crate) fn validate_unique_names(
-        &self,
-    ) -> Result<(), ProviderRegistryError> {
+    pub(crate) fn validate_unique_names(&self) -> Result<(), ProviderRegistryError> {
         match self {
             Self::Auto => Ok(()),
             Self::Named { primary, fallbacks } => {
@@ -176,9 +168,7 @@ impl Default for ProviderSelection {
 ///
 /// # Errors
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
-fn normalize_owned_names(
-    names: &[String],
-) -> Result<Vec<ProviderName>, ProviderRegistryError> {
+fn normalize_owned_names(names: &[String]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
     names
         .iter()
         .map(String::as_str)
@@ -196,9 +186,7 @@ fn normalize_owned_names(
 ///
 /// # Errors
 /// Returns [`ProviderRegistryError`] when any provider name is invalid.
-fn normalize_borrowed_names(
-    names: &[&str],
-) -> Result<Vec<ProviderName>, ProviderRegistryError> {
+fn normalize_borrowed_names(names: &[&str]) -> Result<Vec<ProviderName>, ProviderRegistryError> {
     names.iter().copied().map(ProviderName::new).collect()
 }
 

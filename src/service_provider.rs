@@ -12,10 +12,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderRegistryError,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistryError,
     ServiceSpec,
 };
 
@@ -219,10 +216,7 @@ where
     /// Returns [`ProviderCreateError`] when initialization fails. Registries
     /// translate this provider-level error into [`ProviderRegistryError`] with
     /// provider-name context.
-    fn create_box(
-        &self,
-        config: &Spec::Config,
-    ) -> Result<Box<Spec::Service>, ProviderCreateError>;
+    fn create_box(&self, config: &Spec::Config) -> Result<Box<Spec::Service>, ProviderCreateError>;
 
     /// Creates an atomically shared service instance.
     ///
@@ -237,10 +231,7 @@ where
     /// implementation creates a boxed service first and converts it into
     /// [`Arc`].
     #[inline]
-    fn create_arc(
-        &self,
-        config: &Spec::Config,
-    ) -> Result<Arc<Spec::Service>, ProviderCreateError> {
+    fn create_arc(&self, config: &Spec::Config) -> Result<Arc<Spec::Service>, ProviderCreateError> {
         self.create_box(config).map(Arc::from)
     }
 
@@ -257,10 +248,7 @@ where
     /// implementation creates a boxed service first and converts it into
     /// [`Rc`].
     #[inline]
-    fn create_rc(
-        &self,
-        config: &Spec::Config,
-    ) -> Result<Rc<Spec::Service>, ProviderCreateError> {
+    fn create_rc(&self, config: &Spec::Config) -> Result<Rc<Spec::Service>, ProviderCreateError> {
         self.create_box(config).map(Rc::from)
     }
 }

@@ -1,19 +1,11 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use qubit_spi::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderRegistry,
-    ProviderRegistryError,
-    ServiceProvider,
-    ServiceSpec,
+    ProviderAvailability, ProviderCreateError, ProviderDescriptor, ProviderRegistry,
+    ProviderRegistryError, ServiceProvider, ServiceSpec,
 };
 
 /// Configuration used by test providers.

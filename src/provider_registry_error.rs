@@ -9,10 +9,7 @@
 
 use thiserror::Error;
 
-use crate::{
-    ProviderFailure,
-    ProviderName,
-};
+use crate::{ProviderFailure, ProviderName};
 
 /// Error returned by provider registries.
 #[derive(Debug, Clone, Error)]

@@ -1,8 +1,4 @@
-use qubit_spi::{
-    ProviderName,
-    ProviderRegistryError,
-    ProviderSelection,
-};
+use qubit_spi::{ProviderName, ProviderRegistryError, ProviderSelection};
 
 /// Creates a provider name used by selection assertions.
 fn name(value: &str) -> ProviderName {
@@ -23,9 +19,8 @@ fn test_default_selection_uses_auto_without_fallbacks() {
 /// Test name-based selection trims and normalizes provider names.
 #[test]
 fn test_from_names_trims_and_normalizes_names() {
-    let selection =
-        ProviderSelection::from_names(" Native ", &[" Fallback ", " backup "])
-            .expect("selection names should be valid");
+    let selection = ProviderSelection::from_names(" Native ", &[" Fallback ", " backup "])
+        .expect("selection names should be valid");
 
     assert!(!selection.is_auto());
     assert_eq!(Some(&name("native")), selection.primary());
@@ -58,9 +53,8 @@ fn test_from_names_rejects_invalid_provider_names() {
 fn test_from_names_rejects_duplicate_candidates() {
     let primary_error = ProviderSelection::from_names("native", &["NATIVE"])
         .expect_err("fallbacks must not repeat the primary provider");
-    let fallback_error =
-        ProviderSelection::from_names("native", &["fallback", "FALLBACK"])
-            .expect_err("fallbacks must not repeat earlier fallback providers");
+    let fallback_error = ProviderSelection::from_names("native", &["fallback", "FALLBACK"])
+        .expect_err("fallbacks must not repeat earlier fallback providers");
 
     assert!(matches!(
         primary_error,
@@ -75,8 +69,7 @@ fn test_from_names_rejects_duplicate_candidates() {
 /// Test explicit named selections can be built without fallbacks.
 #[test]
 fn test_named_selection_has_primary_without_fallbacks() {
-    let selection = ProviderSelection::named("native")
-        .expect("selection name should be valid");
+    let selection = ProviderSelection::named("native").expect("selection name should be valid");
 
     assert!(!selection.is_auto());
     assert_eq!(Some(&name("native")), selection.primary());

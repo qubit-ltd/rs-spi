@@ -8,17 +8,9 @@
 //! Candidate failure details collected during fallback selection.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{
-    ProviderCreateError,
-    ProviderName,
-    ProviderRegistryError,
-};
+use crate::{ProviderCreateError, ProviderName, ProviderRegistryError};
 
 /// Failure recorded for one provider candidate.
 #[derive(Debug, Clone)]
@@ -67,14 +59,8 @@ impl ProviderFailure {
     /// # Returns
     /// Unavailable-provider failure.
     #[inline]
-    pub fn unavailable(
-        name: &str,
-        reason: &str,
-    ) -> Result<Self, ProviderRegistryError> {
-        Self::unavailable_from_error(
-            name,
-            ProviderCreateError::unavailable(reason),
-        )
+    pub fn unavailable(name: &str, reason: &str) -> Result<Self, ProviderRegistryError> {
+        Self::unavailable_from_error(name, ProviderCreateError::unavailable(reason))
     }
 
     /// Creates a provider-creation failure.
@@ -86,14 +72,8 @@ impl ProviderFailure {
     /// # Returns
     /// Provider-creation failure.
     #[inline]
-    pub fn create_failed(
-        name: &str,
-        reason: &str,
-    ) -> Result<Self, ProviderRegistryError> {
-        Self::create_failed_from_error(
-            name,
-            ProviderCreateError::failed(reason),
-        )
+    pub fn create_failed(name: &str, reason: &str) -> Result<Self, ProviderRegistryError> {
+        Self::create_failed_from_error(name, ProviderCreateError::failed(reason))
     }
 
     /// Creates an unavailable-provider failure from a provider-level error.
@@ -190,10 +170,7 @@ impl ProviderFailure {
     /// # Returns
     /// Unavailable-provider failure.
     #[inline]
-    pub(crate) fn unavailable_error(
-        name: ProviderName,
-        source: ProviderCreateError,
-    ) -> Self {
+    pub(crate) fn unavailable_error(name: ProviderName, source: ProviderCreateError) -> Self {
         Self::Unavailable { name, source }
     }
 
@@ -206,10 +183,7 @@ impl ProviderFailure {
     /// # Returns
     /// Provider-creation failure.
     #[inline]
-    pub(crate) fn create_failed_error(
-        name: ProviderName,
-        source: ProviderCreateError,
-    ) -> Self {
+    pub(crate) fn create_failed_error(name: ProviderName, source: ProviderCreateError) -> Self {
         Self::CreateFailed { name, source }
     }
 }
@@ -244,8 +218,7 @@ impl Error for ProviderFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::UnknownProvider { .. } => None,
-            Self::Unavailable { source, .. }
-            | Self::CreateFailed { source, .. } => Some(source),
+            Self::Unavailable { source, .. } | Self::CreateFailed { source, .. } => Some(source),
         }
     }
 }

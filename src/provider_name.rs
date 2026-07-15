@@ -7,11 +7,7 @@
 // =============================================================================
 //! Strongly typed provider names.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
 
 use crate::ProviderRegistryError;
@@ -145,8 +141,7 @@ fn is_separator_provider_name_byte(byte: u8) -> bool {
 /// `true` when any two adjacent bytes are separators.
 fn has_consecutive_separators(name: &str) -> bool {
     name.as_bytes().windows(2).any(|bytes| {
-        is_separator_provider_name_byte(bytes[0])
-            && is_separator_provider_name_byte(bytes[1])
+        is_separator_provider_name_byte(bytes[0]) && is_separator_provider_name_byte(bytes[1])
     })
 }
 

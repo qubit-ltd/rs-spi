@@ -3,12 +3,7 @@ mod support;
 use std::error::Error;
 use std::io;
 
-use qubit_spi::{
-    ProviderCreateError,
-    ProviderFailure,
-    ProviderName,
-    ProviderRegistryError,
-};
+use qubit_spi::{ProviderCreateError, ProviderFailure, ProviderName, ProviderRegistryError};
 
 /// Creates a provider name used by error assertions.
 fn name(value: &str) -> ProviderName {
@@ -28,9 +23,7 @@ fn test_empty_provider_name_error_display() {
 fn test_invalid_provider_name_error_display() {
     let error = ProviderRegistryError::InvalidProviderName {
         name: "bad name".to_owned(),
-        reason:
-            "provider names may contain only ASCII letters, digits, '_' or '-'"
-                .to_owned(),
+        reason: "provider names may contain only ASCII letters, digits, '_' or '-'".to_owned(),
     };
 
     assert_eq!(
@@ -118,13 +111,9 @@ fn test_provider_create_error_display() {
 fn test_provider_create_error_preserves_nested_source() {
     let error = ProviderRegistryError::ProviderCreate {
         name: name("native"),
-        source: ProviderCreateError::failed_with_source(
-            "boom",
-            io::Error::other("root cause"),
-        ),
+        source: ProviderCreateError::failed_with_source("boom", io::Error::other("root cause")),
     };
-    let provider_error =
-        Error::source(&error).expect("provider source should exist");
+    let provider_error = Error::source(&error).expect("provider source should exist");
 
     assert_eq!(
         "provider 'native' failed to create service: boom",
@@ -145,8 +134,7 @@ fn test_no_available_provider_error_display() {
     let error = ProviderRegistryError::NoAvailableProvider {
         failures: vec![
             ProviderFailure::unknown("missing").expect("valid provider name"),
-            ProviderFailure::unavailable("native", "not installed")
-                .expect("valid provider name"),
+            ProviderFailure::unavailable("native", "not installed").expect("valid provider name"),
         ],
     };
 

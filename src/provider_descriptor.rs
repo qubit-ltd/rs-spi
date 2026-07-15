@@ -9,10 +9,7 @@
 
 use std::collections::HashSet;
 
-use crate::{
-    ProviderName,
-    ProviderRegistryError,
-};
+use crate::{ProviderName, ProviderRegistryError};
 
 /// Stable provider metadata used for registration and selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,10 +55,7 @@ impl ProviderDescriptor {
     /// Returns [`ProviderRegistryError`] when any alias is not a valid provider
     /// name, or when aliases duplicate the descriptor id or each other.
     #[inline]
-    pub fn with_aliases(
-        mut self,
-        aliases: &[&str],
-    ) -> Result<Self, ProviderRegistryError> {
+    pub fn with_aliases(mut self, aliases: &[&str]) -> Result<Self, ProviderRegistryError> {
         let aliases = aliases
             .iter()
             .map(|alias| ProviderName::new(alias))
