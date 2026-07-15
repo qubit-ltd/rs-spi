@@ -5,17 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Service specification binding configuration and service contracts.
+//! Service specification binding configuration and output handles.
 
 /// Type-level description of one pluggable service family.
 ///
 /// A service specification gives a registry one type parameter that carries the
-/// configuration type accepted by providers and the service contract
-/// implemented by produced services.
-pub trait ServiceSpec {
-    /// Configuration type passed to provider checks and factories.
+/// configuration type accepted by providers and the complete handle returned
+/// by provider factories.
+pub trait ServiceSpec: 'static {
+    /// Configuration type passed to provider factories.
     type Config: ?Sized;
 
-    /// Service contract implemented by provider-created services.
-    type Service: ?Sized;
+    /// Complete output handle returned by providers.
+    type Output;
 }

@@ -1,53 +1,37 @@
-use qubit_spi::{ProviderDescriptor, ProviderRegistryError};
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
-/// Test provider descriptors normalize ids, aliases, and priority.
+use qubit_spi::{ProviderDescriptor, ProviderId, RegistrationErrorKind};
+
 #[test]
-fn test_new_with_aliases_and_priority_normalizes_metadata() {
-    let descriptor = ProviderDescriptor::new(" Native ")
-        .expect("provider id should be valid")
-        .with_aliases(&[" FAST ", "default"])
-        .expect("aliases should be valid")
-        .with_priority(10);
+fn descriptor_keeps_typed_metadata() {
+    let descriptor = ProviderDescriptor::new(ProviderId::new("file-command").unwrap())
+        .with_aliases(["file", "command"])
+        .unwrap()
+        .with_priority(20);
 
-    assert_eq!("native", descriptor.id().as_str());
-    assert_eq!(vec!["fast", "default"], descriptor.aliases_as_str());
-    assert_eq!(10, descriptor.priority());
+    assert_eq!("file-command", descriptor.id().as_str());
+    assert_eq!(20, descriptor.priority());
+    assert_eq!(
+        vec!["file", "command"],
+        descriptor
+            .aliases()
+            .iter()
+            .map(|alias| alias.as_str())
+            .collect::<Vec<_>>(),
+    );
 }
 
-/// Test provider descriptors reject invalid aliases.
 #[test]
-fn test_with_aliases_rejects_invalid_aliases() {
-    let error = ProviderDescriptor::new("native")
-        .expect("provider id should be valid")
-        .with_aliases(&["bad alias"])
-        .expect_err("invalid aliases should be rejected");
+fn descriptor_rejects_an_alias_that_duplicates_its_canonical_id() {
+    let error = ProviderDescriptor::new(ProviderId::new("file-command").unwrap())
+        .with_aliases(["file-command"])
+        .unwrap_err();
 
-    assert!(matches!(
-        error,
-        ProviderRegistryError::InvalidProviderName { ref name, .. } if name == "bad alias"
-    ));
-}
-
-/// Test descriptors reject duplicate names before registration.
-#[test]
-fn test_with_aliases_rejects_duplicate_descriptor_names() {
-    let duplicate_id_error = ProviderDescriptor::new("native")
-        .expect("provider id should be valid")
-        .with_aliases(&["native"])
-        .expect_err("alias matching id should fail");
-    let duplicate_alias_error = ProviderDescriptor::new("native")
-        .expect("provider id should be valid")
-        .with_aliases(&["fast", "FAST"])
-        .expect_err("duplicate aliases should fail");
-
-    assert!(matches!(
-        duplicate_id_error,
-        ProviderRegistryError::DuplicateProviderName { ref name }
-            if name.as_str() == "native"
-    ));
-    assert!(matches!(
-        duplicate_alias_error,
-        ProviderRegistryError::DuplicateProviderName { ref name }
-            if name.as_str() == "fast"
-    ));
+    assert_eq!(RegistrationErrorKind::DuplicateSelector, error.kind());
 }

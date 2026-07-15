@@ -3,12 +3,6 @@
 version = 4
 
 [[package]]
-name = "log"
-version = "0.4.30"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "616ec5685824bcc94416c6d4a7a446eea774a31efd7062c8480ba6fd06d7a6e5"
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19,9 +13,8 @@ dependencies = [
 
 [[package]]
 name = "qubit-spi"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
- "log",
  "thiserror",
 ]
 

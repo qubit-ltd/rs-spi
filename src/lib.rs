@@ -1,35 +1,31 @@
 //! # Qubit SPI
 //!
-//! Typed service provider infrastructure for Qubit Rust crates.
+//! Typed, explicitly assembled service-provider infrastructure for Qubit Rust
+//! crates. A service specification chooses a configuration type and complete
+//! output handle. Applications build an immutable provider registry during
+//! startup, then use a resolver to create services through an explicit
+//! selection and fallback policy.
 //!
-//! This crate provides the small service-provider layer that many Qubit crates
-//! need when a base crate owns a trait and extension crates provide optional
-//! implementations. A [`ServiceProvider`] supplies stable names, aliases,
-//! runtime availability, priority, and a factory method. A
-//! [`ProviderRegistry`] resolves providers by name, by automatic priority, or
-//! through an explicit fallback chain.
+//! # Example
 //!
-//! # Examples
-//!
-//! Register a provider and create a service by name:
-//!
-//! ```rust
-//! use std::fmt::Debug;
+//! ~~~rust
+//! use std::sync::Arc;
 //!
 //! use qubit_spi::{
-//!     ProviderCreateError,
+//!     FallbackPolicy,
 //!     ProviderDescriptor,
+//!     ProviderId,
 //!     ProviderRegistry,
-//!     ProviderRegistryError,
+//!     ProviderResolver,
+//!     ProviderSelection,
 //!     ServiceProvider,
 //!     ServiceSpec,
 //! };
 //!
-//! trait Greeter: Debug + Send + Sync {
+//! trait Greeter: Send + Sync {
 //!     fn greet(&self) -> &'static str;
 //! }
 //!
-//! #[derive(Debug)]
 //! struct EnglishGreeter;
 //!
 //! impl Greeter for EnglishGreeter {
@@ -38,48 +34,45 @@
 //!     }
 //! }
 //!
-//! #[derive(Debug)]
-//! struct EnglishProvider;
-//!
-//! #[derive(Debug)]
 //! struct GreeterSpec;
 //!
 //! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
-//!     type Service = dyn Greeter;
+//!     type Output = Arc<dyn Greeter>;
 //! }
+//!
+//! struct EnglishProvider;
 //!
 //! impl ServiceProvider<GreeterSpec> for EnglishProvider {
-//!     fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-//!         ProviderDescriptor::new("english")?.with_aliases(&["en"])
-//!     }
-//!
-//!     fn create_box(&self, _config: &()) -> Result<Box<dyn Greeter>, ProviderCreateError> {
-//!         Ok(Box::new(EnglishGreeter))
+//!     fn create(
+//!         &self,
+//!         _config: &(),
+//!     ) -> Result<Arc<dyn Greeter>, qubit_spi::ProviderError> {
+//!         Ok(Arc::new(EnglishGreeter))
 //!     }
 //! }
 //!
-//! let mut registry = ProviderRegistry::<GreeterSpec>::new();
-//! registry
-//!     .register(EnglishProvider)
-//!     .expect("provider names should be unique");
-//!
-//! let greeter = registry
-//!     .create_box("en", &())
-//!     .expect("registered provider should create a greeter");
-//! assert_eq!("hello", greeter.greet());
-//! ```
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let mut builder = ProviderRegistry::<GreeterSpec>::builder();
+//! builder.register(
+//!     ProviderDescriptor::new(ProviderId::new("english")?).with_aliases(["en"])?,
+//!     EnglishProvider,
+//! )?;
+//! let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
+//! let created = resolver.create(&ProviderSelection::named("en")?, &())?;
+//! assert_eq!("hello", created.service().greet());
+//! # Ok(())
+//! # }
+//! ~~~
 
 mod created_service;
-mod provider_availability;
-mod provider_create_error;
 mod provider_descriptor;
 mod provider_error;
-mod provider_failure;
 mod provider_id;
-mod provider_name;
+mod provider_registration;
 mod provider_registry;
-mod provider_registry_error;
+mod provider_registry_builder;
+mod provider_resolver;
 mod provider_selection;
 mod provider_selector;
 mod registration_error;
@@ -88,16 +81,14 @@ mod service_provider;
 mod service_spec;
 
 pub use created_service::CreatedService;
-pub use provider_availability::ProviderAvailability;
-pub use provider_create_error::ProviderCreateError;
 pub use provider_descriptor::ProviderDescriptor;
 pub use provider_error::{ProviderError, ProviderErrorKind};
-pub use provider_failure::ProviderFailure;
 pub use provider_id::ProviderId;
-pub use provider_name::ProviderName;
-pub use provider_registry::ProviderRegistry;
-pub use provider_registry_error::ProviderRegistryError;
-pub use provider_selection::ProviderSelection;
+pub use provider_registration::ProviderRegistration;
+pub use provider_registry::{ProviderRegistry, ResolvedProvider};
+pub use provider_registry_builder::ProviderRegistryBuilder;
+pub use provider_resolver::ProviderResolver;
+pub use provider_selection::{FallbackPolicy, ProviderSelection};
 pub use provider_selector::ProviderSelector;
 pub use registration_error::{RegistrationError, RegistrationErrorKind};
 pub use resolution_error::{AttemptFailure, ResolutionError, ResolutionErrorKind};
