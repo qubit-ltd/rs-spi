@@ -15,7 +15,8 @@ use crate::ProviderId;
 /// and the identity used for observability, diagnostics, or later reporting.
 #[derive(Debug)]
 pub struct CreatedService<T> {
-    /// Canonical identifier of the provider that successfully created `service`.
+    /// Canonical identifier of the provider that successfully created
+    /// `service`.
     provider_id: ProviderId,
     /// Successfully created service handle or value.
     service: T,

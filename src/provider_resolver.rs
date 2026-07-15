@@ -7,12 +7,22 @@
 // =============================================================================
 //! Policy-driven provider selection and service creation.
 
-use std::{collections::HashSet, fmt};
+use std::{
+    collections::HashSet,
+    fmt,
+};
 
 use crate::internal::ProviderSelectionRepr;
 use crate::{
-    AttemptFailure, CreatedService, FallbackPolicy, ProviderErrorKind, ProviderRegistry,
-    ProviderSelection, ProviderSelector, ResolutionError, ServiceSpec,
+    AttemptFailure,
+    CreatedService,
+    FallbackPolicy,
+    ProviderErrorKind,
+    ProviderRegistry,
+    ProviderSelection,
+    ProviderSelector,
+    ResolutionError,
+    ServiceSpec,
 };
 
 /// Creates services from an immutable registry using explicit fallback policy.
@@ -35,10 +45,20 @@ where
 {
     /// Creates a resolver over an immutable provider registry.
     ///
-    /// `registry` supplies the selectable providers and `fallback_policy`
-    /// controls which failed attempts may continue. Returns the resolver.
+    /// # Arguments
+    ///
+    /// * `registry` - Immutable catalog of selectable providers.
+    /// * `fallback_policy` - Policy controlling which failures may continue.
+    ///
+    /// # Returns
+    ///
+    /// A resolver combining the catalog and fallback policy.
+    #[inline]
     #[must_use]
-    pub fn new(registry: ProviderRegistry<S>, fallback_policy: FallbackPolicy) -> Self {
+    pub fn new(
+        registry: ProviderRegistry<S>,
+        fallback_policy: FallbackPolicy,
+    ) -> Self {
         Self {
             registry,
             fallback_policy,
@@ -46,12 +66,22 @@ where
     }
 
     /// Returns the immutable provider registry used by this resolver.
+    ///
+    /// # Returns
+    ///
+    /// The immutable provider catalog.
+    #[inline(always)]
     #[must_use]
     pub const fn registry(&self) -> &ProviderRegistry<S> {
         &self.registry
     }
 
     /// Returns the fallback policy applied after provider creation failures.
+    ///
+    /// # Returns
+    ///
+    /// The policy controlling subsequent provider attempts.
+    #[inline(always)]
     #[must_use]
     pub const fn fallback_policy(&self) -> FallbackPolicy {
         self.fallback_policy
@@ -59,14 +89,20 @@ where
 
     /// Creates a service using the requested provider selection.
     ///
-    /// `selection` controls candidate ordering and `config` is passed unchanged
-    /// to each attempted provider. Returns the service and its winning provider
-    /// identity on success.
+    /// # Arguments
+    ///
+    /// * `selection` - Validated candidate selection and ordering.
+    /// * `config` - Configuration passed unchanged to attempted providers.
+    ///
+    /// # Returns
+    ///
+    /// The created service and canonical winning provider ID.
     ///
     /// # Errors
     ///
     /// Returns [`ResolutionError`] when a named selector is unknown, no
     /// candidate succeeds, or a failure is disallowed by the fallback policy.
+    #[inline]
     pub fn create(
         &self,
         selection: &ProviderSelection,
@@ -74,7 +110,9 @@ where
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
         match selection.repr() {
             ProviderSelectionRepr::Auto => self.create_automatic(config),
-            ProviderSelectionRepr::Named(selector) => self.create_named_selector(selector, config),
+            ProviderSelectionRepr::Named(selector) => {
+                self.create_named_selector(selector, config)
+            }
             ProviderSelectionRepr::Chain(selectors) => {
                 self.create_selector_chain(selectors, config)
             }
@@ -83,13 +121,19 @@ where
 
     /// Creates a service using deterministic automatic provider order.
     ///
-    /// `config` is forwarded to each provider candidate. Returns the first
-    /// successfully created service and its canonical provider ID.
+    /// # Arguments
+    ///
+    /// * `config` - Configuration forwarded to each provider candidate.
+    ///
+    /// # Returns
+    ///
+    /// The first successfully created service and canonical provider ID.
     ///
     /// # Errors
     ///
     /// Returns [`ResolutionError`] when the registry is empty, no provider
     /// succeeds, or fallback policy stops after a provider failure.
+    #[inline(always)]
     pub fn create_auto(
         &self,
         config: &S::Config,
@@ -99,21 +143,29 @@ where
 
     /// Creates a service through one raw provider selector.
     ///
-    /// `selector` is normalized and validated before lookup. `config` is
-    /// forwarded only to the matching provider.
+    /// # Arguments
+    ///
+    /// * `selector` - Raw selector normalized and validated before lookup.
+    /// * `config` - Configuration forwarded only to the matching provider.
+    ///
+    /// # Returns
+    ///
+    /// The selected provider's service and canonical provider ID.
     ///
     /// # Errors
     ///
     /// Returns [`ResolutionError`] when `selector` is invalid or unknown, or
     /// when the selected provider cannot create its service.
+    #[inline]
     pub fn create_named(
         &self,
         selector: impl AsRef<str>,
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
         let input = selector.as_ref();
-        let selector = ProviderSelector::parse(input)
-            .map_err(|source| ResolutionError::invalid_selector(input, None, source))?;
+        let selector = ProviderSelector::parse(input).map_err(|source| {
+            ResolutionError::invalid_selector(input, None, source)
+        })?;
         self.create_named_selector(&selector, config)
     }
 
@@ -122,6 +174,15 @@ where
     /// Each selector is normalized and validated before any provider is tried.
     /// Providers are attempted in input order and aliases resolving to an
     /// already attempted provider are skipped.
+    ///
+    /// # Arguments
+    ///
+    /// * `selectors` - Raw selectors in desired attempt order.
+    /// * `config` - Configuration forwarded to each distinct provider.
+    ///
+    /// # Returns
+    ///
+    /// The first successfully created service and canonical provider ID.
     ///
     /// # Errors
     ///
@@ -139,9 +200,14 @@ where
         let mut parsed = Vec::new();
         for (selector_index, selector) in selectors.into_iter().enumerate() {
             let input = selector.as_ref();
-            let selector = ProviderSelector::parse(input).map_err(|source| {
-                ResolutionError::invalid_selector(input, Some(selector_index), source)
-            })?;
+            let selector =
+                ProviderSelector::parse(input).map_err(|source| {
+                    ResolutionError::invalid_selector(
+                        input,
+                        Some(selector_index),
+                        source,
+                    )
+                })?;
             parsed.push(selector);
         }
         if parsed.is_empty() {
@@ -152,8 +218,13 @@ where
 
     /// Creates a service by trying providers in automatic order.
     ///
-    /// `config` is forwarded to each candidate. Returns the first successful
-    /// service and stops without invoking later candidates.
+    /// # Arguments
+    ///
+    /// * `config` - Configuration forwarded to each candidate.
+    ///
+    /// # Returns
+    ///
+    /// The first successful service and canonical provider ID.
     ///
     /// # Errors
     ///
@@ -178,9 +249,15 @@ where
                 Err(error) => {
                     let provider_id = resolved.descriptor().id().clone();
                     let error_kind = error.kind();
-                    failures.push(AttemptFailure::provider_error(None, provider_id, error));
+                    failures.push(AttemptFailure::provider_error(
+                        None,
+                        provider_id,
+                        error,
+                    ));
                     if !self.should_continue(error_kind) {
-                        return Err(ResolutionError::no_provider_succeeded(failures));
+                        return Err(ResolutionError::no_provider_succeeded(
+                            failures,
+                        ));
                     }
                 }
             }
@@ -190,9 +267,22 @@ where
 
     /// Creates a service through one explicitly selected provider.
     ///
-    /// `selector` is normalized and `config` is forwarded to the matching
-    /// factory. Returns its service, or a [`ResolutionError`] if it is unknown
-    /// or creation fails; named selections never fall back.
+    /// Named selections never fall back.
+    ///
+    /// # Arguments
+    ///
+    /// * `selector` - Valid normalized selector used for lookup.
+    /// * `config` - Configuration forwarded to the matching factory.
+    ///
+    /// # Returns
+    ///
+    /// The selected provider's service and canonical provider ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolutionError`] when lookup is unknown or provider creation
+    /// fails.
+    #[inline]
     fn create_named_selector(
         &self,
         selector: &ProviderSelector,
@@ -206,7 +296,11 @@ where
         match resolved.create(config) {
             Ok(service) => Ok(CreatedService::new(provider_id, service)),
             Err(error) => Err(ResolutionError::no_provider_succeeded(vec![
-                AttemptFailure::provider_error(Some(selector.clone()), provider_id, error),
+                AttemptFailure::provider_error(
+                    Some(selector.clone()),
+                    provider_id,
+                    error,
+                ),
             ])),
         }
     }
@@ -214,9 +308,17 @@ where
     /// Creates a service by trying the supplied selectors in order.
     ///
     /// `selectors` may contain aliases for the same provider, which is tried
-    /// only once; later selectors resolving to that provider are omitted without
-    /// a failure record. `config` is forwarded to each attempted factory. Returns
-    /// the first successful service.
+    /// only once; later selectors resolving to that provider are omitted
+    /// without a failure record.
+    ///
+    /// # Arguments
+    ///
+    /// * `selectors` - Valid normalized selectors in attempt order.
+    /// * `config` - Configuration forwarded to each distinct provider.
+    ///
+    /// # Returns
+    ///
+    /// The first successfully created service and canonical provider ID.
     ///
     /// # Errors
     ///
@@ -232,7 +334,8 @@ where
         let mut failures = Vec::new();
         for selector in selectors {
             let Some(index) = self.registry.index_for(selector) else {
-                failures.push(AttemptFailure::unknown_provider(selector.clone()));
+                failures
+                    .push(AttemptFailure::unknown_provider(selector.clone()));
                 continue;
             };
             if !attempted.insert(index) {
@@ -241,7 +344,9 @@ where
             let resolved = self.registry.resolved_at(index);
             let provider_id = resolved.descriptor().id().clone();
             match resolved.create(config) {
-                Ok(service) => return Ok(CreatedService::new(provider_id, service)),
+                Ok(service) => {
+                    return Ok(CreatedService::new(provider_id, service));
+                }
                 Err(error) => {
                     let error_kind = error.kind();
                     failures.push(AttemptFailure::provider_error(
@@ -250,7 +355,9 @@ where
                         error,
                     ));
                     if !self.should_continue(error_kind) {
-                        return Err(ResolutionError::no_provider_succeeded(failures));
+                        return Err(ResolutionError::no_provider_succeeded(
+                            failures,
+                        ));
                     }
                 }
             }
@@ -260,15 +367,22 @@ where
 
     /// Determines whether this resolver may fall back after an error kind.
     ///
-    /// `kind` is the provider-reported failure classification. Returns `true`
-    /// exactly when this resolver's fallback policy permits another attempt.
+    /// # Arguments
+    ///
+    /// * `kind` - Provider-reported failure classification.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the resolver's policy permits another attempt.
+    #[inline(always)]
     fn should_continue(&self, kind: ProviderErrorKind) -> bool {
         match self.fallback_policy {
             FallbackPolicy::OnAnyError => true,
             FallbackPolicy::OnAbsence => {
                 matches!(
                     kind,
-                    ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable
+                    ProviderErrorKind::Unsupported
+                        | ProviderErrorKind::Unavailable
                 )
             }
         }
@@ -280,6 +394,11 @@ where
     S: ServiceSpec,
 {
     /// Clones the resolver and its shared immutable registry handle.
+    ///
+    /// # Returns
+    ///
+    /// A resolver with the same registry and fallback policy.
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             registry: self.registry.clone(),
@@ -293,6 +412,18 @@ where
     S: ServiceSpec,
 {
     /// Formats the registry metadata and fallback policy.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ProviderResolver")

@@ -9,12 +9,17 @@
 use std::error::Error;
 
 use qubit_spi::{
-    ProviderSelection, ProviderSelectionErrorKind, ProviderSelectionKind, ProviderSelector,
+    ProviderSelection,
+    ProviderSelectionErrorKind,
+    ProviderSelectionKind,
+    ProviderSelector,
 };
 
+/// Verifies normalization and accessors for a named selection.
 #[test]
-fn named_selection_normalizes_its_selector() {
-    let selection = ProviderSelection::named(" File+Command ").unwrap();
+fn test_named_selection_normalizes_its_selector() {
+    let selection = ProviderSelection::named(" File+Command ")
+        .expect("valid named selector should parse");
 
     assert_eq!(ProviderSelectionKind::Named, selection.kind());
     assert_eq!(
@@ -24,9 +29,11 @@ fn named_selection_normalizes_its_selector() {
     assert!(selection.selectors().is_empty());
 }
 
+/// Verifies that chained selection preserves caller-supplied ordering.
 #[test]
-fn chain_selection_preserves_candidate_order() {
-    let selection = ProviderSelection::chain(["remote", "memory"]).unwrap();
+fn test_chain_selection_preserves_candidate_order() {
+    let selection = ProviderSelection::chain(["remote", "memory"])
+        .expect("valid selector chain should parse");
 
     assert_eq!(ProviderSelectionKind::Chain, selection.kind());
     assert_eq!(None, selection.selector());
@@ -41,14 +48,19 @@ fn chain_selection_preserves_candidate_order() {
     );
 }
 
+/// Verifies automatic defaults and invalid chain construction boundaries.
 #[test]
-fn selection_construction_enforces_invariants() {
+fn test_selection_construction_enforces_invariants() {
     let automatic = ProviderSelection::auto();
     assert_eq!(ProviderSelectionKind::Auto, automatic.kind());
     assert_eq!(automatic, ProviderSelection::default());
 
-    let empty = ProviderSelection::chain(Vec::<&str>::new()).expect_err("empty chain should fail");
+    let empty = ProviderSelection::chain(Vec::<&str>::new())
+        .expect_err("empty chain should fail");
     assert_eq!(ProviderSelectionErrorKind::EmptyChain, empty.kind());
+    assert_eq!(None, empty.selector_index());
+    assert_eq!(None, empty.selector_input());
+    assert!(Error::source(&empty).is_none());
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
@@ -56,4 +68,16 @@ fn selection_construction_enforces_invariants() {
     assert_eq!(Some(1), invalid.selector_index());
     assert_eq!(Some("bad selector"), invalid.selector_input());
     assert!(Error::source(&invalid).is_some());
+}
+
+/// Verifies invalid named selections report position zero and retain a source.
+#[test]
+fn test_invalid_named_selection_preserves_input_and_source() {
+    let error = ProviderSelection::named("bad selector")
+        .expect_err("invalid named selector should fail");
+
+    assert_eq!(ProviderSelectionErrorKind::InvalidSelector, error.kind());
+    assert_eq!(Some(0), error.selector_index());
+    assert_eq!(Some("bad selector"), error.selector_input());
+    assert!(Error::source(&error).is_some());
 }

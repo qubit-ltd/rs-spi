@@ -7,12 +7,20 @@
 // =============================================================================
 //! Immutable provider catalog and typed provider lookup.
 
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::Arc,
+};
 
 use crate::internal::RegistryInner;
 use crate::{
-    ProviderDescriptor, ProviderId, ProviderRegistryBuilder, ProviderSelector,
-    ResolutionError, ResolvedProvider, ServiceSpec,
+    ProviderDescriptor,
+    ProviderId,
+    ProviderRegistryBuilder,
+    ProviderSelector,
+    ResolutionError,
+    ResolvedProvider,
+    ServiceSpec,
 };
 
 /// Immutable catalog of explicitly registered providers.
@@ -71,13 +79,15 @@ where
     ///
     /// Returns [`ResolutionError`] when `selector` is invalid or does not name
     /// a registered provider.
+    #[inline]
     pub fn resolve(
         &self,
         selector: impl AsRef<str>,
     ) -> Result<ResolvedProvider<'_, S>, ResolutionError> {
         let input = selector.as_ref();
-        let selector = ProviderSelector::parse(input)
-            .map_err(|source| ResolutionError::invalid_selector(input, None, source))?;
+        let selector = ProviderSelector::parse(input).map_err(|source| {
+            ResolutionError::invalid_selector(input, None, source)
+        })?;
         self.resolve_selector(&selector)
             .ok_or_else(|| ResolutionError::unknown_provider(selector))
     }
@@ -92,8 +102,12 @@ where
     ///
     /// `Some` with the matching provider, or `None` for invalid or unknown
     /// input.
+    #[inline]
     #[must_use]
-    pub fn find(&self, selector: impl AsRef<str>) -> Option<ResolvedProvider<'_, S>> {
+    pub fn find(
+        &self,
+        selector: impl AsRef<str>,
+    ) -> Option<ResolvedProvider<'_, S>> {
         ProviderSelector::parse(selector)
             .ok()
             .and_then(|selector| self.resolve_selector(&selector))
@@ -105,7 +119,9 @@ where
     ///
     /// An exact-size iterator borrowing each immutable descriptor once.
     #[inline(always)]
-    pub fn descriptors(&self) -> impl ExactSizeIterator<Item = &ProviderDescriptor> {
+    pub fn descriptors(
+        &self,
+    ) -> impl ExactSizeIterator<Item = &ProviderDescriptor> {
         self.inner.entries.iter().map(|entry| &entry.descriptor)
     }
 
@@ -151,7 +167,10 @@ where
     ///
     /// `Some` with the internal entry position, or `None` when unregistered.
     #[inline(always)]
-    pub(crate) fn index_for(&self, selector: &ProviderSelector) -> Option<usize> {
+    pub(crate) fn index_for(
+        &self,
+        selector: &ProviderSelector,
+    ) -> Option<usize> {
         self.inner.selector_indices.get(selector).copied()
     }
 
@@ -194,7 +213,10 @@ where
     ///
     /// `Some` for a registered selector, or `None` otherwise.
     #[inline(always)]
-    fn resolve_selector(&self, selector: &ProviderSelector) -> Option<ResolvedProvider<'_, S>> {
+    fn resolve_selector(
+        &self,
+        selector: &ProviderSelector,
+    ) -> Option<ResolvedProvider<'_, S>> {
         self.index_for(selector)
             .map(|index| self.resolved_at(index))
     }
@@ -205,6 +227,10 @@ where
     S: ServiceSpec,
 {
     /// Clones the registry by incrementing its shared storage count.
+    ///
+    /// # Returns
+    ///
+    /// Another handle to the same immutable registry storage.
     #[inline(always)]
     fn clone(&self) -> Self {
         Self {
@@ -218,6 +244,10 @@ where
     S: ServiceSpec,
 {
     /// Creates an empty registry through its default builder.
+    ///
+    /// # Returns
+    ///
+    /// An immutable registry with no providers.
     #[inline(always)]
     fn default() -> Self {
         Self::builder().build()
@@ -229,9 +259,24 @@ where
     S: ServiceSpec,
 {
     /// Formats the registry using descriptors in registration order.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects any debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("ProviderRegistry { descriptors: ")?;
-        formatter.debug_list().entries(self.descriptors()).finish()?;
+        formatter
+            .debug_list()
+            .entries(self.descriptors())
+            .finish()?;
         formatter.write_str(" }")
     }
 }

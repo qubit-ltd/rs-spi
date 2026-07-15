@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::internal::RegistrationErrorRepr;
 use crate::RegistrationErrorKind;
+use crate::internal::RegistrationErrorRepr;
 
 /// Error returned when a provider registration conflicts with registry state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -26,7 +26,8 @@ impl RegistrationError {
     /// # Arguments
     ///
     /// * `selector` - Conflicting canonical ID or alias.
-    /// * `existing_provider` - Canonical provider currently owning the selector.
+    /// * `existing_provider` - Canonical provider currently owning the
+    ///   selector.
     /// * `provider` - Canonical provider attempting the new claim.
     ///
     /// # Returns
@@ -66,7 +67,9 @@ impl RegistrationError {
     #[must_use]
     pub fn selector(&self) -> &str {
         match &self.0 {
-            RegistrationErrorRepr::DuplicateSelector { selector, .. } => selector,
+            RegistrationErrorRepr::DuplicateSelector { selector, .. } => {
+                selector
+            }
         }
     }
 
@@ -80,7 +83,8 @@ impl RegistrationError {
     pub fn existing_provider(&self) -> &str {
         match &self.0 {
             RegistrationErrorRepr::DuplicateSelector {
-                existing_provider, ..
+                existing_provider,
+                ..
             } => existing_provider,
         }
     }
@@ -94,7 +98,9 @@ impl RegistrationError {
     #[must_use]
     pub fn provider(&self) -> &str {
         match &self.0 {
-            RegistrationErrorRepr::DuplicateSelector { provider, .. } => provider,
+            RegistrationErrorRepr::DuplicateSelector { provider, .. } => {
+                provider
+            }
         }
     }
 }

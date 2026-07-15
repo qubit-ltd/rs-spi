@@ -10,7 +10,10 @@
 use std::collections::HashMap;
 
 use crate::internal::RegistryEntry;
-use crate::{ProviderSelector, ServiceSpec};
+use crate::{
+    ProviderSelector,
+    ServiceSpec,
+};
 
 /// Immutable lookup indexes and entries shared by registry clones.
 pub(crate) struct RegistryInner<S>

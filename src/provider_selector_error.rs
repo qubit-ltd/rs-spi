@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::internal::ProviderSelectorErrorRepr;
 use crate::ProviderSelectorErrorKind;
+use crate::internal::ProviderSelectorErrorRepr;
 
 /// Error returned when provider selector input cannot be parsed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -66,8 +66,12 @@ impl ProviderSelectorError {
     #[must_use]
     pub const fn kind(&self) -> ProviderSelectorErrorKind {
         match self.0 {
-            ProviderSelectorErrorRepr::Empty { .. } => ProviderSelectorErrorKind::Empty,
-            ProviderSelectorErrorRepr::Invalid { .. } => ProviderSelectorErrorKind::Invalid,
+            ProviderSelectorErrorRepr::Empty { .. } => {
+                ProviderSelectorErrorKind::Empty
+            }
+            ProviderSelectorErrorRepr::Invalid { .. } => {
+                ProviderSelectorErrorKind::Invalid
+            }
         }
     }
 
@@ -96,7 +100,9 @@ impl ProviderSelectorError {
     pub fn normalized(&self) -> Option<&str> {
         match &self.0 {
             ProviderSelectorErrorRepr::Empty { .. } => None,
-            ProviderSelectorErrorRepr::Invalid { normalized, .. } => Some(normalized),
+            ProviderSelectorErrorRepr::Invalid { normalized, .. } => {
+                Some(normalized)
+            }
         }
     }
 }

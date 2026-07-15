@@ -7,7 +7,10 @@
 // =============================================================================
 //! Classified errors returned by provider construction.
 
-use std::{error::Error, sync::Arc};
+use std::{
+    error::Error,
+    sync::Arc,
+};
 
 use thiserror::Error;
 
@@ -126,7 +129,11 @@ impl ProviderError {
         reason: impl AsRef<str>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
-        Self::with_source(ProviderErrorKind::InitializationFailed, reason, source)
+        Self::with_source(
+            ProviderErrorKind::InitializationFailed,
+            reason,
+            source,
+        )
     }
 
     /// Creates a classified error without an underlying source.

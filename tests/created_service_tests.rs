@@ -54,7 +54,8 @@ fn create_number() -> CreatedService<u8> {
     builder
         .register(
             ProviderDescriptor::new(
-                ProviderId::new("memory").expect("test provider ID should be valid"),
+                ProviderId::new("memory")
+                    .expect("test provider ID should be valid"),
             ),
             NumberProvider,
         )

@@ -19,7 +19,9 @@ pub(crate) enum ProviderSelectorErrorRepr {
         input: Box<str>,
     },
     /// The normalized selector violated selector syntax.
-    #[error("invalid provider selector {input:?} (normalized as {normalized:?})")]
+    #[error(
+        "invalid provider selector {input:?} (normalized as {normalized:?})"
+    )]
     Invalid {
         /// Verbatim selector input.
         input: Box<str>,

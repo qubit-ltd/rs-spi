@@ -7,11 +7,22 @@
 // =============================================================================
 //! Startup-only assembly of immutable provider registries.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
-use crate::internal::{BuilderEntry, RegistryEntry, RegistryInner};
+use crate::internal::{
+    BuilderEntry,
+    RegistryEntry,
+    RegistryInner,
+};
 use crate::{
-    ProviderDescriptor, ProviderRegistry, ProviderSelector, RegistrationError, ServiceProvider,
+    ProviderDescriptor,
+    ProviderRegistry,
+    ProviderSelector,
+    RegistrationError,
+    ServiceProvider,
     ServiceSpec,
 };
 
@@ -24,7 +35,8 @@ pub struct ProviderRegistryBuilder<S>
 where
     S: ServiceSpec,
 {
-    /// Registrations retained until they are transformed into immutable entries.
+    /// Registrations retained until they are transformed into immutable
+    /// entries.
     registrations: Vec<BuilderEntry<S>>,
     /// Mapping from every claimed selector to its pending registration index.
     selector_indices: HashMap<ProviderSelector, usize>,
@@ -55,6 +67,10 @@ where
     /// * `descriptor` - Provider ID, aliases, and automatic priority.
     /// * `provider` - Owned factory moved into shared registry storage.
     ///
+    /// # Returns
+    ///
+    /// `Ok(())` after the registration and selector claims are recorded.
+    ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] when the descriptor conflicts with an
@@ -77,6 +93,10 @@ where
     ///
     /// * `descriptor` - Provider ID, aliases, and automatic priority.
     /// * `provider` - Shared factory retained by the immutable registry.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after the registration and selector claims are recorded.
     ///
     /// # Errors
     ///
@@ -137,17 +157,27 @@ where
     /// * `descriptor` - Provider metadata whose selectors must be unclaimed.
     /// * `provider` - Shared factory stored after validation succeeds.
     ///
+    /// # Returns
+    ///
+    /// `Ok(())` after the descriptor, factory, and selector indexes are stored.
+    ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] without modifying the builder when any
     /// selector is already registered.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if a previously validated canonical provider ID cannot be
+    /// parsed as a selector, which safe construction cannot produce.
     fn insert(
         &mut self,
         descriptor: ProviderDescriptor,
         provider: Arc<dyn ServiceProvider<S>>,
     ) -> Result<(), RegistrationError> {
-        let canonical_selector = ProviderSelector::parse(descriptor.id().as_str())
-            .expect("canonical provider IDs are valid selectors");
+        let canonical_selector =
+            ProviderSelector::parse(descriptor.id().as_str())
+                .expect("canonical provider IDs are valid selectors");
         self.validate_selector(&canonical_selector, descriptor.id().as_str())?;
         for alias in descriptor.aliases() {
             self.validate_selector(alias, descriptor.id().as_str())?;
@@ -173,6 +203,10 @@ where
     ///
     /// * `selector` - Candidate canonical ID or alias.
     /// * `provider` - Canonical ID attempting to claim the selector.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the selector is unclaimed.
     ///
     /// # Errors
     ///
@@ -205,6 +239,10 @@ where
     S: ServiceSpec,
 {
     /// Creates an empty provider-registry builder.
+    ///
+    /// # Returns
+    ///
+    /// A builder with no registrations or claimed selectors.
     #[inline(always)]
     fn default() -> Self {
         Self::new()

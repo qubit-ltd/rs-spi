@@ -8,6 +8,7 @@
 
 use qubit_spi::ServiceSpec;
 
+/// Service family proving that configuration may be dynamically sized.
 struct UnsizedConfigSpec;
 
 impl ServiceSpec for UnsizedConfigSpec {
@@ -15,9 +16,12 @@ impl ServiceSpec for UnsizedConfigSpec {
     type Output = String;
 }
 
-#[test]
-fn service_spec_accepts_unsized_configuration_and_sized_output() {
-    fn output_type<S: ServiceSpec<Config = str, Output = String>>() {}
+/// Accepts only a service specification with the expected associated types.
+fn assert_unsized_config_spec<S: ServiceSpec<Config = str, Output = String>>() {
+}
 
-    output_type::<UnsizedConfigSpec>();
+/// Verifies unsized configuration and sized output associated types.
+#[test]
+fn test_service_spec_accepts_unsized_configuration_and_sized_output() {
+    assert_unsized_config_spec::<UnsizedConfigSpec>();
 }

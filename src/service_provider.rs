@@ -7,7 +7,10 @@
 // =============================================================================
 //! Provider contract for pluggable service implementations.
 
-use crate::{ProviderError, ServiceSpec};
+use crate::{
+    ProviderError,
+    ServiceSpec,
+};
 
 /// Factory contract for one pluggable service implementation.
 ///

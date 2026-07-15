@@ -7,7 +7,10 @@
 // =============================================================================
 //! Strict canonical provider identifiers.
 
-use std::{fmt, str::FromStr};
+use std::{
+    fmt,
+    str::FromStr,
+};
 
 use crate::ProviderIdError;
 
@@ -39,6 +42,7 @@ impl ProviderId {
     /// # Errors
     ///
     /// Returns [`ProviderIdError`] when `value` is empty or noncanonical.
+    #[inline]
     pub fn new(value: impl AsRef<str>) -> Result<Self, ProviderIdError> {
         let value = value.as_ref();
         if value.is_empty() {
@@ -64,6 +68,10 @@ impl ProviderId {
 
 impl AsRef<str> for ProviderId {
     /// Forwards to [`ProviderId::as_str`].
+    ///
+    /// # Returns
+    ///
+    /// The canonical provider ID text.
     #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
@@ -80,6 +88,10 @@ impl fmt::Display for ProviderId {
     /// # Returns
     ///
     /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the destination formatter rejects the text.
     #[inline(always)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
@@ -132,7 +144,8 @@ pub(crate) fn is_canonical_token(value: &str) -> bool {
             .bytes()
             .last()
             .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        && !value
-            .bytes()
-            .any(|byte| !byte.is_ascii_alphanumeric() && !matches!(byte, b'-' | b'_' | b'.' | b'+'))
+        && !value.bytes().any(|byte| {
+            !byte.is_ascii_alphanumeric()
+                && !matches!(byte, b'-' | b'_' | b'.' | b'+')
+        })
 }

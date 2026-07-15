@@ -10,7 +10,10 @@
 use thiserror::Error;
 
 use crate::internal::ProviderSelectionErrorRepr;
-use crate::{ProviderSelectionErrorKind, ProviderSelectorError};
+use crate::{
+    ProviderSelectionErrorKind,
+    ProviderSelectorError,
+};
 
 /// Error returned when a provider selection cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -69,7 +72,9 @@ impl ProviderSelectionError {
             ProviderSelectionErrorRepr::InvalidSelector { .. } => {
                 ProviderSelectionErrorKind::InvalidSelector
             }
-            ProviderSelectionErrorRepr::EmptyChain => ProviderSelectionErrorKind::EmptyChain,
+            ProviderSelectionErrorRepr::EmptyChain => {
+                ProviderSelectionErrorKind::EmptyChain
+            }
         }
     }
 
@@ -82,9 +87,10 @@ impl ProviderSelectionError {
     #[must_use]
     pub const fn selector_index(&self) -> Option<usize> {
         match self.0 {
-            ProviderSelectionErrorRepr::InvalidSelector { selector_index, .. } => {
-                Some(selector_index)
-            }
+            ProviderSelectionErrorRepr::InvalidSelector {
+                selector_index,
+                ..
+            } => Some(selector_index),
             ProviderSelectionErrorRepr::EmptyChain => None,
         }
     }
@@ -98,9 +104,10 @@ impl ProviderSelectionError {
     #[must_use]
     pub fn selector_input(&self) -> Option<&str> {
         match &self.0 {
-            ProviderSelectionErrorRepr::InvalidSelector { selector_input, .. } => {
-                Some(selector_input)
-            }
+            ProviderSelectionErrorRepr::InvalidSelector {
+                selector_input,
+                ..
+            } => Some(selector_input),
             ProviderSelectionErrorRepr::EmptyChain => None,
         }
     }

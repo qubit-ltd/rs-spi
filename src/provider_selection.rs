@@ -9,7 +9,9 @@
 
 use crate::internal::ProviderSelectionRepr;
 use crate::{
-    ProviderSelectionError, ProviderSelectionKind, ProviderSelector,
+    ProviderSelectionError,
+    ProviderSelectionKind,
+    ProviderSelector,
 };
 
 /// Validated request for the providers a resolver may try.
@@ -49,10 +51,14 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionError`] when `value` cannot form a valid
     /// selector.
-    pub fn named(value: impl AsRef<str>) -> Result<Self, ProviderSelectionError> {
+    #[inline]
+    pub fn named(
+        value: impl AsRef<str>,
+    ) -> Result<Self, ProviderSelectionError> {
         let input = value.as_ref();
-        let selector = ProviderSelector::parse(input)
-            .map_err(|source| ProviderSelectionError::invalid_selector(0, input, source))?;
+        let selector = ProviderSelector::parse(input).map_err(|source| {
+            ProviderSelectionError::invalid_selector(0, input, source)
+        })?;
         Ok(Self(ProviderSelectionRepr::Named(selector)))
     }
 
@@ -78,9 +84,14 @@ impl ProviderSelection {
         let mut selectors = Vec::new();
         for (selector_index, value) in values.into_iter().enumerate() {
             let input = value.as_ref();
-            let selector = ProviderSelector::parse(input).map_err(|source| {
-                ProviderSelectionError::invalid_selector(selector_index, input, source)
-            })?;
+            let selector =
+                ProviderSelector::parse(input).map_err(|source| {
+                    ProviderSelectionError::invalid_selector(
+                        selector_index,
+                        input,
+                        source,
+                    )
+                })?;
             selectors.push(selector);
         }
         if selectors.is_empty() {
@@ -117,7 +128,9 @@ impl ProviderSelection {
     pub fn selector(&self) -> Option<&ProviderSelector> {
         match &self.0 {
             ProviderSelectionRepr::Named(selector) => Some(selector),
-            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Chain(_) => None,
+            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Chain(_) => {
+                None
+            }
         }
     }
 
@@ -132,7 +145,9 @@ impl ProviderSelection {
     pub fn selectors(&self) -> &[ProviderSelector] {
         match &self.0 {
             ProviderSelectionRepr::Chain(selectors) => selectors,
-            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Named(_) => &[],
+            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Named(_) => {
+                &[]
+            }
         }
     }
 
@@ -149,6 +164,10 @@ impl ProviderSelection {
 
 impl Default for ProviderSelection {
     /// Creates the default automatic provider selection.
+    ///
+    /// # Returns
+    ///
+    /// An automatic provider selection.
     #[inline(always)]
     fn default() -> Self {
         Self::auto()

@@ -7,7 +7,11 @@
 // =============================================================================
 //! Private storage for aggregate provider resolution failures.
 
-use crate::{AttemptFailure, ProviderSelector, ProviderSelectorError};
+use crate::{
+    AttemptFailure,
+    ProviderSelector,
+    ProviderSelectorError,
+};
 
 /// Variant-specific storage for an aggregate resolution failure.
 #[derive(Clone, Debug)]

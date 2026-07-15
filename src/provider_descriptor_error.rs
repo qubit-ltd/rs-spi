@@ -10,7 +10,10 @@
 use thiserror::Error;
 
 use crate::internal::ProviderDescriptorErrorRepr;
-use crate::{ProviderDescriptorErrorKind, ProviderSelectorError};
+use crate::{
+    ProviderDescriptorErrorKind,
+    ProviderSelectorError,
+};
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -110,7 +113,9 @@ impl ProviderDescriptorError {
     #[must_use]
     pub const fn alias_index(&self) -> Option<usize> {
         match self.0 {
-            ProviderDescriptorErrorRepr::InvalidAlias { alias_index, .. } => Some(alias_index),
+            ProviderDescriptorErrorRepr::InvalidAlias {
+                alias_index, ..
+            } => Some(alias_index),
             ProviderDescriptorErrorRepr::DuplicateAlias { .. }
             | ProviderDescriptorErrorRepr::AliasMatchesId { .. } => None,
         }
@@ -127,7 +132,9 @@ impl ProviderDescriptorError {
         match &self.0 {
             ProviderDescriptorErrorRepr::InvalidAlias { alias, .. }
             | ProviderDescriptorErrorRepr::DuplicateAlias { alias }
-            | ProviderDescriptorErrorRepr::AliasMatchesId { alias } => Some(alias),
+            | ProviderDescriptorErrorRepr::AliasMatchesId { alias } => {
+                Some(alias)
+            }
         }
     }
 }

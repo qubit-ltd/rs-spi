@@ -6,19 +6,37 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{ProviderSelector, ProviderSelectorErrorKind};
+use qubit_spi::{
+    ProviderSelector,
+    ProviderSelectorErrorKind,
+};
 
+/// Verifies trimming and ASCII case normalization at the selector boundary.
 #[test]
-fn selector_normalizes_configuration_input() {
+fn test_selector_normalizes_configuration_input() {
     assert_eq!(
         "git+ssh",
-        ProviderSelector::parse(" Git+SSH ").unwrap().as_str(),
+        ProviderSelector::parse(" Git+SSH ")
+            .expect("valid selector should normalize")
+            .as_str(),
     );
 }
 
+/// Verifies standard string parsing and string-reference conversion.
 #[test]
-fn selector_errors_preserve_raw_and_normalized_input() {
-    let empty = ProviderSelector::parse("  ").expect_err("blank selector should fail");
+fn test_selector_supports_standard_string_traits() {
+    let selector = " Git+SSH "
+        .parse::<ProviderSelector>()
+        .expect("valid selector should parse");
+
+    assert_eq!("git+ssh", AsRef::<str>::as_ref(&selector));
+}
+
+/// Verifies preservation of raw and normalized invalid selector input.
+#[test]
+fn test_selector_errors_preserve_raw_and_normalized_input() {
+    let empty =
+        ProviderSelector::parse("  ").expect_err("blank selector should fail");
     assert_eq!(ProviderSelectorErrorKind::Empty, empty.kind());
     assert_eq!("  ", empty.input());
     assert_eq!(None, empty.normalized());

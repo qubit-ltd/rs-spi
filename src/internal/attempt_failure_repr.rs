@@ -7,7 +7,11 @@
 // =============================================================================
 //! Private storage for one failed provider resolution attempt.
 
-use crate::{ProviderError, ProviderId, ProviderSelector};
+use crate::{
+    ProviderError,
+    ProviderId,
+    ProviderSelector,
+};
 
 /// Variant-specific diagnostics for one failed resolution attempt.
 #[derive(Clone, Debug)]

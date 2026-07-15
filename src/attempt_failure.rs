@@ -7,11 +7,18 @@
 // =============================================================================
 //! Diagnostics for individual provider resolution attempts.
 
-use std::{error::Error, fmt};
+use std::{
+    error::Error,
+    fmt,
+};
 
 use crate::internal::AttemptFailureRepr;
 use crate::{
-    AttemptFailureKind, ProviderError, ProviderErrorKind, ProviderId, ProviderSelector,
+    AttemptFailureKind,
+    ProviderError,
+    ProviderErrorKind,
+    ProviderId,
+    ProviderSelector,
 };
 
 /// Diagnostic record for one candidate that could not produce a service.
@@ -79,8 +86,12 @@ impl AttemptFailure {
     #[must_use]
     pub const fn kind(&self) -> AttemptFailureKind {
         match self.repr {
-            AttemptFailureRepr::UnknownProvider { .. } => AttemptFailureKind::UnknownProvider,
-            AttemptFailureRepr::ProviderError { .. } => AttemptFailureKind::ProviderError,
+            AttemptFailureRepr::UnknownProvider { .. } => {
+                AttemptFailureKind::UnknownProvider
+            }
+            AttemptFailureRepr::ProviderError { .. } => {
+                AttemptFailureKind::ProviderError
+            }
         }
     }
 
@@ -113,7 +124,9 @@ impl AttemptFailure {
     pub fn provider_id(&self) -> Option<&ProviderId> {
         match &self.repr {
             AttemptFailureRepr::UnknownProvider { .. } => None,
-            AttemptFailureRepr::ProviderError { provider_id, .. } => Some(provider_id),
+            AttemptFailureRepr::ProviderError { provider_id, .. } => {
+                Some(provider_id)
+            }
         }
     }
 
@@ -127,7 +140,9 @@ impl AttemptFailure {
     pub const fn provider_error_kind(&self) -> Option<ProviderErrorKind> {
         match &self.repr {
             AttemptFailureRepr::UnknownProvider { .. } => None,
-            AttemptFailureRepr::ProviderError { error, .. } => Some(error.kind()),
+            AttemptFailureRepr::ProviderError { error, .. } => {
+                Some(error.kind())
+            }
         }
     }
 
@@ -156,16 +171,32 @@ impl AttemptFailure {
     pub fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.repr {
             AttemptFailureRepr::UnknownProvider { .. } => None,
-            AttemptFailureRepr::ProviderError { error, .. } => Error::source(error),
+            AttemptFailureRepr::ProviderError { error, .. } => {
+                Error::source(error)
+            }
         }
     }
 }
 
 impl fmt::Display for AttemptFailure {
     /// Formats this failed attempt with selector or provider context.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.repr {
-            AttemptFailureRepr::UnknownProvider { reason, .. } => formatter.write_str(reason),
+            AttemptFailureRepr::UnknownProvider { reason, .. } => {
+                formatter.write_str(reason)
+            }
             AttemptFailureRepr::ProviderError {
                 requested_selector,
                 provider_id,
@@ -188,6 +219,10 @@ impl fmt::Display for AttemptFailure {
 
 impl Error for AttemptFailure {
     /// Returns the retained provider cause, when one exists.
+    ///
+    /// # Returns
+    ///
+    /// The provider's underlying source error, or `None` when absent.
     #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Self::source(self)

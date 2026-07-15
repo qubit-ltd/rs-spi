@@ -7,9 +7,15 @@
 // =============================================================================
 //! Provider selectors parsed from configuration or user input.
 
-use std::{fmt, str::FromStr};
+use std::{
+    fmt,
+    str::FromStr,
+};
 
-use crate::{ProviderSelectorError, provider_id::is_canonical_token};
+use crate::{
+    ProviderSelectorError,
+    provider_id::is_canonical_token,
+};
 
 /// Normalized token used to look up a provider by ID or alias.
 ///
@@ -37,9 +43,12 @@ impl ProviderSelector {
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderSelectorError`] when the normalized selector is empty or
-    /// invalid.
-    pub fn parse(value: impl AsRef<str>) -> Result<Self, ProviderSelectorError> {
+    /// Returns [`ProviderSelectorError`] when the normalized selector is empty
+    /// or invalid.
+    #[inline]
+    pub fn parse(
+        value: impl AsRef<str>,
+    ) -> Result<Self, ProviderSelectorError> {
         let input = value.as_ref();
         let normalized = input.trim().to_ascii_lowercase();
         if normalized.is_empty() {
@@ -65,6 +74,10 @@ impl ProviderSelector {
 
 impl AsRef<str> for ProviderSelector {
     /// Forwards to [`ProviderSelector::as_str`].
+    ///
+    /// # Returns
+    ///
+    /// The normalized selector text.
     #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
@@ -81,6 +94,10 @@ impl fmt::Display for ProviderSelector {
     /// # Returns
     ///
     /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the destination formatter rejects the text.
     #[inline(always)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())

@@ -15,7 +15,7 @@
 //!
 //! # Example
 //!
-//! ~~~rust
+//! ```rust
 //! use std::sync::Arc;
 //!
 //! use qubit_spi::{
@@ -69,7 +69,7 @@
 //! assert_eq!("hello", created.service().greet());
 //! # Ok(())
 //! # }
-//! ~~~
+//! ```
 
 mod attempt_failure;
 mod attempt_failure_kind;

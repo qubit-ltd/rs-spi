@@ -49,7 +49,8 @@ fn test_registration_error_exposes_its_kind_and_conflict_details() {
     builder
         .register(
             ProviderDescriptor::new(
-                ProviderId::new("english").expect("test provider ID should be valid"),
+                ProviderId::new("english")
+                    .expect("test provider ID should be valid"),
             )
             .with_aliases(["en"])
             .expect("test alias should be valid"),
@@ -59,7 +60,8 @@ fn test_registration_error_exposes_its_kind_and_conflict_details() {
     let error = builder
         .register(
             ProviderDescriptor::new(
-                ProviderId::new("spanish").expect("test provider ID should be valid"),
+                ProviderId::new("spanish")
+                    .expect("test provider ID should be valid"),
             )
             .with_aliases(["en"])
             .expect("test alias should be valid"),

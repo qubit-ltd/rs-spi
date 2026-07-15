@@ -11,6 +11,7 @@ use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
     ProviderError,
+    ProviderErrorKind,
     ProviderId,
     ProviderRegistry,
     ProviderResolver,
@@ -79,6 +80,15 @@ fn test_attempt_failure_preserves_provider_error_source() {
     };
 
     assert_eq!(AttemptFailureKind::ProviderError, attempt.kind());
+    assert_eq!(
+        Some("file-command"),
+        attempt.requested_selector().map(ProviderSelector::as_str),
+    );
+    assert_eq!(
+        Some(ProviderErrorKind::Unavailable),
+        attempt.provider_error_kind(),
+    );
+    assert_eq!("file executable is absent", attempt.reason());
     assert!(attempt.source().is_some());
     assert!(std::error::Error::source(attempt).is_some());
     assert!(attempt.to_string().contains("file-command"));
@@ -106,5 +116,7 @@ fn test_unknown_attempt_has_an_explicit_kind() {
     );
     assert!(attempt.provider_id().is_none());
     assert!(attempt.provider_error_kind().is_none());
+    assert_eq!("unknown provider: missing", attempt.reason());
     assert!(attempt.source().is_none());
+    assert_eq!("unknown provider: missing", attempt.to_string());
 }

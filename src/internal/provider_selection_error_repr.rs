@@ -15,7 +15,9 @@ use crate::ProviderSelectorError;
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub(crate) enum ProviderSelectionErrorRepr {
     /// One selector input cannot be parsed.
-    #[error("invalid provider selector at selection index {selector_index}: {selector_input:?}")]
+    #[error(
+        "invalid provider selector at selection index {selector_index}: {selector_input:?}"
+    )]
     InvalidSelector {
         /// Zero-based selector position.
         selector_index: usize,

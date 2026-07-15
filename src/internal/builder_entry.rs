@@ -9,7 +9,11 @@
 
 use std::sync::Arc;
 
-use crate::{ProviderDescriptor, ServiceProvider, ServiceSpec};
+use crate::{
+    ProviderDescriptor,
+    ServiceProvider,
+    ServiceSpec,
+};
 
 /// Descriptor and factory pair retained by a registry builder.
 pub(crate) struct BuilderEntry<S>

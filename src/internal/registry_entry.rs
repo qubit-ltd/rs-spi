@@ -9,7 +9,11 @@
 
 use std::sync::Arc;
 
-use crate::{ProviderDescriptor, ServiceProvider, ServiceSpec};
+use crate::{
+    ProviderDescriptor,
+    ServiceProvider,
+    ServiceSpec,
+};
 
 /// Internal pairing of one descriptor and the factory it represents.
 pub(crate) struct RegistryEntry<S>

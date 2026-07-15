@@ -9,7 +9,11 @@
 
 use std::collections::HashSet;
 
-use crate::{ProviderDescriptorError, ProviderId, ProviderSelector};
+use crate::{
+    ProviderDescriptorError,
+    ProviderId,
+    ProviderSelector,
+};
 
 /// Immutable metadata that identifies and ranks a registered provider.
 ///
@@ -65,29 +69,20 @@ impl ProviderDescriptor {
     ///
     /// Panics only if a previously validated canonical provider ID cannot be
     /// parsed as a selector, which safe construction cannot produce.
-    pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
+    #[inline]
+    pub fn with_aliases<I, T>(
+        mut self,
+        aliases: I,
+    ) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
-        let canonical_selector = ProviderSelector::parse(self.id.as_str())
-            .expect("canonical provider IDs are valid selectors");
-        let mut seen = HashSet::new();
-        let mut normalized = Vec::new();
-        for (alias_index, alias) in aliases.into_iter().enumerate() {
-            let input = alias.as_ref();
-            let alias = ProviderSelector::parse(input).map_err(|source| {
-                ProviderDescriptorError::invalid_alias(alias_index, input, source)
-            })?;
-            if alias == canonical_selector {
-                return Err(ProviderDescriptorError::alias_matches_id(alias.as_str()));
-            }
-            if !seen.insert(alias.clone()) {
-                return Err(ProviderDescriptorError::duplicate_alias(alias.as_str()));
-            }
-            normalized.push(alias);
+        let mut inputs = Vec::new();
+        for alias in aliases {
+            inputs.push(Box::<str>::from(alias.as_ref()));
         }
-        self.aliases = normalized.into_boxed_slice();
+        self.aliases = normalize_aliases(&self.id, inputs)?;
         Ok(self)
     }
 
@@ -139,4 +134,61 @@ impl ProviderDescriptor {
     pub const fn priority(&self) -> i32 {
         self.priority
     }
+}
+
+/// Normalizes and validates owned alias inputs for one canonical provider ID.
+///
+/// Keeping validation outside the generic public method avoids duplicating the
+/// complete validation state machine for every caller iterator type.
+///
+/// # Arguments
+///
+/// * `id` - Canonical provider ID that aliases must not duplicate.
+/// * `inputs` - Owned raw aliases in caller-supplied order.
+///
+/// # Returns
+///
+/// The validated normalized aliases in input order.
+///
+/// # Errors
+///
+/// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates the
+/// canonical provider ID, or duplicates an earlier normalized alias.
+///
+/// # Panics
+///
+/// Panics only if `id` violates its type invariant and cannot be parsed as a
+/// selector.
+fn normalize_aliases(
+    id: &ProviderId,
+    inputs: Vec<Box<str>>,
+) -> Result<Box<[ProviderSelector]>, ProviderDescriptorError> {
+    let canonical_selector = ProviderSelector::parse(id.as_str())
+        .expect("canonical provider IDs are valid selectors");
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::with_capacity(inputs.len());
+    for (alias_index, input) in inputs.into_iter().enumerate() {
+        let alias = match ProviderSelector::parse(&input) {
+            Ok(alias) => alias,
+            Err(source) => {
+                return Err(ProviderDescriptorError::invalid_alias(
+                    alias_index,
+                    &input,
+                    source,
+                ));
+            }
+        };
+        if alias == canonical_selector {
+            return Err(ProviderDescriptorError::alias_matches_id(
+                alias.as_str(),
+            ));
+        }
+        if !seen.insert(alias.clone()) {
+            return Err(ProviderDescriptorError::duplicate_alias(
+                alias.as_str(),
+            ));
+        }
+        normalized.push(alias);
+    }
+    Ok(normalized.into_boxed_slice())
 }

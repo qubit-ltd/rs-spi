@@ -7,11 +7,17 @@
 // =============================================================================
 //! Errors raised while resolving provider selections.
 
-use std::{error::Error, fmt};
+use std::{
+    error::Error,
+    fmt,
+};
 
 use crate::internal::ResolutionErrorRepr;
 use crate::{
-    AttemptFailure, ProviderSelector, ProviderSelectorError, ResolutionErrorKind,
+    AttemptFailure,
+    ProviderSelector,
+    ProviderSelectorError,
+    ResolutionErrorKind,
 };
 
 /// Aggregate error returned when provider resolution cannot create a service.
@@ -82,7 +88,8 @@ impl ResolutionError {
         Self(ResolutionErrorRepr::EmptyRegistry)
     }
 
-    /// Creates an aggregate error when considered candidates produce no service.
+    /// Creates an aggregate error when considered candidates produce no
+    /// service.
     ///
     /// # Arguments
     ///
@@ -117,10 +124,18 @@ impl ResolutionError {
     #[must_use]
     pub const fn kind(&self) -> ResolutionErrorKind {
         match self.0 {
-            ResolutionErrorRepr::InvalidSelector { .. } => ResolutionErrorKind::InvalidSelector,
-            ResolutionErrorRepr::EmptySelection => ResolutionErrorKind::EmptySelection,
-            ResolutionErrorRepr::UnknownProvider { .. } => ResolutionErrorKind::UnknownProvider,
-            ResolutionErrorRepr::EmptyRegistry => ResolutionErrorKind::EmptyRegistry,
+            ResolutionErrorRepr::InvalidSelector { .. } => {
+                ResolutionErrorKind::InvalidSelector
+            }
+            ResolutionErrorRepr::EmptySelection => {
+                ResolutionErrorKind::EmptySelection
+            }
+            ResolutionErrorRepr::UnknownProvider { .. } => {
+                ResolutionErrorKind::UnknownProvider
+            }
+            ResolutionErrorRepr::EmptyRegistry => {
+                ResolutionErrorKind::EmptyRegistry
+            }
             ResolutionErrorRepr::NoProviderSucceeded { .. } => {
                 ResolutionErrorKind::NoProviderSucceeded
             }
@@ -138,7 +153,9 @@ impl ResolutionError {
     pub fn selector_input(&self) -> Option<&str> {
         match &self.0 {
             ResolutionErrorRepr::InvalidSelector { input, .. } => Some(input),
-            ResolutionErrorRepr::UnknownProvider { selector } => Some(selector.as_str()),
+            ResolutionErrorRepr::UnknownProvider { selector } => {
+                Some(selector.as_str())
+            }
             ResolutionErrorRepr::EmptySelection
             | ResolutionErrorRepr::EmptyRegistry
             | ResolutionErrorRepr::NoProviderSucceeded { .. } => None,
@@ -155,7 +172,9 @@ impl ResolutionError {
     #[must_use]
     pub const fn selector_index(&self) -> Option<usize> {
         match self.0 {
-            ResolutionErrorRepr::InvalidSelector { selector_index, .. } => selector_index,
+            ResolutionErrorRepr::InvalidSelector { selector_index, .. } => {
+                selector_index
+            }
             ResolutionErrorRepr::EmptySelection
             | ResolutionErrorRepr::UnknownProvider { .. }
             | ResolutionErrorRepr::EmptyRegistry
@@ -218,6 +237,18 @@ impl ResolutionError {
 
 impl fmt::Display for ResolutionError {
     /// Formats the resolution failure and ordered attempt diagnostics.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
             ResolutionErrorRepr::InvalidSelector {
@@ -229,17 +260,17 @@ impl fmt::Display for ResolutionError {
                     formatter,
                     "invalid provider selector at chain index {index}: {input:?}",
                 ),
-                None => write!(formatter, "invalid provider selector {input:?}"),
+                None => {
+                    write!(formatter, "invalid provider selector {input:?}")
+                }
             },
-            ResolutionErrorRepr::EmptySelection => {
-                formatter.write_str("provider selection chain must not be empty")
-            }
+            ResolutionErrorRepr::EmptySelection => formatter
+                .write_str("provider selection chain must not be empty"),
             ResolutionErrorRepr::UnknownProvider { selector } => {
                 write!(formatter, "unknown provider: {selector}")
             }
-            ResolutionErrorRepr::EmptyRegistry => {
-                formatter.write_str("cannot resolve a provider from an empty registry")
-            }
+            ResolutionErrorRepr::EmptyRegistry => formatter
+                .write_str("cannot resolve a provider from an empty registry"),
             ResolutionErrorRepr::NoProviderSucceeded { attempts } => {
                 write!(
                     formatter,
@@ -257,6 +288,10 @@ impl fmt::Display for ResolutionError {
 
 impl Error for ResolutionError {
     /// Returns the selector parsing source for invalid raw input.
+    ///
+    /// # Returns
+    ///
+    /// The selector parse source for invalid input, or `None` otherwise.
     #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.0 {

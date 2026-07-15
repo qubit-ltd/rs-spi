@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::internal::ProviderIdErrorRepr;
 use crate::ProviderIdErrorKind;
+use crate::internal::ProviderIdErrorRepr;
 
 /// Error returned when a canonical provider ID cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -65,7 +65,9 @@ impl ProviderIdError {
     pub const fn kind(&self) -> ProviderIdErrorKind {
         match self.0 {
             ProviderIdErrorRepr::Empty { .. } => ProviderIdErrorKind::Empty,
-            ProviderIdErrorRepr::NonCanonical { .. } => ProviderIdErrorKind::NonCanonical,
+            ProviderIdErrorRepr::NonCanonical { .. } => {
+                ProviderIdErrorKind::NonCanonical
+            }
         }
     }
 

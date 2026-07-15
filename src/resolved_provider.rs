@@ -8,7 +8,11 @@
 //! Borrowed provider lookup results.
 
 use crate::internal::RegistryEntry;
-use crate::{ProviderDescriptor, ProviderError, ServiceSpec};
+use crate::{
+    ProviderDescriptor,
+    ProviderError,
+    ServiceSpec,
+};
 
 /// Borrowed provider lookup result retaining descriptor metadata.
 ///
@@ -67,7 +71,10 @@ where
     /// Returns [`ProviderError`] when the provider cannot create the service;
     /// its classification remains available to resolver fallback logic.
     #[inline(always)]
-    pub fn create(&self, config: &S::Config) -> Result<S::Output, ProviderError> {
+    pub fn create(
+        &self,
+        config: &S::Config,
+    ) -> Result<S::Output, ProviderError> {
         self.entry.provider.create(config)
     }
 }
