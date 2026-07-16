@@ -158,6 +158,13 @@ where
     ///
     /// Returns [`ResolutionError`] when `selector` is invalid or unknown, or
     /// when the selected provider cannot create its service.
+    ///
+    /// # Performance
+    ///
+    /// TODO: Before adding a no-allocation fast path, benchmark representative
+    /// repeated canonical-selector lookups, including filesystem URI schemes,
+    /// and retain the optimization only when the measurements show a material
+    /// benefit.
     #[inline]
     pub fn create_named(
         &self,

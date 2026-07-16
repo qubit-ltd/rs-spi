@@ -44,6 +44,13 @@ impl ProviderSelector {
     ///
     /// Returns [`ProviderSelectorError`] when the normalized selector is empty
     /// or invalid.
+    ///
+    /// # Performance
+    ///
+    /// TODO: Before adding a no-allocation fast path, benchmark representative
+    /// repeated canonical-selector lookups, including filesystem URI schemes,
+    /// and retain the optimization only when the measurements show a material
+    /// benefit.
     #[inline]
     pub fn parse(
         value: impl AsRef<str>,
