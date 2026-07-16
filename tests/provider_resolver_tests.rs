@@ -16,15 +16,19 @@ use std::sync::{
 };
 use std::thread;
 
+use qubit_spi::error::{
+    AttemptFailure,
+    ProviderError,
+    ProviderSelectorErrorKind,
+    ResolutionError,
+};
 use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
     ProviderResolver,
     ProviderSelection,
-    ResolutionErrorKind,
     ServiceProvider,
     ServiceSpec,
 };
@@ -155,7 +159,10 @@ fn test_on_absence_stops_after_an_initialization_failure() {
         Err(error) => error,
     };
 
-    assert_eq!(1, error.attempts().len());
+    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+        panic!("provider failure should produce an aggregate error");
+    };
+    assert_eq!(1, attempts.len());
 }
 
 /// Verifies resolver accessors, clone behavior, and debug output.
@@ -287,12 +294,19 @@ fn test_chain_records_unknown_selectors_and_deduplicates_provider_aliases() {
     };
 
     assert_eq!(1, attempts.load(Ordering::SeqCst));
-    assert_eq!(2, error.attempts().len());
-    assert_eq!("unknown provider: missing", error.attempts()[0].reason());
-    assert_eq!(
-        Some("remote"),
-        error.attempts()[1].provider_id().map(ProviderId::as_str)
-    );
+    let ResolutionError::NoProviderSucceeded { attempts: failures } = error
+    else {
+        panic!("an exhausted chain should produce an aggregate error");
+    };
+    let [
+        AttemptFailure::UnknownProvider { requested_selector },
+        AttemptFailure::ProviderError { provider_id, .. },
+    ] = failures.as_ref()
+    else {
+        panic!("the chain should retain one lookup and one provider failure");
+    };
+    assert_eq!("missing", requested_selector.as_str());
+    assert_eq!("remote", provider_id.as_str());
 }
 
 /// Verifies that named selection never invokes another registered provider.
@@ -327,11 +341,14 @@ fn test_named_selection_never_falls_back() {
         Err(error) => error,
     };
 
-    assert_eq!(1, error.attempts().len());
-    assert_eq!(
-        Some("remote"),
-        error.attempts()[0].provider_id().map(ProviderId::as_str)
-    );
+    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+        panic!("named provider failure should produce an aggregate error");
+    };
+    let [AttemptFailure::ProviderError { provider_id, .. }] = attempts.as_ref()
+    else {
+        panic!("named resolution should retain one provider failure");
+    };
+    assert_eq!("remote", provider_id.as_str());
 }
 
 /// Verifies fallback decisions for every provider error classification.
@@ -423,12 +440,17 @@ fn test_raw_named_resolution_preserves_invalid_selector_input() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::InvalidSelector, error.kind());
-    assert_eq!(Some(" Bad Selector "), error.selector_input());
-    assert_eq!(None, error.selector_index());
-    assert!(error.selector_error().is_some());
-    assert!(error.requested_selector().is_none());
-    assert!(error.attempts().is_empty());
+    let ResolutionError::InvalidSelector {
+        input,
+        selector_index,
+        source,
+    } = &error
+    else {
+        panic!("invalid input should produce an invalid-selector error");
+    };
+    assert_eq!(" Bad Selector ", input.as_ref());
+    assert_eq!(None, *selector_index);
+    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
     assert!(Error::source(&error).is_some());
     assert_eq!(
         "invalid provider selector \" Bad Selector \"",
@@ -448,13 +470,10 @@ fn test_raw_named_resolution_reports_an_unknown_provider() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::UnknownProvider, error.kind());
-    assert_eq!(Some("missing"), error.selector_input());
-    assert_eq!(
-        Some("missing"),
-        error.requested_selector().map(|selector| selector.as_str()),
-    );
-    assert!(error.selector_error().is_none());
+    let ResolutionError::UnknownProvider { selector } = &error else {
+        panic!("unknown input should produce an unknown-provider error");
+    };
+    assert_eq!("missing", selector.as_str());
     assert!(Error::source(&error).is_none());
     assert_eq!("unknown provider: missing", error.to_string());
 }
@@ -470,12 +489,17 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
         Ok(_) => panic!("invalid raw chain selector should fail"),
         Err(error) => error,
     };
-    assert_eq!(ResolutionErrorKind::InvalidSelector, invalid.kind());
-    assert_eq!(Some(1), invalid.selector_index());
-    assert_eq!(Some("bad selector"), invalid.selector_input());
-    assert!(invalid.selector_error().is_some());
-    assert!(invalid.requested_selector().is_none());
-    assert!(invalid.attempts().is_empty());
+    let ResolutionError::InvalidSelector {
+        input,
+        selector_index,
+        source,
+    } = &invalid
+    else {
+        panic!("invalid chain input should report its selector position");
+    };
+    assert_eq!("bad selector", input.as_ref());
+    assert_eq!(Some(1), *selector_index);
+    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
     assert_eq!(
         "invalid provider selector at chain index 1: \"bad selector\"",
         invalid.to_string(),
@@ -485,12 +509,7 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
         Ok(_) => panic!("empty raw chain should fail"),
         Err(error) => error,
     };
-    assert_eq!(ResolutionErrorKind::EmptySelection, empty.kind());
-    assert_eq!(None, empty.selector_input());
-    assert_eq!(None, empty.selector_index());
-    assert!(empty.selector_error().is_none());
-    assert!(empty.requested_selector().is_none());
-    assert!(empty.attempts().is_empty());
+    assert!(matches!(&empty, ResolutionError::EmptySelection));
     assert!(Error::source(&empty).is_none());
     assert_eq!(
         "provider selection chain must not be empty",
@@ -510,12 +529,7 @@ fn test_automatic_resolution_distinguishes_an_empty_registry() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::EmptyRegistry, error.kind());
-    assert_eq!(None, error.selector_input());
-    assert_eq!(None, error.selector_index());
-    assert!(error.selector_error().is_none());
-    assert!(error.requested_selector().is_none());
-    assert!(error.attempts().is_empty());
+    assert!(matches!(&error, ResolutionError::EmptyRegistry));
     assert!(Error::source(&error).is_none());
     assert!(error.to_string().contains("empty"));
 }
@@ -550,11 +564,10 @@ fn test_aggregate_resolution_display_contains_ordered_attempt_diagnostics() {
     };
     let message = error.to_string();
 
-    assert_eq!(ResolutionErrorKind::NoProviderSucceeded, error.kind());
-    assert_eq!(None, error.selector_input());
-    assert_eq!(None, error.selector_index());
-    assert!(error.selector_error().is_none());
-    assert!(error.requested_selector().is_none());
+    assert!(matches!(
+        &error,
+        ResolutionError::NoProviderSucceeded { .. }
+    ));
     assert!(Error::source(&error).is_none());
 
     let first = message.find("first unavailable").expect("first reason");
@@ -612,8 +625,10 @@ fn test_raw_chain_stops_on_a_disallowed_provider_failure() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::NoProviderSucceeded, error.kind());
-    assert_eq!(1, error.attempts().len());
+    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+        panic!("disallowed provider failure should produce an aggregate error");
+    };
+    assert_eq!(1, attempts.len());
 }
 
 /// Verifies automatic resolution aggregates all permitted failures.
@@ -639,8 +654,10 @@ fn test_automatic_resolution_aggregates_all_permitted_failures() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::NoProviderSucceeded, error.kind());
-    assert_eq!(2, error.attempts().len());
+    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+        panic!("automatic exhaustion should produce an aggregate error");
+    };
+    assert_eq!(2, attempts.len());
 }
 
 /// Reports whether automatic resolution reaches the second provider.

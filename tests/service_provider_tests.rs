@@ -8,8 +8,8 @@
 
 use std::sync::Arc;
 
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderError,
     ServiceProvider,
     ServiceSpec,
 };

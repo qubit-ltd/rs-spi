@@ -7,10 +7,10 @@
 // =============================================================================
 //! Borrowed provider lookup results.
 
+use crate::error::ProviderError;
 use crate::internal::RegistryEntry;
 use crate::{
     ProviderDescriptor,
-    ProviderError,
     ServiceSpec,
 };
 

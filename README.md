@@ -33,10 +33,10 @@ qubit-spi = "0.5"
 ~~~rust
 use std::sync::Arc;
 
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
     ProviderResolver,
@@ -93,12 +93,15 @@ assert_eq!("hello", created.service().greet());
   does not attempt the same provider twice through aliases.
 - `ProviderResolver::create_auto`, `create_named`, and `create_chain` accept raw
   runtime input and report parsing failures as `ResolutionError` values.
+- Reuse a validated `ProviderSelection` when configuration is applied across
+  calls; prefer the raw resolver methods at runtime input boundaries.
 - FallbackPolicy::OnAbsence continues after unknown, unsupported, or
   unavailable optional providers; it stops at invalid configuration and
   initialization failures.
 - FallbackPolicy::OnAnyError is available for explicitly best-effort chains.
 
-`ProviderError` classifies a single factory failure. `ResolutionError` records
+All error types are available through `qubit_spi::error`. `ProviderError`
+classifies a single factory failure. `ResolutionError` records
 all attempted candidates, preserves invalid selector input and its validation
 source, and distinguishes empty registries and empty raw chains. Its display
 text includes ordered attempt diagnostics. Each `AttemptFailure` explicitly

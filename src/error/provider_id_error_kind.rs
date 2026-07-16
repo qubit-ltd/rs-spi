@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Classifications for canonical provider ID validation failures.
+//! Error classifications for canonical provider ID validation failures.
 
 /// Classification of a canonical provider ID validation failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Private storage for provider selector parsing failures.
+//! Private representation for provider selector parsing failures.
 
 use thiserror::Error;
 

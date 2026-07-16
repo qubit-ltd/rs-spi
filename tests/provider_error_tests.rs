@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
+use qubit_spi::error::{
     ProviderError,
     ProviderErrorKind,
 };

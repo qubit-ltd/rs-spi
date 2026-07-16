@@ -12,10 +12,9 @@ use std::{
     str::FromStr,
 };
 
-use crate::{
-    ProviderSelectorError,
-    provider_id::is_canonical_token,
-};
+use crate::ProviderId;
+use crate::error::ProviderSelectorError;
+use crate::provider_id::is_canonical_token;
 
 /// Normalized token used to look up a provider by ID or alias.
 ///
@@ -81,6 +80,23 @@ impl AsRef<str> for ProviderSelector {
     #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl From<&ProviderId> for ProviderSelector {
+    /// Converts a validated canonical provider ID into a selector.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Canonical provider ID whose invariant already satisfies the
+    ///   selector grammar.
+    ///
+    /// # Returns
+    ///
+    /// A selector containing the same canonical text without reparsing.
+    #[inline]
+    fn from(id: &ProviderId) -> Self {
+        Self(id.as_str().into())
     }
 }
 

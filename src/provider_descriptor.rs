@@ -9,8 +9,8 @@
 
 use std::collections::HashSet;
 
+use crate::error::ProviderDescriptorError;
 use crate::{
-    ProviderDescriptorError,
     ProviderId,
     ProviderSelector,
 };
@@ -50,58 +50,6 @@ impl ProviderDescriptor {
         }
     }
 
-    /// Replaces the descriptor's aliases with normalized lookup selectors.
-    ///
-    /// # Arguments
-    ///
-    /// * `aliases` - Raw aliases trimmed, lowercased, and validated in order.
-    ///
-    /// # Returns
-    ///
-    /// This descriptor with the resulting normalized aliases.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
-    /// another alias, or duplicates the canonical provider ID.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if a previously validated canonical provider ID cannot be
-    /// parsed as a selector, which safe construction cannot produce.
-    #[inline]
-    pub fn with_aliases<I, T>(
-        mut self,
-        aliases: I,
-    ) -> Result<Self, ProviderDescriptorError>
-    where
-        I: IntoIterator<Item = T>,
-        T: AsRef<str>,
-    {
-        let mut inputs = Vec::new();
-        for alias in aliases {
-            inputs.push(Box::<str>::from(alias.as_ref()));
-        }
-        self.aliases = normalize_aliases(&self.id, inputs)?;
-        Ok(self)
-    }
-
-    /// Sets the priority used by automatic selection.
-    ///
-    /// # Arguments
-    ///
-    /// * `priority` - Descending automatic-selection sort key.
-    ///
-    /// # Returns
-    ///
-    /// This descriptor with the replacement priority.
-    #[inline]
-    #[must_use]
-    pub fn with_priority(mut self, priority: i32) -> Self {
-        self.priority = priority;
-        self
-    }
-
     /// Returns the canonical provider ID.
     ///
     /// # Returns
@@ -124,6 +72,36 @@ impl ProviderDescriptor {
         &self.aliases
     }
 
+    /// Replaces the descriptor's aliases with normalized lookup selectors.
+    ///
+    /// # Arguments
+    ///
+    /// * `aliases` - Raw aliases trimmed, lowercased, and validated in order.
+    ///
+    /// # Returns
+    ///
+    /// This descriptor with the resulting normalized aliases.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
+    /// another alias, or duplicates the canonical provider ID.
+    pub fn with_aliases<I, T>(
+        mut self,
+        aliases: I,
+    ) -> Result<Self, ProviderDescriptorError>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<str>,
+    {
+        let mut inputs = Vec::new();
+        for alias in aliases {
+            inputs.push(Box::<str>::from(alias.as_ref()));
+        }
+        self.aliases = normalize_aliases(&self.id, inputs)?;
+        Ok(self)
+    }
+
     /// Returns the priority used to order automatic selection candidates.
     ///
     /// # Returns
@@ -133,6 +111,22 @@ impl ProviderDescriptor {
     #[must_use]
     pub const fn priority(&self) -> i32 {
         self.priority
+    }
+
+    /// Sets the priority used by automatic selection.
+    ///
+    /// # Arguments
+    ///
+    /// * `priority` - Descending automatic-selection sort key.
+    ///
+    /// # Returns
+    ///
+    /// This descriptor with the replacement priority.
+    #[inline(always)]
+    #[must_use]
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
     }
 }
 
@@ -154,17 +148,11 @@ impl ProviderDescriptor {
 ///
 /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates the
 /// canonical provider ID, or duplicates an earlier normalized alias.
-///
-/// # Panics
-///
-/// Panics only if `id` violates its type invariant and cannot be parsed as a
-/// selector.
 fn normalize_aliases(
     id: &ProviderId,
     inputs: Vec<Box<str>>,
 ) -> Result<Box<[ProviderSelector]>, ProviderDescriptorError> {
-    let canonical_selector = ProviderSelector::parse(id.as_str())
-        .expect("canonical provider IDs are valid selectors");
+    let canonical_selector = ProviderSelector::from(id);
     let mut seen = HashSet::new();
     let mut normalized = Vec::with_capacity(inputs.len());
     for (alias_index, input) in inputs.into_iter().enumerate() {

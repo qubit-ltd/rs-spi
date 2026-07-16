@@ -6,11 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
     CreatedService,
     FallbackPolicy,
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
     ProviderResolver,

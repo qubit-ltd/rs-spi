@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::ProviderIdErrorKind;
-use crate::internal::ProviderIdErrorRepr;
+use super::ProviderIdErrorKind;
+use super::internal::ProviderIdErrorRepr;
 
 /// Error returned when a canonical provider ID cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]

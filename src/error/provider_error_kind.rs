@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Classifications reported by provider service construction.
+//! Error classifications reported by provider service construction.
 
 /// Classification of a failure reported while a provider creates a service.
 ///

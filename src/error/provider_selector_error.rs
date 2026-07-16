@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::ProviderSelectorErrorKind;
-use crate::internal::ProviderSelectorErrorRepr;
+use super::ProviderSelectorErrorKind;
+use super::internal::ProviderSelectorErrorRepr;
 
 /// Error returned when provider selector input cannot be parsed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]

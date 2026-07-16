@@ -14,7 +14,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::ProviderErrorKind;
+use super::ProviderErrorKind;
 
 /// Error returned by one provider while creating a service.
 ///

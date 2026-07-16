@@ -5,14 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Classifications for provider selector parsing failures.
+//! Error classifications for provider registration conflicts.
 
-/// Classification of a provider selector parsing failure.
+/// Classification of a provider registration conflict.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
-pub enum ProviderSelectorErrorKind {
-    /// Trimming the input produced an empty selector.
-    Empty,
-    /// The normalized selector violates selector syntax.
-    Invalid,
+pub enum RegistrationErrorKind {
+    /// A canonical ID or alias is already owned by another registration.
+    DuplicateSelector,
 }

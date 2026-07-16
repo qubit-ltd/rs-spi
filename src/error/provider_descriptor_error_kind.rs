@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Classifications for provider descriptor construction failures.
+//! Error classifications for provider descriptor construction failures.
 
 /// Classification of a provider descriptor construction failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

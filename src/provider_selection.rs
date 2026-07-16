@@ -7,9 +7,9 @@
 // =============================================================================
 //! Validated provider selection inputs.
 
+use crate::error::ProviderSelectionError;
 use crate::internal::ProviderSelectionRepr;
 use crate::{
-    ProviderSelectionError,
     ProviderSelectionKind,
     ProviderSelector,
 };
@@ -19,6 +19,59 @@ use crate::{
 /// Construct selections through [`Self::auto`], [`Self::named`], or
 /// [`Self::chain`]. The opaque representation prevents invalid selectors and
 /// empty chains from reaching a resolver.
+///
+/// # Examples
+///
+/// Parse a configured selection once and reuse it for multiple creations:
+///
+/// ```rust
+/// use qubit_spi::error::ProviderError;
+/// use qubit_spi::{
+///     FallbackPolicy,
+///     ProviderDescriptor,
+///     ProviderId,
+///     ProviderRegistry,
+///     ProviderResolver,
+///     ProviderSelection,
+///     ServiceProvider,
+///     ServiceSpec,
+/// };
+///
+/// struct GreetingSpec;
+///
+/// impl ServiceSpec for GreetingSpec {
+///     type Config = ();
+///     type Output = &'static str;
+/// }
+///
+/// struct EnglishProvider;
+///
+/// impl ServiceProvider<GreetingSpec> for EnglishProvider {
+///     fn create(&self, _config: &()) -> Result<&'static str, ProviderError> {
+///         Ok("hello")
+///     }
+/// }
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+/// builder.register(
+///     ProviderDescriptor::new(ProviderId::new("english")?),
+///     EnglishProvider,
+/// )?;
+/// let resolver = ProviderResolver::new(
+///     builder.build(),
+///     FallbackPolicy::OnAbsence,
+/// );
+/// let selection = ProviderSelection::named("english")?;
+///
+/// let first = resolver.create(&selection, &())?;
+/// let second = resolver.create(&selection, &())?;
+///
+/// assert_eq!("hello", *first.service());
+/// assert_eq!("hello", *second.service());
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderSelection(
     /// Invariant-safe provider selection consumed by a resolver.

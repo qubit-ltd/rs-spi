@@ -12,13 +12,13 @@ use std::{
     sync::Arc,
 };
 
+use crate::error::ResolutionError;
 use crate::internal::RegistryInner;
 use crate::{
     ProviderDescriptor,
     ProviderId,
     ProviderRegistryBuilder,
     ProviderSelector,
-    ResolutionError,
     ResolvedProvider,
     ServiceSpec,
 };

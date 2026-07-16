@@ -5,14 +5,14 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Classifications for provider selection construction failures.
+//! Error classifications for provider selector parsing failures.
 
-/// Classification of a provider selection construction failure.
+/// Classification of a provider selector parsing failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
-pub enum ProviderSelectionErrorKind {
-    /// One selector input cannot be parsed.
-    InvalidSelector,
-    /// A chained selection contains no selector inputs.
-    EmptyChain,
+pub enum ProviderSelectorErrorKind {
+    /// Trimming the input produced an empty selector.
+    Empty,
+    /// The normalized selector violates selector syntax.
+    Invalid,
 }

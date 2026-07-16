@@ -12,14 +12,16 @@ use std::{
     thread,
 };
 
-use qubit_spi::{
-    ProviderDescriptor,
+use qubit_spi::error::{
     ProviderError,
-    ProviderId,
-    ProviderRegistry,
     ProviderSelectorError,
     ProviderSelectorErrorKind,
-    ResolutionErrorKind,
+    ResolutionError,
+};
+use qubit_spi::{
+    ProviderDescriptor,
+    ProviderId,
+    ProviderRegistry,
     ServiceProvider,
     ServiceSpec,
 };
@@ -115,8 +117,10 @@ fn test_registry_reports_unknown_provider() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::UnknownProvider, error.kind());
-    assert_eq!(Some("missing"), error.selector_input());
+    let ResolutionError::UnknownProvider { selector } = &error else {
+        panic!("missing provider should produce an unknown-provider error");
+    };
+    assert_eq!("missing", selector.as_str());
     assert!(Error::source(&error).is_none());
 }
 
@@ -151,13 +155,22 @@ fn test_registry_preserves_invalid_selector_input_and_source() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::InvalidSelector, error.kind());
-    assert_eq!(Some(" Bad Selector "), error.selector_input());
-    assert_eq!(None, error.requested_selector());
-    let source = Error::source(&error)
-        .and_then(|source| source.downcast_ref::<ProviderSelectorError>())
-        .expect("invalid selector must retain its selector error source");
+    let ResolutionError::InvalidSelector {
+        input,
+        selector_index,
+        source,
+    } = &error
+    else {
+        panic!("invalid provider input should retain its parser error");
+    };
+    assert_eq!(" Bad Selector ", input.as_ref());
+    assert_eq!(None, *selector_index);
     assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
+    assert!(
+        Error::source(&error)
+            .and_then(|source| source.downcast_ref::<ProviderSelectorError>())
+            .is_some()
+    );
     assert!(error.to_string().contains(" Bad Selector "));
 }
 

@@ -8,9 +8,9 @@
 
 use std::error::Error;
 
+use qubit_spi::error::ProviderDescriptorErrorKind;
 use qubit_spi::{
     ProviderDescriptor,
-    ProviderDescriptorErrorKind,
     ProviderId,
 };
 

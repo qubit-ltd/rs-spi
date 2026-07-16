@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Private storage for provider registration conflicts.
+//! Private representation for provider registration conflicts.
 
 use thiserror::Error;
 

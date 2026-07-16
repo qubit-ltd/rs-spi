@@ -6,12 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_spi::error::{
+    ProviderError,
+    RegistrationErrorKind,
+};
 use qubit_spi::{
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
-    RegistrationErrorKind,
     ServiceProvider,
     ServiceSpec,
 };

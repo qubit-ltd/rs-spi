@@ -12,7 +12,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::ProviderIdError;
+use crate::error::ProviderIdError;
 
 /// Stable canonical identifier of a provider.
 ///

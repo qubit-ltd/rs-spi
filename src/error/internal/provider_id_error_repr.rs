@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Private storage for canonical provider ID validation failures.
+//! Private representation for canonical provider ID validation failures.
 
 use thiserror::Error;
 

@@ -8,9 +8,9 @@
 
 use std::error::Error;
 
+use qubit_spi::error::ProviderSelectionErrorKind;
 use qubit_spi::{
     ProviderSelection,
-    ProviderSelectionErrorKind,
     ProviderSelectionKind,
     ProviderSelector,
 };

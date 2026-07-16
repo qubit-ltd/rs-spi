@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::RegistrationErrorKind;
-use crate::internal::RegistrationErrorRepr;
+use super::RegistrationErrorKind;
+use super::internal::RegistrationErrorRepr;
 
 /// Error returned when a provider registration conflicts with registry state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]

@@ -8,13 +8,15 @@
 
 use std::sync::Arc;
 
+use qubit_spi::error::{
+    ProviderError,
+    RegistrationErrorKind,
+};
 use qubit_spi::{
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
     ProviderRegistryBuilder,
-    RegistrationErrorKind,
     ServiceProvider,
     ServiceSpec,
 };

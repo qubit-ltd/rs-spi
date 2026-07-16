@@ -12,6 +12,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::error::RegistrationError;
 use crate::internal::{
     BuilderEntry,
     RegistryEntry,
@@ -21,7 +22,6 @@ use crate::{
     ProviderDescriptor,
     ProviderRegistry,
     ProviderSelector,
-    RegistrationError,
     ServiceProvider,
     ServiceSpec,
 };
@@ -165,19 +165,12 @@ where
     ///
     /// Returns [`RegistrationError`] without modifying the builder when any
     /// selector is already registered.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if a previously validated canonical provider ID cannot be
-    /// parsed as a selector, which safe construction cannot produce.
     fn insert(
         &mut self,
         descriptor: ProviderDescriptor,
         provider: Arc<dyn ServiceProvider<S>>,
     ) -> Result<(), RegistrationError> {
-        let canonical_selector =
-            ProviderSelector::parse(descriptor.id().as_str())
-                .expect("canonical provider IDs are valid selectors");
+        let canonical_selector = ProviderSelector::from(descriptor.id());
         self.validate_selector(&canonical_selector, descriptor.id().as_str())?;
         for alias in descriptor.aliases() {
             self.validate_selector(alias, descriptor.id().as_str())?;

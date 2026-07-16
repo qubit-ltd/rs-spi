@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ProviderId,
-    ProviderIdErrorKind,
-};
+use qubit_spi::ProviderId;
+use qubit_spi::error::ProviderIdErrorKind;
 
 /// Verifies the complete accepted canonical-token boundary.
 #[test]

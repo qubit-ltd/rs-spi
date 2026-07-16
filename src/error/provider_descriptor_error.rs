@@ -9,8 +9,8 @@
 
 use thiserror::Error;
 
-use crate::internal::ProviderDescriptorErrorRepr;
-use crate::{
+use super::internal::ProviderDescriptorErrorRepr;
+use super::{
     ProviderDescriptorErrorKind,
     ProviderSelectorError,
 };

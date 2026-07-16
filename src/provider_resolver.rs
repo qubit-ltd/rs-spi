@@ -12,16 +12,18 @@ use std::{
     fmt,
 };
 
+use crate::error::{
+    AttemptFailure,
+    ProviderErrorKind,
+    ResolutionError,
+};
 use crate::internal::ProviderSelectionRepr;
 use crate::{
-    AttemptFailure,
     CreatedService,
     FallbackPolicy,
-    ProviderErrorKind,
     ProviderRegistry,
     ProviderSelection,
     ProviderSelector,
-    ResolutionError,
     ServiceSpec,
 };
 

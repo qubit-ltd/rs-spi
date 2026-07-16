@@ -9,7 +9,7 @@
 
 use thiserror::Error;
 
-use crate::ProviderSelectorError;
+use crate::error::ProviderSelectorError;
 
 /// Variant-specific provider selection construction failure.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
