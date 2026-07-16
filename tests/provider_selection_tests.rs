@@ -112,10 +112,15 @@ fn test_invalid_named_selection_preserves_input_and_source() {
 /// Verifies selection-construction failures convert into resolution failures.
 #[test]
 fn test_selection_error_converts_to_resolution_error() {
-    let invalid: ResolutionError =
-        ProviderSelection::chain(["valid", "bad selector"])
-            .expect_err("invalid chain selector should fail")
-            .into();
+    let selection_error = ProviderSelection::chain(["valid", "bad selector"])
+        .expect_err("invalid chain selector should fail");
+    let source_input_pointer = match &selection_error {
+        ProviderSelectionError::InvalidSelector { source, .. } => {
+            source.input().as_ptr()
+        }
+        _ => panic!("invalid chain selector should retain its source"),
+    };
+    let invalid: ResolutionError = selection_error.into();
     let ResolutionError::InvalidSelector {
         selector_index,
         source,
@@ -126,6 +131,7 @@ fn test_selection_error_converts_to_resolution_error() {
     };
     assert_eq!(Some(1), selector_index);
     assert_eq!("bad selector", source.input());
+    assert_eq!(source_input_pointer, source.input().as_ptr());
 
     let named: ResolutionError = ProviderSelection::named("bad selector")
         .expect_err("invalid named selector should fail")
