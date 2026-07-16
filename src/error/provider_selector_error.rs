@@ -9,8 +9,6 @@
 
 use thiserror::Error;
 
-use super::ProviderSelectorErrorKind;
-
 /// Error returned when provider selector input cannot be parsed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
@@ -70,20 +68,6 @@ impl ProviderSelectorError {
         }
     }
 
-    /// Returns this selector error's stable classification.
-    ///
-    /// # Returns
-    ///
-    /// The empty or invalid classification.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderSelectorErrorKind {
-        match self {
-            Self::Empty { .. } => ProviderSelectorErrorKind::Empty,
-            Self::Invalid { .. } => ProviderSelectorErrorKind::Invalid,
-        }
-    }
-
     /// Returns the verbatim selector input.
     ///
     /// # Returns
@@ -95,31 +79,5 @@ impl ProviderSelectorError {
         match self {
             Self::Empty { input } | Self::Invalid { input, .. } => input,
         }
-    }
-
-    /// Returns normalized invalid selector text.
-    ///
-    /// # Returns
-    ///
-    /// The invalid normalized value, or `None` when trimming produced an empty
-    /// selector.
-    #[inline(always)]
-    #[must_use]
-    pub fn normalized(&self) -> Option<&str> {
-        match self {
-            Self::Invalid { normalized, .. } => Some(normalized),
-            Self::Empty { .. } => None,
-        }
-    }
-
-    /// Reports whether trimming produced an empty selector.
-    ///
-    /// # Returns
-    ///
-    /// `true` only for [`Self::Empty`].
-    #[inline(always)]
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        matches!(self, Self::Empty { .. })
     }
 }

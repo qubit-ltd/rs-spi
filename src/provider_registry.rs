@@ -44,7 +44,7 @@ where
     /// # Returns
     ///
     /// A mutable builder used during startup to register providers.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn builder() -> ProviderRegistryBuilder<S> {
         ProviderRegistryBuilder::new()

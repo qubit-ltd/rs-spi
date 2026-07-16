@@ -10,7 +10,6 @@ use std::error::Error;
 
 use qubit_spi::error::{
     ProviderSelectionError,
-    ProviderSelectionErrorKind,
     ResolutionError,
 };
 use qubit_spi::{
@@ -61,31 +60,23 @@ fn test_selection_construction_enforces_invariants() {
 
     let empty = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail");
-    assert_eq!(ProviderSelectionErrorKind::EmptyChain, empty.kind());
-    assert!(empty.is_empty_chain());
-    assert!(empty.selector_input().is_none());
-    assert!(empty.selector_error().is_none());
     assert!(Error::source(&empty).is_none());
     assert!(matches!(empty, ProviderSelectionError::EmptyChain));
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
-    assert_eq!(ProviderSelectionErrorKind::InvalidSelector, invalid.kind(),);
-    assert!(!invalid.is_empty_chain());
-    assert_eq!(Some(1), invalid.selector_index());
-    assert_eq!(Some("bad selector"), invalid.selector_input());
-    assert!(invalid.selector_error().is_some());
     assert!(Error::source(&invalid).is_some());
     let ProviderSelectionError::InvalidSelector {
         selector_index,
         selector_input,
-        source: _,
+        source,
     } = invalid
     else {
         panic!("invalid chain selector should retain its context");
     };
     assert_eq!(1, selector_index);
     assert_eq!("bad selector", selector_input.as_ref());
+    assert_eq!("bad selector", source.input());
 }
 
 /// Verifies invalid named selections report position zero and retain a source.

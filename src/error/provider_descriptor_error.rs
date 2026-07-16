@@ -9,10 +9,7 @@
 
 use thiserror::Error;
 
-use super::{
-    ProviderDescriptorErrorKind,
-    ProviderSelectorError,
-};
+use super::ProviderSelectorError;
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -103,41 +100,6 @@ impl ProviderDescriptorError {
         }
     }
 
-    /// Returns this descriptor error's stable classification.
-    ///
-    /// # Returns
-    ///
-    /// The classification corresponding to the stored error variant.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderDescriptorErrorKind {
-        match self {
-            Self::InvalidAlias { .. } => {
-                ProviderDescriptorErrorKind::InvalidAlias
-            }
-            Self::DuplicateAlias { .. } => {
-                ProviderDescriptorErrorKind::DuplicateAlias
-            }
-            Self::AliasMatchesId { .. } => {
-                ProviderDescriptorErrorKind::AliasMatchesId
-            }
-        }
-    }
-
-    /// Returns the invalid alias position.
-    ///
-    /// # Returns
-    ///
-    /// The zero-based position for an invalid alias, or `None` otherwise.
-    #[inline(always)]
-    #[must_use]
-    pub const fn alias_index(&self) -> Option<usize> {
-        match self {
-            Self::InvalidAlias { alias_index, .. } => Some(*alias_index),
-            _ => None,
-        }
-    }
-
     /// Returns the alias retained by this error.
     ///
     /// # Returns
@@ -150,20 +112,6 @@ impl ProviderDescriptorError {
             Self::InvalidAlias { alias, .. }
             | Self::DuplicateAlias { alias }
             | Self::AliasMatchesId { alias } => alias,
-        }
-    }
-
-    /// Returns the selector parser error retained by an invalid alias.
-    ///
-    /// # Returns
-    ///
-    /// The parser source, or `None` for alias conflicts.
-    #[inline(always)]
-    #[must_use]
-    pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
-        match self {
-            Self::InvalidAlias { source, .. } => Some(source),
-            _ => None,
         }
     }
 }

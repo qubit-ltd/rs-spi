@@ -7,10 +7,7 @@
 // =============================================================================
 
 use qubit_spi::ProviderId;
-use qubit_spi::error::{
-    ProviderIdError,
-    ProviderIdErrorKind,
-};
+use qubit_spi::error::ProviderIdError;
 
 /// Verifies the complete accepted canonical-token boundary.
 #[test]
@@ -45,7 +42,6 @@ fn test_provider_id_supports_standard_string_traits() {
 #[test]
 fn test_provider_id_reports_empty_and_noncanonical_input() {
     let empty = ProviderId::new("").expect_err("empty ID should fail");
-    assert_eq!(ProviderIdErrorKind::Empty, empty.kind());
     assert_eq!("", empty.input());
     let ProviderIdError::Empty { input } = empty else {
         panic!("empty ID should retain the empty variant");
@@ -66,7 +62,6 @@ fn test_provider_id_reports_empty_and_noncanonical_input() {
     ] {
         let error =
             ProviderId::new(input).expect_err("noncanonical ID should fail");
-        assert_eq!(ProviderIdErrorKind::NonCanonical, error.kind());
         assert_eq!(input, error.input());
         let ProviderIdError::NonCanonical { input: actual } = error else {
             panic!("noncanonical ID should retain its input");

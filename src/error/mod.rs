@@ -7,33 +7,49 @@
 // =============================================================================
 //! Errors and diagnostics produced by provider validation, registration, and
 //! resolution.
+//!
+//! # Removed parallel error classifications
+//!
+//! Validation and registration errors are matched directly. The former
+//! parallel Kind types are intentionally unavailable:
+//!
+//! ```compile_fail
+//! use qubit_spi::error::ProviderDescriptorErrorKind;
+//! # fn main() {}
+//! ```
+//! ```compile_fail
+//! use qubit_spi::error::ProviderIdErrorKind;
+//! # fn main() {}
+//! ```
+//! ```compile_fail
+//! use qubit_spi::error::ProviderSelectionErrorKind;
+//! # fn main() {}
+//! ```
+//! ```compile_fail
+//! use qubit_spi::error::ProviderSelectorErrorKind;
+//! # fn main() {}
+//! ```
+//! ```compile_fail
+//! use qubit_spi::error::RegistrationErrorKind;
+//! # fn main() {}
+//! ```
 
 mod attempt_failure;
 mod provider_descriptor_error;
-mod provider_descriptor_error_kind;
 mod provider_error;
 mod provider_error_kind;
 mod provider_id_error;
-mod provider_id_error_kind;
 mod provider_selection_error;
-mod provider_selection_error_kind;
 mod provider_selector_error;
-mod provider_selector_error_kind;
 mod registration_error;
-mod registration_error_kind;
 mod resolution_error;
 
 pub use attempt_failure::AttemptFailure;
 pub use provider_descriptor_error::ProviderDescriptorError;
-pub use provider_descriptor_error_kind::ProviderDescriptorErrorKind;
 pub use provider_error::ProviderError;
 pub use provider_error_kind::ProviderErrorKind;
 pub use provider_id_error::ProviderIdError;
-pub use provider_id_error_kind::ProviderIdErrorKind;
 pub use provider_selection_error::ProviderSelectionError;
-pub use provider_selection_error_kind::ProviderSelectionErrorKind;
 pub use provider_selector_error::ProviderSelectorError;
-pub use provider_selector_error_kind::ProviderSelectorErrorKind;
 pub use registration_error::RegistrationError;
-pub use registration_error_kind::RegistrationErrorKind;
 pub use resolution_error::ResolutionError;

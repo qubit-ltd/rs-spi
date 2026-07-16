@@ -9,8 +9,6 @@
 
 use thiserror::Error;
 
-use super::RegistrationErrorKind;
-
 /// Error returned when a provider registration conflicts with registry state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
@@ -53,62 +51,6 @@ impl RegistrationError {
             selector: selector.into(),
             existing_provider: existing_provider.into(),
             provider: provider.into(),
-        }
-    }
-
-    /// Returns this registration error's stable classification.
-    ///
-    /// # Returns
-    ///
-    /// The registry-conflict classification.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> RegistrationErrorKind {
-        match self {
-            Self::DuplicateSelector { .. } => {
-                RegistrationErrorKind::DuplicateSelector
-            }
-        }
-    }
-
-    /// Returns the conflicting selector.
-    ///
-    /// # Returns
-    ///
-    /// The canonical ID or alias claimed by both providers.
-    #[inline(always)]
-    #[must_use]
-    pub fn selector(&self) -> &str {
-        match self {
-            Self::DuplicateSelector { selector, .. } => selector,
-        }
-    }
-
-    /// Returns the provider that already owns the selector.
-    ///
-    /// # Returns
-    ///
-    /// The canonical ID of the existing provider.
-    #[inline(always)]
-    #[must_use]
-    pub fn existing_provider(&self) -> &str {
-        match self {
-            Self::DuplicateSelector {
-                existing_provider, ..
-            } => existing_provider,
-        }
-    }
-
-    /// Returns the provider whose registration was rejected.
-    ///
-    /// # Returns
-    ///
-    /// The canonical ID attempting to claim the selector.
-    #[inline(always)]
-    #[must_use]
-    pub fn provider(&self) -> &str {
-        match self {
-            Self::DuplicateSelector { provider, .. } => provider,
         }
     }
 }
