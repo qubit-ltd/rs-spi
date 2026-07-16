@@ -374,18 +374,15 @@ impl Error for ResolutionError {
     ///
     /// # Returns
     ///
-    /// The selector parse source for invalid input, the sole failed attempt for
-    /// a single-attempt aggregate, or `None` otherwise.
-    #[inline(always)]
+    /// The selector parse source for invalid input, the decisive failed attempt
+    /// for an aggregate, or `None` when no single attempt explains the outcome.
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSelector { source, .. } => Some(source),
-            Self::NoProviderSucceeded { attempts, .. } => {
-                match attempts.as_ref() {
-                    [attempt] => Some(attempt),
-                    _ => None,
-                }
-            }
+            Self::NoProviderSucceeded { .. } => self
+                .decisive_attempt()
+                .map(|attempt| attempt as &(dyn Error + 'static)),
             Self::EmptySelection
             | Self::UnknownProvider { .. }
             | Self::EmptyRegistry => None,

@@ -193,6 +193,53 @@ fn test_on_absence_stops_after_an_initialization_failure() {
     );
 }
 
+/// Verifies that a policy-stopped aggregate exposes its decisive attempt.
+#[test]
+fn test_policy_stop_after_fallback_exposes_its_decisive_source() {
+    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+    builder
+        .register(
+            ProviderDescriptor::new(
+                ProviderId::new("remote")
+                    .expect("test provider ID should be valid"),
+            )
+            .with_priority(20),
+            TestProvider(Err(ProviderError::unavailable("disabled"))),
+        )
+        .expect("remote provider should register");
+    builder
+        .register(
+            ProviderDescriptor::new(
+                ProviderId::new("broken")
+                    .expect("test provider ID should be valid"),
+            )
+            .with_priority(10),
+            TestProvider(Err(ProviderError::initialization_failed("broken"))),
+        )
+        .expect("broken provider should register");
+
+    let result =
+        ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence)
+            .create(&ProviderSelection::auto(), &());
+    let error = match result {
+        Ok(_) => panic!("initialization failure must stop fallback"),
+        Err(error) => error,
+    };
+
+    assert_eq!(2, error.attempts().len());
+    assert_eq!(
+        Some(ResolutionTermination::StoppedByPolicy),
+        error.termination(),
+    );
+    let decisive = error
+        .decisive_attempt()
+        .expect("policy stop should retain its decisive attempt");
+    let source = Error::source(&error)
+        .and_then(|source| source.downcast_ref::<AttemptFailure>())
+        .expect("policy stop should expose its decisive attempt as the source");
+    assert!(std::ptr::eq(decisive, source));
+}
+
 /// Verifies resolver accessors, clone behavior, and debug output.
 #[test]
 fn test_resolver_accessors_clone_and_debug() {
