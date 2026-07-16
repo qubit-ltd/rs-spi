@@ -133,7 +133,7 @@ impl Error for AttemptFailure {
     /// # Returns
     ///
     /// The provider error for an invoked provider, or `None` for failed lookup.
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::UnknownProvider { .. } => None,

@@ -161,10 +161,9 @@ where
     ///
     /// # Performance
     ///
-    /// TODO: Before adding a no-allocation fast path, benchmark representative
-    /// repeated canonical-selector lookups, including filesystem URI schemes,
-    /// and retain the optimization only when the measurements show a material
-    /// benefit.
+    /// Each call parses and stores an owned selector. Reuse a
+    /// [`ProviderSelection`] with [`Self::create`] when the same configured
+    /// input is applied repeatedly.
     #[inline]
     pub fn create_named(
         &self,
@@ -368,7 +367,7 @@ where
     /// # Returns
     ///
     /// `true` when the resolver's policy permits another attempt.
-    #[inline(always)]
+    #[inline]
     fn should_continue(&self, kind: ProviderErrorKind) -> bool {
         match self.fallback_policy {
             FallbackPolicy::OnAnyError => true,

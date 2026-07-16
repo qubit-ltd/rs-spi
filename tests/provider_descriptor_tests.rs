@@ -48,6 +48,11 @@ fn test_descriptor_rejects_an_alias_that_duplicates_its_canonical_id() {
     .expect_err("an alias matching the canonical ID should fail");
 
     assert_eq!("file-command", error.alias());
+    assert_eq!(
+        "provider alias matches canonical ID: file-command",
+        error.to_string(),
+    );
+    assert!(Error::source(&error).is_none());
     let ProviderDescriptorError::AliasMatchesId { alias, .. } = error else {
         panic!("matching alias should retain its dedicated variant");
     };
@@ -64,6 +69,10 @@ fn test_descriptor_reports_invalid_alias_with_position_and_source() {
     .expect_err("invalid alias should fail");
 
     assert_eq!("bad alias", error.alias());
+    assert_eq!(
+        "invalid provider alias at index 1: \"bad alias\"",
+        error.to_string(),
+    );
     assert!(Error::source(&error).is_some());
     let ProviderDescriptorError::InvalidAlias {
         alias_index,
@@ -109,6 +118,8 @@ fn test_descriptor_distinguishes_duplicate_aliases() {
     .expect_err("normalized duplicate aliases should fail");
 
     assert_eq!("file", error.alias());
+    assert_eq!("duplicate provider alias: file", error.to_string());
+    assert!(Error::source(&error).is_none());
     let ProviderDescriptorError::DuplicateAlias { alias, .. } = error else {
         panic!("duplicate aliases should retain their dedicated variant");
     };

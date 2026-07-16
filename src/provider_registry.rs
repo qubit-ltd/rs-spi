@@ -59,7 +59,7 @@ where
     /// # Returns
     ///
     /// A registry sharing the supplied immutable storage.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub(crate) fn from_inner(inner: Arc<RegistryInner<S>>) -> Self {
         Self { inner }

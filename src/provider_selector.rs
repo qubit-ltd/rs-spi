@@ -47,10 +47,9 @@ impl ProviderSelector {
     ///
     /// # Performance
     ///
-    /// TODO: Before adding a no-allocation fast path, benchmark representative
-    /// repeated canonical-selector lookups, including filesystem URI schemes,
-    /// and retain the optimization only when the measurements show a material
-    /// benefit.
+    /// Successful parsing stores an owned normalized selector and therefore
+    /// allocates. Cache a [`ProviderSelector`] or
+    /// [`crate::ProviderSelection`] when the same configured input is reused.
     #[inline]
     pub fn parse(value: &str) -> Result<Self, ProviderSelectorError> {
         let input = value;

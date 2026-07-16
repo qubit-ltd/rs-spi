@@ -61,6 +61,10 @@ fn test_selection_construction_enforces_invariants() {
     let empty = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail");
     assert!(Error::source(&empty).is_none());
+    assert_eq!(
+        "provider selection chain must not be empty",
+        empty.to_string(),
+    );
     assert!(matches!(empty, ProviderSelectionError::EmptyChain));
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])

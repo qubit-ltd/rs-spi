@@ -23,7 +23,7 @@ ServiceSpec 同时定义配置类型和完整输出句柄；SPI 核心不会在 
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.7"
+qubit-spi = "0.8"
 ~~~
 
 ## 快速开始
@@ -102,8 +102,9 @@ assert_eq!("hello", created.service().greet());
 无效 selector 的原始输入及校验错误链，并明确区分空 registry 与空原始 chain。
 聚合失败通过 `ResolutionTermination::Exhausted` 和
 `ResolutionTermination::StoppedByPolicy` 区分候选项已全部耗尽与被策略提前终止。
-其显示文本包含按顺序排列的尝试诊断；仅有一次尝试时，该尝试会进入标准 error
-source 链。每个 `AttemptFailure` 会显式区分未知 selector 与 Provider 创建失败。
+其显示文本包含按顺序排列的尝试诊断。当某次尝试能够无歧义地解释聚合结果（包括导致
+策略终止的末次尝试）时，该尝试会进入标准 error source 链。每个
+`AttemptFailure` 会显式区分未知 selector 与 Provider 创建失败。
 
 校验和装配错误按生命周期拆分为 `ProviderIdError`、`ProviderSelectorError`、
 `ProviderDescriptorError`、`ProviderSelectionError` 与 `RegistrationError`；其中

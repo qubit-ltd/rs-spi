@@ -25,7 +25,7 @@ core does not convert between Box, Arc, and Rc.
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.7"
+qubit-spi = "0.8"
 ~~~
 
 ## Quick Start
@@ -108,7 +108,8 @@ empty registries and empty raw chains. Aggregate failures expose
 `ResolutionTermination::Exhausted` or
 `ResolutionTermination::StoppedByPolicy`, so callers can distinguish complete
 candidate exhaustion from an early policy stop. Its display text includes
-ordered attempt diagnostics; a single-attempt aggregate exposes that attempt
+ordered attempt diagnostics. When one attempt unambiguously explains the
+aggregate outcome, including a policy-stopping terminal attempt, it is exposed
 through the standard error source chain. Each `AttemptFailure` explicitly
 distinguishes an unknown selector from a provider creation error.
 
