@@ -19,7 +19,7 @@ use std::thread;
 use qubit_spi::error::{
     AttemptFailure,
     ProviderError,
-    ProviderSelectorErrorKind,
+    ProviderSelectorError,
     ResolutionError,
 };
 use qubit_spi::{
@@ -450,7 +450,7 @@ fn test_raw_named_resolution_preserves_invalid_selector_input() {
     };
     assert_eq!(" Bad Selector ", input.as_ref());
     assert_eq!(None, *selector_index);
-    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
+    assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert!(Error::source(&error).is_some());
     assert_eq!(
         "invalid provider selector \" Bad Selector \"",
@@ -499,7 +499,7 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
     };
     assert_eq!("bad selector", input.as_ref());
     assert_eq!(Some(1), *selector_index);
-    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
+    assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert_eq!(
         "invalid provider selector at chain index 1: \"bad selector\"",
         invalid.to_string(),

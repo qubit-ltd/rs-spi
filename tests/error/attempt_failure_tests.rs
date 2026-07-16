@@ -78,6 +78,10 @@ fn test_attempt_failure_preserves_provider_error_source() {
     let error = create_failing_resolver()
         .create_named("file-command", &())
         .expect_err("the test provider always fails");
+    let aggregate_source = std::error::Error::source(&error)
+        .and_then(|source| source.downcast_ref::<AttemptFailure>())
+        .expect("a single failed attempt should be the aggregate source");
+    assert!(std::error::Error::source(aggregate_source).is_some());
     let ResolutionError::NoProviderSucceeded { attempts } = error else {
         panic!("one provider failure should produce an aggregate error");
     };

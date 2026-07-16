@@ -9,16 +9,26 @@
 
 use thiserror::Error;
 
-use super::ProviderSelectorErrorKind;
-use super::internal::ProviderSelectorErrorRepr;
-
 /// Error returned when provider selector input cannot be parsed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(transparent)]
-pub struct ProviderSelectorError(
-    /// Variant-specific provider selector parsing failure.
-    ProviderSelectorErrorRepr,
-);
+pub enum ProviderSelectorError {
+    /// Trimming the input produced an empty selector.
+    #[error("provider selector must not be empty")]
+    Empty {
+        /// Verbatim selector input.
+        input: Box<str>,
+    },
+    /// The normalized selector violated selector syntax.
+    #[error(
+        "invalid provider selector {input:?} (normalized as {normalized:?})"
+    )]
+    Invalid {
+        /// Verbatim selector input.
+        input: Box<str>,
+        /// Trimmed and ASCII-lowercased selector input.
+        normalized: Box<str>,
+    },
+}
 
 impl ProviderSelectorError {
     /// Creates an error for selector input that becomes empty after trimming.
@@ -33,9 +43,9 @@ impl ProviderSelectorError {
     #[inline]
     #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
-        Self(ProviderSelectorErrorRepr::Empty {
+        Self::Empty {
             input: input.into(),
-        })
+        }
     }
 
     /// Creates an error for invalid normalized selector input.
@@ -51,58 +61,9 @@ impl ProviderSelectorError {
     #[inline]
     #[must_use]
     pub(crate) fn invalid(input: &str, normalized: &str) -> Self {
-        Self(ProviderSelectorErrorRepr::Invalid {
+        Self::Invalid {
             input: input.into(),
             normalized: normalized.into(),
-        })
-    }
-
-    /// Returns the selector parsing rule that failed.
-    ///
-    /// # Returns
-    ///
-    /// The empty or invalid selector classification.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderSelectorErrorKind {
-        match self.0 {
-            ProviderSelectorErrorRepr::Empty { .. } => {
-                ProviderSelectorErrorKind::Empty
-            }
-            ProviderSelectorErrorRepr::Invalid { .. } => {
-                ProviderSelectorErrorKind::Invalid
-            }
-        }
-    }
-
-    /// Returns the verbatim selector input.
-    ///
-    /// # Returns
-    ///
-    /// The original unnormalized selector text.
-    #[inline(always)]
-    #[must_use]
-    pub fn input(&self) -> &str {
-        match &self.0 {
-            ProviderSelectorErrorRepr::Empty { input }
-            | ProviderSelectorErrorRepr::Invalid { input, .. } => input,
-        }
-    }
-
-    /// Returns the normalized invalid selector.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for invalid normalized syntax, or `None` when trimming produced
-    /// an empty selector.
-    #[inline(always)]
-    #[must_use]
-    pub fn normalized(&self) -> Option<&str> {
-        match &self.0 {
-            ProviderSelectorErrorRepr::Empty { .. } => None,
-            ProviderSelectorErrorRepr::Invalid { normalized, .. } => {
-                Some(normalized)
-            }
         }
     }
 }

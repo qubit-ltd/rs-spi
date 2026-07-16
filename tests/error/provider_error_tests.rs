@@ -36,3 +36,29 @@ fn test_initialization_failure_preserves_its_source() {
     assert_eq!("runtime bootstrap failed", error.reason());
     assert!(std::error::Error::source(&error).is_some());
 }
+
+/// Verifies unsupported failures can retain their original causal error.
+#[test]
+fn test_unsupported_failure_preserves_its_source() {
+    let error = ProviderError::unsupported_with_source(
+        "requested capability is unavailable",
+        std::io::Error::other("capability disabled"),
+    );
+
+    assert_eq!(ProviderErrorKind::Unsupported, error.kind());
+    assert_eq!("requested capability is unavailable", error.reason());
+    assert!(std::error::Error::source(&error).is_some());
+}
+
+/// Verifies invalid configurations can retain their causal error.
+#[test]
+fn test_invalid_configuration_preserves_its_source() {
+    let error = ProviderError::invalid_configuration_with_source(
+        "invalid provider setting",
+        std::io::Error::other("value is out of range"),
+    );
+
+    assert_eq!(ProviderErrorKind::InvalidConfiguration, error.kind());
+    assert_eq!("invalid provider setting", error.reason());
+    assert!(std::error::Error::source(&error).is_some());
+}

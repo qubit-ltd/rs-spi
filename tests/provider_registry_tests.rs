@@ -15,7 +15,6 @@ use std::{
 use qubit_spi::error::{
     ProviderError,
     ProviderSelectorError,
-    ProviderSelectorErrorKind,
     ResolutionError,
 };
 use qubit_spi::{
@@ -165,7 +164,7 @@ fn test_registry_preserves_invalid_selector_input_and_source() {
     };
     assert_eq!(" Bad Selector ", input.as_ref());
     assert_eq!(None, *selector_index);
-    assert_eq!(ProviderSelectorErrorKind::Invalid, source.kind());
+    assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert!(
         Error::source(&error)
             .and_then(|source| source.downcast_ref::<ProviderSelectorError>())

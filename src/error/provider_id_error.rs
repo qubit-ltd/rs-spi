@@ -9,16 +9,22 @@
 
 use thiserror::Error;
 
-use super::ProviderIdErrorKind;
-use super::internal::ProviderIdErrorRepr;
-
 /// Error returned when a canonical provider ID cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(transparent)]
-pub struct ProviderIdError(
-    /// Variant-specific provider ID validation failure.
-    ProviderIdErrorRepr,
-);
+pub enum ProviderIdError {
+    /// The supplied provider ID was empty.
+    #[error("provider ID must not be empty")]
+    Empty {
+        /// Verbatim empty input retained for diagnostics.
+        input: Box<str>,
+    },
+    /// The supplied provider ID violated canonical syntax.
+    #[error("provider ID is not canonical: {input}")]
+    NonCanonical {
+        /// Verbatim noncanonical input retained for diagnostics.
+        input: Box<str>,
+    },
+}
 
 impl ProviderIdError {
     /// Creates an error for an empty canonical provider ID.
@@ -33,9 +39,9 @@ impl ProviderIdError {
     #[inline]
     #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
-        Self(ProviderIdErrorRepr::Empty {
+        Self::Empty {
             input: input.into(),
-        })
+        }
     }
 
     /// Creates an error for a noncanonical provider ID.
@@ -50,38 +56,8 @@ impl ProviderIdError {
     #[inline]
     #[must_use]
     pub(crate) fn noncanonical(input: &str) -> Self {
-        Self(ProviderIdErrorRepr::NonCanonical {
+        Self::NonCanonical {
             input: input.into(),
-        })
-    }
-
-    /// Returns the provider ID validation rule that failed.
-    ///
-    /// # Returns
-    ///
-    /// The empty or noncanonical classification.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderIdErrorKind {
-        match self.0 {
-            ProviderIdErrorRepr::Empty { .. } => ProviderIdErrorKind::Empty,
-            ProviderIdErrorRepr::NonCanonical { .. } => {
-                ProviderIdErrorKind::NonCanonical
-            }
-        }
-    }
-
-    /// Returns the verbatim provider ID input retained by this error.
-    ///
-    /// # Returns
-    ///
-    /// The original invalid input.
-    #[inline(always)]
-    #[must_use]
-    pub fn input(&self) -> Option<&str> {
-        match &self.0 {
-            ProviderIdErrorRepr::Empty { input }
-            | ProviderIdErrorRepr::NonCanonical { input } => Some(input),
         }
     }
 }

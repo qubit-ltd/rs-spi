@@ -191,19 +191,23 @@ impl fmt::Display for ResolutionError {
 }
 
 impl Error for ResolutionError {
-    /// Returns the selector parsing source for invalid raw input.
+    /// Returns the direct cause when the failure has one unambiguous source.
     ///
     /// # Returns
     ///
-    /// The selector parse source for invalid input, or `None` otherwise.
+    /// The selector parse source for invalid input, the sole failed attempt for
+    /// a single-attempt aggregate, or `None` otherwise.
     #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSelector { source, .. } => Some(source),
+            Self::NoProviderSucceeded { attempts } => match attempts.as_ref() {
+                [attempt] => Some(attempt),
+                _ => None,
+            },
             Self::EmptySelection
             | Self::UnknownProvider { .. }
-            | Self::EmptyRegistry
-            | Self::NoProviderSucceeded { .. } => None,
+            | Self::EmptyRegistry => None,
         }
     }
 }

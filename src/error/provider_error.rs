@@ -49,6 +49,25 @@ impl ProviderError {
         Self::new(ProviderErrorKind::Unsupported, reason)
     }
 
+    /// Creates an unsupported-request error with an underlying cause.
+    ///
+    /// # Arguments
+    ///
+    /// * `reason` - Human-readable unsupported condition.
+    /// * `source` - Causal error retained for diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// An unsupported error retaining its source.
+    #[inline(always)]
+    #[must_use]
+    pub fn unsupported_with_source(
+        reason: impl AsRef<str>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::with_source(ProviderErrorKind::Unsupported, reason, source)
+    }
+
     /// Creates an error indicating that the provider is unavailable.
     ///
     /// # Arguments
@@ -96,6 +115,29 @@ impl ProviderError {
     #[must_use]
     pub fn invalid_configuration(reason: impl AsRef<str>) -> Self {
         Self::new(ProviderErrorKind::InvalidConfiguration, reason)
+    }
+
+    /// Creates an invalid-configuration error with an underlying cause.
+    ///
+    /// # Arguments
+    ///
+    /// * `reason` - Human-readable invalid configuration condition.
+    /// * `source` - Causal error retained for diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// An invalid-configuration error retaining its source.
+    #[inline(always)]
+    #[must_use]
+    pub fn invalid_configuration_with_source(
+        reason: impl AsRef<str>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::with_source(
+            ProviderErrorKind::InvalidConfiguration,
+            reason,
+            source,
+        )
     }
 
     /// Creates an unexpected provider-initialization failure.

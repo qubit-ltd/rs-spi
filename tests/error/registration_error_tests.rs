@@ -8,7 +8,7 @@
 
 use qubit_spi::error::{
     ProviderError,
-    RegistrationErrorKind,
+    RegistrationError,
 };
 use qubit_spi::{
     ProviderDescriptor,
@@ -46,7 +46,7 @@ impl ServiceProvider<ConflictSpec> for EmptyProvider {
 
 /// Verifies that builder conflicts expose both providers and the selector.
 #[test]
-fn test_registration_error_exposes_its_kind_and_conflict_details() {
+fn test_registration_error_exposes_its_variant_and_conflict_details() {
     let mut builder = ProviderRegistry::<ConflictSpec>::builder();
     builder
         .register(
@@ -71,8 +71,12 @@ fn test_registration_error_exposes_its_kind_and_conflict_details() {
         )
         .expect_err("duplicate alias should be rejected");
 
-    assert_eq!(RegistrationErrorKind::DuplicateSelector, error.kind());
-    assert_eq!("en", error.selector());
-    assert_eq!("english", error.existing_provider());
-    assert_eq!("spanish", error.provider());
+    let RegistrationError::DuplicateSelector {
+        selector,
+        existing_provider,
+        provider,
+    } = error;
+    assert_eq!("en", selector.as_ref());
+    assert_eq!("english", existing_provider.as_ref());
+    assert_eq!("spanish", provider.as_ref());
 }

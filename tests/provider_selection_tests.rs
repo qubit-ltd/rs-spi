@@ -8,7 +8,7 @@
 
 use std::error::Error;
 
-use qubit_spi::error::ProviderSelectionErrorKind;
+use qubit_spi::error::ProviderSelectionError;
 use qubit_spi::{
     ProviderSelection,
     ProviderSelectionKind,
@@ -57,17 +57,22 @@ fn test_selection_construction_enforces_invariants() {
 
     let empty = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail");
-    assert_eq!(ProviderSelectionErrorKind::EmptyChain, empty.kind());
-    assert_eq!(None, empty.selector_index());
-    assert_eq!(None, empty.selector_input());
     assert!(Error::source(&empty).is_none());
+    assert!(matches!(empty, ProviderSelectionError::EmptyChain));
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
-    assert_eq!(ProviderSelectionErrorKind::InvalidSelector, invalid.kind());
-    assert_eq!(Some(1), invalid.selector_index());
-    assert_eq!(Some("bad selector"), invalid.selector_input());
     assert!(Error::source(&invalid).is_some());
+    let ProviderSelectionError::InvalidSelector {
+        selector_index,
+        selector_input,
+        source: _,
+    } = invalid
+    else {
+        panic!("invalid chain selector should retain its context");
+    };
+    assert_eq!(1, selector_index);
+    assert_eq!("bad selector", selector_input.as_ref());
 }
 
 /// Verifies invalid named selections report position zero and retain a source.
@@ -76,8 +81,15 @@ fn test_invalid_named_selection_preserves_input_and_source() {
     let error = ProviderSelection::named("bad selector")
         .expect_err("invalid named selector should fail");
 
-    assert_eq!(ProviderSelectionErrorKind::InvalidSelector, error.kind());
-    assert_eq!(Some(0), error.selector_index());
-    assert_eq!(Some("bad selector"), error.selector_input());
     assert!(Error::source(&error).is_some());
+    let ProviderSelectionError::InvalidSelector {
+        selector_index,
+        selector_input,
+        source: _,
+    } = error
+    else {
+        panic!("invalid named selector should retain its context");
+    };
+    assert_eq!(0, selector_index);
+    assert_eq!("bad selector", selector_input.as_ref());
 }

@@ -9,19 +9,35 @@
 
 use thiserror::Error;
 
-use super::internal::ProviderDescriptorErrorRepr;
-use super::{
-    ProviderDescriptorErrorKind,
-    ProviderSelectorError,
-};
+use super::ProviderSelectorError;
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(transparent)]
-pub struct ProviderDescriptorError(
-    /// Variant-specific descriptor construction failure.
-    ProviderDescriptorErrorRepr,
-);
+pub enum ProviderDescriptorError {
+    /// An alias cannot be parsed as a selector.
+    #[error("invalid provider alias at index {alias_index}: {alias:?}")]
+    InvalidAlias {
+        /// Zero-based position of the invalid alias.
+        alias_index: usize,
+        /// Verbatim invalid alias.
+        alias: Box<str>,
+        /// Selector parsing failure.
+        #[source]
+        source: ProviderSelectorError,
+    },
+    /// Two aliases normalize to the same selector.
+    #[error("duplicate provider alias: {alias}")]
+    DuplicateAlias {
+        /// Normalized duplicate alias.
+        alias: Box<str>,
+    },
+    /// An alias normalizes to the canonical provider ID.
+    #[error("provider alias matches canonical ID: {alias}")]
+    AliasMatchesId {
+        /// Normalized alias matching the canonical ID.
+        alias: Box<str>,
+    },
+}
 
 impl ProviderDescriptorError {
     /// Creates an error for an alias that cannot be parsed.
@@ -42,11 +58,11 @@ impl ProviderDescriptorError {
         alias: &str,
         source: ProviderSelectorError,
     ) -> Self {
-        Self(ProviderDescriptorErrorRepr::InvalidAlias {
+        Self::InvalidAlias {
             alias_index,
             alias: alias.into(),
             source,
-        })
+        }
     }
 
     /// Creates an error for aliases that normalize to the same selector.
@@ -61,9 +77,9 @@ impl ProviderDescriptorError {
     #[inline]
     #[must_use]
     pub(crate) fn duplicate_alias(alias: &str) -> Self {
-        Self(ProviderDescriptorErrorRepr::DuplicateAlias {
+        Self::DuplicateAlias {
             alias: alias.into(),
-        })
+        }
     }
 
     /// Creates an error for an alias matching the canonical provider ID.
@@ -78,63 +94,8 @@ impl ProviderDescriptorError {
     #[inline]
     #[must_use]
     pub(crate) fn alias_matches_id(alias: &str) -> Self {
-        Self(ProviderDescriptorErrorRepr::AliasMatchesId {
+        Self::AliasMatchesId {
             alias: alias.into(),
-        })
-    }
-
-    /// Returns the descriptor construction rule that failed.
-    ///
-    /// # Returns
-    ///
-    /// The classification corresponding to the retained descriptor failure.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderDescriptorErrorKind {
-        match self.0 {
-            ProviderDescriptorErrorRepr::InvalidAlias { .. } => {
-                ProviderDescriptorErrorKind::InvalidAlias
-            }
-            ProviderDescriptorErrorRepr::DuplicateAlias { .. } => {
-                ProviderDescriptorErrorKind::DuplicateAlias
-            }
-            ProviderDescriptorErrorRepr::AliasMatchesId { .. } => {
-                ProviderDescriptorErrorKind::AliasMatchesId
-            }
-        }
-    }
-
-    /// Returns the zero-based invalid alias position.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for an invalid alias, or `None` for alias conflicts.
-    #[inline(always)]
-    #[must_use]
-    pub const fn alias_index(&self) -> Option<usize> {
-        match self.0 {
-            ProviderDescriptorErrorRepr::InvalidAlias {
-                alias_index, ..
-            } => Some(alias_index),
-            ProviderDescriptorErrorRepr::DuplicateAlias { .. }
-            | ProviderDescriptorErrorRepr::AliasMatchesId { .. } => None,
-        }
-    }
-
-    /// Returns the invalid or conflicting alias retained by this error.
-    ///
-    /// # Returns
-    ///
-    /// The alias associated with this descriptor failure.
-    #[inline(always)]
-    #[must_use]
-    pub fn alias(&self) -> Option<&str> {
-        match &self.0 {
-            ProviderDescriptorErrorRepr::InvalidAlias { alias, .. }
-            | ProviderDescriptorErrorRepr::DuplicateAlias { alias }
-            | ProviderDescriptorErrorRepr::AliasMatchesId { alias } => {
-                Some(alias)
-            }
         }
     }
 }

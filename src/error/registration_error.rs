@@ -9,16 +9,22 @@
 
 use thiserror::Error;
 
-use super::RegistrationErrorKind;
-use super::internal::RegistrationErrorRepr;
-
 /// Error returned when a provider registration conflicts with registry state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(transparent)]
-pub struct RegistrationError(
-    /// Variant-specific provider registration conflict.
-    RegistrationErrorRepr,
-);
+pub enum RegistrationError {
+    /// A selector is already owned by a registered provider.
+    #[error(
+        "provider selector {selector} claimed by {provider} is already owned by {existing_provider}"
+    )]
+    DuplicateSelector {
+        /// Conflicting canonical ID or alias.
+        selector: Box<str>,
+        /// Canonical ID that already owns the selector.
+        existing_provider: Box<str>,
+        /// Canonical ID attempting the new claim.
+        provider: Box<str>,
+    },
+}
 
 impl RegistrationError {
     /// Creates an error for a selector claimed by another provider.
@@ -40,67 +46,10 @@ impl RegistrationError {
         existing_provider: &str,
         provider: &str,
     ) -> Self {
-        Self(RegistrationErrorRepr::DuplicateSelector {
+        Self::DuplicateSelector {
             selector: selector.into(),
             existing_provider: existing_provider.into(),
             provider: provider.into(),
-        })
-    }
-
-    /// Returns the registration conflict classification.
-    ///
-    /// # Returns
-    ///
-    /// [`RegistrationErrorKind::DuplicateSelector`].
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> RegistrationErrorKind {
-        RegistrationErrorKind::DuplicateSelector
-    }
-
-    /// Returns the canonical ID or alias that conflicts.
-    ///
-    /// # Returns
-    ///
-    /// The conflicting normalized selector.
-    #[inline(always)]
-    #[must_use]
-    pub fn selector(&self) -> &str {
-        match &self.0 {
-            RegistrationErrorRepr::DuplicateSelector { selector, .. } => {
-                selector
-            }
-        }
-    }
-
-    /// Returns the canonical provider that already owns the selector.
-    ///
-    /// # Returns
-    ///
-    /// The existing provider's canonical ID.
-    #[inline(always)]
-    #[must_use]
-    pub fn existing_provider(&self) -> &str {
-        match &self.0 {
-            RegistrationErrorRepr::DuplicateSelector {
-                existing_provider,
-                ..
-            } => existing_provider,
-        }
-    }
-
-    /// Returns the canonical provider that attempted the conflicting claim.
-    ///
-    /// # Returns
-    ///
-    /// The new provider's canonical ID.
-    #[inline(always)]
-    #[must_use]
-    pub fn provider(&self) -> &str {
-        match &self.0 {
-            RegistrationErrorRepr::DuplicateSelector { provider, .. } => {
-                provider
-            }
         }
     }
 }

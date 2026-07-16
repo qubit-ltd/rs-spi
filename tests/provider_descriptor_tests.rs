@@ -8,7 +8,7 @@
 
 use std::error::Error;
 
-use qubit_spi::error::ProviderDescriptorErrorKind;
+use qubit_spi::error::ProviderDescriptorError;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
@@ -47,8 +47,10 @@ fn test_descriptor_rejects_an_alias_that_duplicates_its_canonical_id() {
     .with_aliases(["file-command"])
     .expect_err("an alias matching the canonical ID should fail");
 
-    assert_eq!(ProviderDescriptorErrorKind::AliasMatchesId, error.kind());
-    assert_eq!(Some("file-command"), error.alias());
+    let ProviderDescriptorError::AliasMatchesId { alias } = error else {
+        panic!("matching alias should retain its dedicated variant");
+    };
+    assert_eq!("file-command", alias.as_ref());
 }
 
 /// Verifies invalid alias position, input, and source diagnostics.
@@ -60,10 +62,17 @@ fn test_descriptor_reports_invalid_alias_with_position_and_source() {
     .with_aliases(["file", "bad alias"])
     .expect_err("invalid alias should fail");
 
-    assert_eq!(ProviderDescriptorErrorKind::InvalidAlias, error.kind());
-    assert_eq!(Some(1), error.alias_index());
-    assert_eq!(Some("bad alias"), error.alias());
     assert!(Error::source(&error).is_some());
+    let ProviderDescriptorError::InvalidAlias {
+        alias_index,
+        alias,
+        source: _,
+    } = error
+    else {
+        panic!("invalid alias should retain position and input");
+    };
+    assert_eq!(1, alias_index);
+    assert_eq!("bad alias", alias.as_ref());
 }
 
 /// Verifies invalid-alias diagnostics for a single-element alias input.
@@ -75,9 +84,14 @@ fn test_descriptor_rejects_a_single_invalid_alias() {
     .with_aliases(["bad alias"])
     .expect_err("invalid alias should fail");
 
-    assert_eq!(ProviderDescriptorErrorKind::InvalidAlias, error.kind());
-    assert_eq!(Some(0), error.alias_index());
-    assert_eq!(Some("bad alias"), error.alias());
+    let ProviderDescriptorError::InvalidAlias {
+        alias_index, alias, ..
+    } = error
+    else {
+        panic!("invalid alias should retain position and input");
+    };
+    assert_eq!(0, alias_index);
+    assert_eq!("bad alias", alias.as_ref());
 }
 
 /// Verifies that normalized duplicate aliases have their own classification.
@@ -89,6 +103,8 @@ fn test_descriptor_distinguishes_duplicate_aliases() {
     .with_aliases([" File ", "file"])
     .expect_err("normalized duplicate aliases should fail");
 
-    assert_eq!(ProviderDescriptorErrorKind::DuplicateAlias, error.kind());
-    assert_eq!(Some("file"), error.alias());
+    let ProviderDescriptorError::DuplicateAlias { alias } = error else {
+        panic!("duplicate aliases should retain their dedicated variant");
+    };
+    assert_eq!("file", alias.as_ref());
 }

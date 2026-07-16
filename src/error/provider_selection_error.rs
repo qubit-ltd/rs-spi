@@ -9,19 +9,28 @@
 
 use thiserror::Error;
 
-use super::internal::ProviderSelectionErrorRepr;
-use super::{
-    ProviderSelectionErrorKind,
-    ProviderSelectorError,
-};
+use super::ProviderSelectorError;
 
 /// Error returned when a provider selection cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error(transparent)]
-pub struct ProviderSelectionError(
-    /// Variant-specific provider selection construction failure.
-    ProviderSelectionErrorRepr,
-);
+pub enum ProviderSelectionError {
+    /// One selector input cannot be parsed.
+    #[error(
+        "invalid provider selector at selection index {selector_index}: {selector_input:?}"
+    )]
+    InvalidSelector {
+        /// Zero-based selector position.
+        selector_index: usize,
+        /// Verbatim invalid selector input.
+        selector_input: Box<str>,
+        /// Selector parsing failure.
+        #[source]
+        source: ProviderSelectorError,
+    },
+    /// A chained selection contains no selector inputs.
+    #[error("provider selection chain must not be empty")]
+    EmptyChain,
+}
 
 impl ProviderSelectionError {
     /// Creates an error for an invalid selection input.
@@ -42,11 +51,11 @@ impl ProviderSelectionError {
         selector_input: &str,
         source: ProviderSelectorError,
     ) -> Self {
-        Self(ProviderSelectionErrorRepr::InvalidSelector {
+        Self::InvalidSelector {
             selector_index,
             selector_input: selector_input.into(),
             source,
-        })
+        }
     }
 
     /// Creates an error for an empty chained selection.
@@ -57,58 +66,6 @@ impl ProviderSelectionError {
     #[inline]
     #[must_use]
     pub(crate) const fn empty_chain() -> Self {
-        Self(ProviderSelectionErrorRepr::EmptyChain)
-    }
-
-    /// Returns the selection construction rule that failed.
-    ///
-    /// # Returns
-    ///
-    /// The invalid-selector or empty-chain classification.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderSelectionErrorKind {
-        match self.0 {
-            ProviderSelectionErrorRepr::InvalidSelector { .. } => {
-                ProviderSelectionErrorKind::InvalidSelector
-            }
-            ProviderSelectionErrorRepr::EmptyChain => {
-                ProviderSelectionErrorKind::EmptyChain
-            }
-        }
-    }
-
-    /// Returns the zero-based invalid selector position.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for invalid selector input, or `None` for an empty chain.
-    #[inline(always)]
-    #[must_use]
-    pub const fn selector_index(&self) -> Option<usize> {
-        match self.0 {
-            ProviderSelectionErrorRepr::InvalidSelector {
-                selector_index,
-                ..
-            } => Some(selector_index),
-            ProviderSelectionErrorRepr::EmptyChain => None,
-        }
-    }
-
-    /// Returns the verbatim invalid selector input.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for invalid selector input, or `None` for an empty chain.
-    #[inline(always)]
-    #[must_use]
-    pub fn selector_input(&self) -> Option<&str> {
-        match &self.0 {
-            ProviderSelectionErrorRepr::InvalidSelector {
-                selector_input,
-                ..
-            } => Some(selector_input),
-            ProviderSelectionErrorRepr::EmptyChain => None,
-        }
+        Self::EmptyChain
     }
 }
