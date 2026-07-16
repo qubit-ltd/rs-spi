@@ -165,10 +165,17 @@ where
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
         let input = selector.as_ref();
-        let selector = ProviderSelector::parse(input).map_err(|source| {
-            ResolutionError::invalid_selector(input, None, source)
-        })?;
-        self.create_named_selector(&selector, config)
+        let selection =
+            ProviderSelection::named(input).map_err(|error| match error {
+                crate::error::ProviderSelectionError::InvalidSelector {
+                    source,
+                    ..
+                } => ResolutionError::invalid_selector(input, None, source),
+                crate::error::ProviderSelectionError::EmptyChain => {
+                    ResolutionError::empty_selection()
+                }
+            })?;
+        self.create(&selection, config)
     }
 
     /// Creates a service through a nonempty sequence of raw selectors.
@@ -199,23 +206,9 @@ where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
-        let mut parsed = Vec::new();
-        for (selector_index, selector) in selectors.into_iter().enumerate() {
-            let input = selector.as_ref();
-            let selector =
-                ProviderSelector::parse(input).map_err(|source| {
-                    ResolutionError::invalid_selector(
-                        input,
-                        Some(selector_index),
-                        source,
-                    )
-                })?;
-            parsed.push(selector);
-        }
-        if parsed.is_empty() {
-            return Err(ResolutionError::empty_selection());
-        }
-        self.create_selector_chain(&parsed, config)
+        let selection = ProviderSelection::chain(selectors)
+            .map_err(ResolutionError::from)?;
+        self.create(&selection, config)
     }
 
     /// Creates a service by trying providers in automatic order.
@@ -251,20 +244,20 @@ where
                 Err(error) => {
                     let provider_id = resolved.descriptor().id().clone();
                     let error_kind = error.kind();
-                    failures.push(AttemptFailure::provider_error(
+                    failures.push(AttemptFailure::from_provider_error(
                         None,
                         provider_id,
                         error,
                     ));
                     if !self.should_continue(error_kind) {
-                        return Err(ResolutionError::no_provider_succeeded(
+                        return Err(ResolutionError::stopped_by_policy(
                             failures,
                         ));
                     }
                 }
             }
         }
-        Err(ResolutionError::no_provider_succeeded(failures))
+        Err(ResolutionError::exhausted(failures))
     }
 
     /// Creates a service through one explicitly selected provider.
@@ -297,8 +290,8 @@ where
         let provider_id = resolved.descriptor().id().clone();
         match resolved.create(config) {
             Ok(service) => Ok(CreatedService::new(provider_id, service)),
-            Err(error) => Err(ResolutionError::no_provider_succeeded(vec![
-                AttemptFailure::provider_error(
+            Err(error) => Err(ResolutionError::exhausted(vec![
+                AttemptFailure::from_provider_error(
                     Some(selector.clone()),
                     provider_id,
                     error,
@@ -351,20 +344,20 @@ where
                 }
                 Err(error) => {
                     let error_kind = error.kind();
-                    failures.push(AttemptFailure::provider_error(
+                    failures.push(AttemptFailure::from_provider_error(
                         Some(selector.clone()),
                         provider_id,
                         error,
                     ));
                     if !self.should_continue(error_kind) {
-                        return Err(ResolutionError::no_provider_succeeded(
+                        return Err(ResolutionError::stopped_by_policy(
                             failures,
                         ));
                     }
                 }
             }
         }
-        Err(ResolutionError::no_provider_succeeded(failures))
+        Err(ResolutionError::exhausted(failures))
     }
 
     /// Determines whether this resolver may fall back after an error kind.

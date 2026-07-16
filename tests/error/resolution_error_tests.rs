@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ResolutionError;
+use qubit_spi::error::{
+    ResolutionError,
+    ResolutionErrorKind,
+};
 use qubit_spi::{
     ProviderRegistry,
     ServiceSpec,
@@ -29,8 +32,20 @@ fn test_resolution_error_exposes_unknown_provider_selector() {
             Err(error) => error,
         };
 
-    let ResolutionError::UnknownProvider { selector } = error else {
+    let ResolutionError::UnknownProvider { selector } = &error else {
         panic!("an empty registry lookup should report an unknown provider");
     };
     assert_eq!("missing", selector.as_str());
+    assert_eq!(ResolutionErrorKind::UnknownProvider, error.kind());
+    assert_eq!(
+        Some("missing"),
+        error.unknown_selector().map(|selector| selector.as_str()),
+    );
+    assert!(error.invalid_selector_input().is_none());
+    assert!(error.invalid_selector_index().is_none());
+    assert!(error.selector_error().is_none());
+    assert!(error.attempts().is_empty());
+    assert!(error.termination().is_none());
+    assert!(error.terminal_attempt().is_none());
+    assert!(error.is_absence());
 }

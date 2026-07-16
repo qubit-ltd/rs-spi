@@ -8,7 +8,7 @@
 
 use qubit_spi::error::{
     ProviderError,
-    RegistrationError,
+    RegistrationErrorKind,
 };
 use qubit_spi::{
     ProviderDescriptor,
@@ -71,12 +71,8 @@ fn test_registration_error_exposes_its_variant_and_conflict_details() {
         )
         .expect_err("duplicate alias should be rejected");
 
-    let RegistrationError::DuplicateSelector {
-        selector,
-        existing_provider,
-        provider,
-    } = error;
-    assert_eq!("en", selector.as_ref());
-    assert_eq!("english", existing_provider.as_ref());
-    assert_eq!("spanish", provider.as_ref());
+    assert_eq!(RegistrationErrorKind::DuplicateSelector, error.kind());
+    assert_eq!("en", error.selector());
+    assert_eq!("english", error.existing_provider());
+    assert_eq!("spanish", error.provider());
 }

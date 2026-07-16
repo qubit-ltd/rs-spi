@@ -9,8 +9,11 @@
 
 use thiserror::Error;
 
+use super::ProviderIdErrorKind;
+
 /// Error returned when a canonical provider ID cannot be constructed.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
 pub enum ProviderIdError {
     /// The supplied provider ID was empty.
     #[error("provider ID must not be empty")]
@@ -58,6 +61,33 @@ impl ProviderIdError {
     pub(crate) fn noncanonical(input: &str) -> Self {
         Self::NonCanonical {
             input: input.into(),
+        }
+    }
+
+    /// Returns this provider ID error's stable classification.
+    ///
+    /// # Returns
+    ///
+    /// The empty or noncanonical classification.
+    #[inline(always)]
+    #[must_use]
+    pub const fn kind(&self) -> ProviderIdErrorKind {
+        match self {
+            Self::Empty { .. } => ProviderIdErrorKind::Empty,
+            Self::NonCanonical { .. } => ProviderIdErrorKind::NonCanonical,
+        }
+    }
+
+    /// Returns the verbatim provider ID input.
+    ///
+    /// # Returns
+    ///
+    /// The input rejected by canonical ID validation.
+    #[inline(always)]
+    #[must_use]
+    pub fn input(&self) -> &str {
+        match self {
+            Self::Empty { input } | Self::NonCanonical { input } => input,
         }
     }
 }

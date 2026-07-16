@@ -12,15 +12,22 @@ use std::{
     fmt,
 };
 
-use crate::ProviderSelector;
+use crate::{
+    ProviderSelector,
+    ResolutionTermination,
+};
 
 use super::{
     AttemptFailure,
+    ProviderErrorKind,
+    ProviderSelectionError,
     ProviderSelectorError,
+    ResolutionErrorKind,
 };
 
 /// Aggregate error returned when provider resolution cannot create a service.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum ResolutionError {
     /// Raw selector input failed normalization or syntax validation.
     InvalidSelector {
@@ -44,6 +51,8 @@ pub enum ResolutionError {
     NoProviderSucceeded {
         /// Attempt diagnostics in encounter order.
         attempts: Box<[AttemptFailure]>,
+        /// Reason candidate traversal ended without a service.
+        termination: ResolutionTermination,
     },
 }
 
@@ -128,13 +137,228 @@ impl ResolutionError {
     /// the internal `NoProviderSucceeded` invariant.
     #[inline]
     #[must_use]
-    pub(crate) fn no_provider_succeeded(attempts: Vec<AttemptFailure>) -> Self {
+    pub(crate) fn exhausted(attempts: Vec<AttemptFailure>) -> Self {
+        Self::no_provider_succeeded(attempts, ResolutionTermination::Exhausted)
+    }
+
+    /// Creates an aggregate error after fallback policy stops traversal.
+    ///
+    /// # Arguments
+    ///
+    /// * `attempts` - Non-empty failures recorded before policy stopped.
+    ///
+    /// # Returns
+    ///
+    /// An aggregate resolution error marked as stopped by policy.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `attempts` is empty.
+    #[inline]
+    #[must_use]
+    pub(crate) fn stopped_by_policy(attempts: Vec<AttemptFailure>) -> Self {
+        Self::no_provider_succeeded(
+            attempts,
+            ResolutionTermination::StoppedByPolicy,
+        )
+    }
+
+    /// Creates an aggregate resolution error with an explicit termination.
+    ///
+    /// # Arguments
+    ///
+    /// * `attempts` - Non-empty failures recorded in encounter order.
+    /// * `termination` - Reason traversal ended without a service.
+    ///
+    /// # Returns
+    ///
+    /// An aggregate resolution error retaining attempts and termination.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `attempts` is empty.
+    fn no_provider_succeeded(
+        attempts: Vec<AttemptFailure>,
+        termination: ResolutionTermination,
+    ) -> Self {
         assert!(
             !attempts.is_empty(),
             "no-provider-succeeded errors require at least one attempt",
         );
         Self::NoProviderSucceeded {
             attempts: attempts.into_boxed_slice(),
+            termination,
+        }
+    }
+
+    /// Returns this resolution error's stable classification.
+    ///
+    /// # Returns
+    ///
+    /// The classification corresponding to the stored error variant.
+    #[inline(always)]
+    #[must_use]
+    pub const fn kind(&self) -> ResolutionErrorKind {
+        match self {
+            Self::InvalidSelector { .. } => {
+                ResolutionErrorKind::InvalidSelector
+            }
+            Self::EmptySelection => ResolutionErrorKind::EmptySelection,
+            Self::UnknownProvider { .. } => {
+                ResolutionErrorKind::UnknownProvider
+            }
+            Self::EmptyRegistry => ResolutionErrorKind::EmptyRegistry,
+            Self::NoProviderSucceeded { .. } => {
+                ResolutionErrorKind::NoProviderSucceeded
+            }
+        }
+    }
+
+    /// Returns verbatim invalid selector input.
+    ///
+    /// # Returns
+    ///
+    /// The invalid input, or `None` for other error classifications.
+    #[inline(always)]
+    #[must_use]
+    pub fn invalid_selector_input(&self) -> Option<&str> {
+        match self {
+            Self::InvalidSelector { input, .. } => Some(input),
+            _ => None,
+        }
+    }
+
+    /// Returns the invalid selector's chain position.
+    ///
+    /// # Returns
+    ///
+    /// The zero-based chain position, or `None` for direct named input and
+    /// non-selector errors.
+    #[inline(always)]
+    #[must_use]
+    pub const fn invalid_selector_index(&self) -> Option<usize> {
+        match self {
+            Self::InvalidSelector { selector_index, .. } => *selector_index,
+            _ => None,
+        }
+    }
+
+    /// Returns the selector parser error retained by invalid input.
+    ///
+    /// # Returns
+    ///
+    /// The parser source, or `None` for other error classifications.
+    #[inline(always)]
+    #[must_use]
+    pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
+        match self {
+            Self::InvalidSelector { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+
+    /// Returns the valid selector that matched no provider.
+    ///
+    /// # Returns
+    ///
+    /// The unknown selector, or `None` for other error classifications.
+    #[inline(always)]
+    #[must_use]
+    pub const fn unknown_selector(&self) -> Option<&ProviderSelector> {
+        match self {
+            Self::UnknownProvider { selector } => Some(selector),
+            _ => None,
+        }
+    }
+
+    /// Returns ordered failed attempts.
+    ///
+    /// # Returns
+    ///
+    /// Aggregate attempts, or an empty slice for non-aggregate errors.
+    #[inline(always)]
+    #[must_use]
+    pub fn attempts(&self) -> &[AttemptFailure] {
+        match self {
+            Self::NoProviderSucceeded { attempts, .. } => attempts,
+            _ => &[],
+        }
+    }
+
+    /// Returns why aggregate candidate traversal ended.
+    ///
+    /// # Returns
+    ///
+    /// The aggregate termination reason, or `None` for non-aggregate errors.
+    #[inline(always)]
+    #[must_use]
+    pub const fn termination(&self) -> Option<ResolutionTermination> {
+        match self {
+            Self::NoProviderSucceeded { termination, .. } => Some(*termination),
+            _ => None,
+        }
+    }
+
+    /// Returns the final recorded attempt.
+    ///
+    /// # Returns
+    ///
+    /// The last aggregate attempt, or `None` when no attempts are stored.
+    #[inline(always)]
+    #[must_use]
+    pub fn terminal_attempt(&self) -> Option<&AttemptFailure> {
+        self.attempts().last()
+    }
+
+    /// Reports whether failure means providers were absent or unavailable.
+    ///
+    /// # Returns
+    ///
+    /// `true` for an unknown direct provider or an aggregate containing only
+    /// unknown, unsupported, or unavailable attempts.
+    #[inline]
+    #[must_use]
+    pub fn is_absence(&self) -> bool {
+        match self {
+            Self::UnknownProvider { .. } => true,
+            Self::NoProviderSucceeded { attempts, .. } => {
+                attempts.iter().all(|attempt| match attempt {
+                    AttemptFailure::UnknownProvider { .. } => true,
+                    AttemptFailure::ProviderError { error, .. } => matches!(
+                        error.kind(),
+                        ProviderErrorKind::Unsupported
+                            | ProviderErrorKind::Unavailable
+                    ),
+                })
+            }
+            _ => false,
+        }
+    }
+}
+
+impl From<ProviderSelectionError> for ResolutionError {
+    /// Converts validated-selection construction failures for resolver use.
+    ///
+    /// # Arguments
+    ///
+    /// * `error` - Selection construction failure to preserve.
+    ///
+    /// # Returns
+    ///
+    /// The corresponding invalid-selector or empty-selection resolution error.
+    #[inline]
+    fn from(error: ProviderSelectionError) -> Self {
+        match error {
+            ProviderSelectionError::InvalidSelector {
+                selector_index,
+                selector_input,
+                source,
+            } => Self::invalid_selector(
+                &selector_input,
+                Some(selector_index),
+                source,
+            ),
+            ProviderSelectionError::EmptyChain => Self::empty_selection(),
         }
     }
 }
@@ -175,12 +399,22 @@ impl fmt::Display for ResolutionError {
             }
             Self::EmptyRegistry => formatter
                 .write_str("cannot resolve a provider from an empty registry"),
-            Self::NoProviderSucceeded { attempts } => {
-                write!(
-                    formatter,
-                    "no provider succeeded after {} attempt(s)",
-                    attempts.len(),
-                )?;
+            Self::NoProviderSucceeded {
+                attempts,
+                termination,
+            } => {
+                match termination {
+                    ResolutionTermination::Exhausted => write!(
+                        formatter,
+                        "no provider succeeded after {} attempt(s)",
+                        attempts.len(),
+                    )?,
+                    ResolutionTermination::StoppedByPolicy => write!(
+                        formatter,
+                        "provider resolution stopped by fallback policy after {} attempt(s)",
+                        attempts.len(),
+                    )?,
+                }
                 for (index, attempt) in attempts.iter().enumerate() {
                     write!(formatter, "; attempt {}: {attempt}", index + 1)?;
                 }
@@ -201,10 +435,12 @@ impl Error for ResolutionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSelector { source, .. } => Some(source),
-            Self::NoProviderSucceeded { attempts } => match attempts.as_ref() {
-                [attempt] => Some(attempt),
-                _ => None,
-            },
+            Self::NoProviderSucceeded { attempts, .. } => {
+                match attempts.as_ref() {
+                    [attempt] => Some(attempt),
+                    _ => None,
+                }
+            }
             Self::EmptySelection
             | Self::UnknownProvider { .. }
             | Self::EmptyRegistry => None,

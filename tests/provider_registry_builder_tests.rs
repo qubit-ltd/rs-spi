@@ -8,10 +8,7 @@
 
 use std::sync::Arc;
 
-use qubit_spi::error::{
-    ProviderError,
-    RegistrationError,
-};
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
@@ -86,14 +83,9 @@ fn test_builder_rejects_a_selector_owned_by_another_provider() {
         )
         .expect_err("duplicate alias should be rejected");
 
-    let RegistrationError::DuplicateSelector {
-        selector,
-        existing_provider,
-        provider,
-    } = &error;
-    assert_eq!("en", selector.as_ref());
-    assert_eq!("english", existing_provider.as_ref());
-    assert_eq!("spanish", provider.as_ref());
+    assert_eq!("en", error.selector());
+    assert_eq!("english", error.existing_provider());
+    assert_eq!("spanish", error.provider());
     assert_eq!(
         "provider selector en claimed by spanish is already owned by english",
         error.to_string(),
@@ -146,14 +138,9 @@ fn test_builder_rejects_a_duplicate_canonical_id_without_mutation() {
         )
         .expect_err("duplicate canonical ID should be rejected");
 
-    let RegistrationError::DuplicateSelector {
-        selector,
-        existing_provider,
-        provider,
-    } = error;
-    assert_eq!("english", selector.as_ref());
-    assert_eq!("english", existing_provider.as_ref());
-    assert_eq!("english", provider.as_ref());
+    assert_eq!("english", error.selector());
+    assert_eq!("english", error.existing_provider());
+    assert_eq!("english", error.provider());
     let registry = builder.build();
     assert_eq!(
         "hello",

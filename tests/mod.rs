@@ -16,5 +16,6 @@ mod provider_registry_tests;
 mod provider_resolver_tests;
 mod provider_selection_tests;
 mod provider_selector_tests;
+mod resolution_termination_tests;
 mod service_provider_tests;
 mod service_spec_tests;

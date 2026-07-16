@@ -8,7 +8,12 @@
 
 use std::error::Error;
 
-use qubit_spi::error::ProviderSelectionError;
+use qubit_spi::error::{
+    ProviderSelectionError,
+    ProviderSelectionErrorKind,
+    ResolutionError,
+    ResolutionErrorKind,
+};
 use qubit_spi::{
     ProviderSelection,
     ProviderSelectionKind,
@@ -57,11 +62,20 @@ fn test_selection_construction_enforces_invariants() {
 
     let empty = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail");
+    assert_eq!(ProviderSelectionErrorKind::EmptyChain, empty.kind());
+    assert!(empty.is_empty_chain());
+    assert!(empty.selector_input().is_none());
+    assert!(empty.selector_error().is_none());
     assert!(Error::source(&empty).is_none());
     assert!(matches!(empty, ProviderSelectionError::EmptyChain));
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
+    assert_eq!(ProviderSelectionErrorKind::InvalidSelector, invalid.kind(),);
+    assert!(!invalid.is_empty_chain());
+    assert_eq!(Some(1), invalid.selector_index());
+    assert_eq!(Some("bad selector"), invalid.selector_input());
+    assert!(invalid.selector_error().is_some());
     assert!(Error::source(&invalid).is_some());
     let ProviderSelectionError::InvalidSelector {
         selector_index,
@@ -92,4 +106,22 @@ fn test_invalid_named_selection_preserves_input_and_source() {
     };
     assert_eq!(0, selector_index);
     assert_eq!("bad selector", selector_input.as_ref());
+}
+
+/// Verifies selection-construction failures convert into resolution failures.
+#[test]
+fn test_selection_error_converts_to_resolution_error() {
+    let invalid: ResolutionError =
+        ProviderSelection::chain(["valid", "bad selector"])
+            .expect_err("invalid chain selector should fail")
+            .into();
+    assert_eq!(ResolutionErrorKind::InvalidSelector, invalid.kind());
+    assert_eq!(Some("bad selector"), invalid.invalid_selector_input());
+    assert_eq!(Some(1), invalid.invalid_selector_index());
+    assert!(invalid.selector_error().is_some());
+
+    let empty: ResolutionError = ProviderSelection::chain(Vec::<&str>::new())
+        .expect_err("empty chain should fail")
+        .into();
+    assert_eq!(ResolutionErrorKind::EmptySelection, empty.kind());
 }

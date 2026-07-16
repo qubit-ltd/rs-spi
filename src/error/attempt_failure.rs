@@ -17,10 +17,12 @@ use crate::{
     ProviderSelector,
 };
 
+use super::AttemptFailureKind;
 use super::ProviderError;
 
 /// Diagnostic record for one candidate that could not produce a service.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum AttemptFailure {
     /// Selector lookup reached no provider.
     UnknownProvider {
@@ -70,7 +72,7 @@ impl AttemptFailure {
     /// A resolver-owned provider failure retaining the original error.
     #[inline]
     #[must_use]
-    pub(crate) fn provider_error(
+    pub(crate) fn from_provider_error(
         requested_selector: Option<ProviderSelector>,
         provider_id: ProviderId,
         error: ProviderError,
@@ -79,6 +81,72 @@ impl AttemptFailure {
             requested_selector,
             provider_id,
             error,
+        }
+    }
+
+    /// Returns this attempt's stable classification.
+    ///
+    /// # Returns
+    ///
+    /// The lookup or provider-error classification.
+    #[inline(always)]
+    #[must_use]
+    pub const fn kind(&self) -> AttemptFailureKind {
+        match self {
+            Self::UnknownProvider { .. } => AttemptFailureKind::UnknownProvider,
+            Self::ProviderError { .. } => AttemptFailureKind::ProviderError,
+        }
+    }
+
+    /// Returns the selector requested for this attempt.
+    ///
+    /// # Returns
+    ///
+    /// The explicit selector for lookup and named/chained provider attempts,
+    /// or `None` for automatic provider attempts.
+    #[inline(always)]
+    #[must_use]
+    pub const fn requested_selector(&self) -> Option<&ProviderSelector> {
+        match self {
+            Self::UnknownProvider { requested_selector }
+            | Self::ProviderError {
+                requested_selector: Some(requested_selector),
+                ..
+            } => Some(requested_selector),
+            Self::ProviderError {
+                requested_selector: None,
+                ..
+            } => None,
+        }
+    }
+
+    /// Returns the provider reached by this attempt.
+    ///
+    /// # Returns
+    ///
+    /// The canonical provider ID for provider failures, or `None` when lookup
+    /// reached no provider.
+    #[inline(always)]
+    #[must_use]
+    pub const fn provider_id(&self) -> Option<&ProviderId> {
+        match self {
+            Self::ProviderError { provider_id, .. } => Some(provider_id),
+            Self::UnknownProvider { .. } => None,
+        }
+    }
+
+    /// Returns the error reported by the attempted provider.
+    ///
+    /// # Returns
+    ///
+    /// The classified provider error, or `None` when lookup reached no
+    /// provider.
+    #[inline(always)]
+    #[must_use]
+    pub const fn provider_error(&self) -> Option<&ProviderError> {
+        match self {
+            Self::ProviderError { error, .. } => Some(error),
+            Self::UnknownProvider { .. } => None,
         }
     }
 }

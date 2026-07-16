@@ -8,6 +8,7 @@
 
 use qubit_spi::error::{
     AttemptFailure,
+    AttemptFailureKind,
     ProviderError,
     ProviderErrorKind,
     ResolutionError,
@@ -82,7 +83,7 @@ fn test_attempt_failure_preserves_provider_error_source() {
         .and_then(|source| source.downcast_ref::<AttemptFailure>())
         .expect("a single failed attempt should be the aggregate source");
     assert!(std::error::Error::source(aggregate_source).is_some());
-    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+    let ResolutionError::NoProviderSucceeded { attempts, .. } = error else {
         panic!("one provider failure should produce an aggregate error");
     };
     let [attempt] = attempts.as_ref() else {
@@ -111,6 +112,19 @@ fn test_attempt_failure_preserves_provider_error_source() {
     assert_eq!(ProviderErrorKind::Unavailable, error.kind());
     assert_eq!("file executable is absent", error.reason());
     assert!(std::error::Error::source(error).is_some());
+    assert_eq!(AttemptFailureKind::ProviderError, attempt.kind());
+    assert_eq!(
+        Some("file-command"),
+        attempt.requested_selector().map(ProviderSelector::as_str),
+    );
+    assert_eq!(
+        Some("file-command"),
+        attempt.provider_id().map(ProviderId::as_str),
+    );
+    assert_eq!(
+        Some(ProviderErrorKind::Unavailable),
+        attempt.provider_error().map(ProviderError::kind),
+    );
 }
 
 /// Verifies that an unresolved chain selector uses the unknown-provider
@@ -124,7 +138,7 @@ fn test_unknown_attempt_exposes_requested_selector() {
     let error = resolver
         .create_chain(["missing"], &())
         .expect_err("the empty registry cannot resolve the selector");
-    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+    let ResolutionError::NoProviderSucceeded { attempts, .. } = error else {
         panic!("one unknown selector should produce an aggregate error");
     };
     let [attempt] = attempts.as_ref() else {
@@ -137,6 +151,13 @@ fn test_unknown_attempt_exposes_requested_selector() {
     };
 
     assert_eq!("missing", requested_selector.as_str());
+    assert_eq!(AttemptFailureKind::UnknownProvider, attempt.kind());
+    assert_eq!(
+        Some("missing"),
+        attempt.requested_selector().map(ProviderSelector::as_str),
+    );
+    assert!(attempt.provider_id().is_none());
+    assert!(attempt.provider_error().is_none());
 }
 
 /// Verifies automatic provider attempts omit explicit selector context.
@@ -145,7 +166,7 @@ fn test_automatic_attempt_omits_requested_selector() {
     let error = create_failing_resolver()
         .create_auto(&())
         .expect_err("the test provider always fails");
-    let ResolutionError::NoProviderSucceeded { attempts } = error else {
+    let ResolutionError::NoProviderSucceeded { attempts, .. } = error else {
         panic!("automatic provider failure should produce an aggregate error");
     };
     let [attempt] = attempts.as_ref() else {
