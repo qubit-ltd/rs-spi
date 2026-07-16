@@ -378,7 +378,9 @@ fn test_chain_records_unknown_selectors_and_deduplicates_provider_aliases() {
         panic!("an exhausted chain should produce an aggregate error");
     };
     let [
-        AttemptFailure::UnknownProvider { requested_selector },
+        AttemptFailure::UnknownProvider {
+            requested_selector, ..
+        },
         AttemptFailure::ProviderError { provider_id, .. },
     ] = failures.as_ref()
     else {
@@ -554,7 +556,7 @@ fn test_raw_named_resolution_reports_an_unknown_provider() {
         Err(error) => error,
     };
 
-    let ResolutionError::UnknownProvider { selector } = &error else {
+    let ResolutionError::UnknownProvider { selector, .. } = &error else {
         panic!("unknown input should produce an unknown-provider error");
     };
     assert_eq!("missing", selector.as_str());

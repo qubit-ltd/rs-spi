@@ -19,6 +19,7 @@ use super::ProviderSelectorError;
 #[non_exhaustive]
 pub enum ProviderSelectionError {
     /// One selector input cannot be parsed.
+    #[non_exhaustive]
     InvalidSelector {
         /// Zero-based selector position, or `None` for a named selection.
         selector_index: Option<usize>,

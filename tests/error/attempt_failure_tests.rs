@@ -98,6 +98,7 @@ fn test_attempt_failure_preserves_provider_error_source() {
         requested_selector,
         provider_id,
         error,
+        ..
     } = attempt
     else {
         panic!("named resolution should retain a provider failure");
@@ -132,7 +133,10 @@ fn test_unknown_attempt_exposes_requested_selector() {
     };
     assert!(std::error::Error::source(attempt).is_none());
     assert_eq!("unknown provider: missing", attempt.to_string());
-    let AttemptFailure::UnknownProvider { requested_selector } = attempt else {
+    let AttemptFailure::UnknownProvider {
+        requested_selector, ..
+    } = attempt
+    else {
         panic!("unknown selector should retain a lookup failure");
     };
 

@@ -14,12 +14,14 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum ProviderIdError {
     /// The supplied provider ID was empty.
+    #[non_exhaustive]
     #[error("provider ID must not be empty")]
     Empty {
         /// Verbatim empty input retained for diagnostics.
         input: Box<str>,
     },
     /// The supplied provider ID violated canonical syntax.
+    #[non_exhaustive]
     #[error("provider ID is not canonical: {input}")]
     NonCanonical {
         /// Verbatim noncanonical input retained for diagnostics.

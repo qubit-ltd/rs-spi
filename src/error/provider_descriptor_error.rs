@@ -19,6 +19,7 @@ use super::ProviderSelectorError;
 #[non_exhaustive]
 pub enum ProviderDescriptorError {
     /// An alias cannot be parsed as a selector.
+    #[non_exhaustive]
     InvalidAlias {
         /// Zero-based position of the invalid alias.
         alias_index: usize,
@@ -26,11 +27,13 @@ pub enum ProviderDescriptorError {
         source: ProviderSelectorError,
     },
     /// Two aliases normalize to the same selector.
+    #[non_exhaustive]
     DuplicateAlias {
         /// Normalized duplicate alias.
         alias: Box<str>,
     },
     /// An alias normalizes to the canonical provider ID.
+    #[non_exhaustive]
     AliasMatchesId {
         /// Normalized alias matching the canonical ID.
         alias: Box<str>,

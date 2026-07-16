@@ -24,11 +24,13 @@ use super::ProviderError;
 #[non_exhaustive]
 pub enum AttemptFailure {
     /// Selector lookup reached no provider.
+    #[non_exhaustive]
     UnknownProvider {
         /// Normalized selector retained from the request.
         requested_selector: ProviderSelector,
     },
     /// A provider factory returned a classified error.
+    #[non_exhaustive]
     ProviderError {
         /// Explicit selector, or `None` for automatic selection.
         requested_selector: Option<ProviderSelector>,

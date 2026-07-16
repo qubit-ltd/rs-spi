@@ -50,7 +50,7 @@ fn test_selector_errors_preserve_raw_and_normalized_input() {
     let empty =
         ProviderSelector::parse("  ").expect_err("blank selector should fail");
     assert_eq!("  ", empty.input());
-    let ProviderSelectorError::Empty { input } = empty else {
+    let ProviderSelectorError::Empty { input, .. } = empty else {
         panic!("blank selector should retain the empty variant");
     };
     assert_eq!("  ", input.as_ref());
@@ -58,7 +58,10 @@ fn test_selector_errors_preserve_raw_and_normalized_input() {
     let invalid = ProviderSelector::parse(" Bad Selector ")
         .expect_err("selector containing a space should fail");
     assert_eq!(" Bad Selector ", invalid.input());
-    let ProviderSelectorError::Invalid { input, normalized } = invalid else {
+    let ProviderSelectorError::Invalid {
+        input, normalized, ..
+    } = invalid
+    else {
         panic!("invalid selector should retain both representations");
     };
     assert_eq!(" Bad Selector ", input.as_ref());

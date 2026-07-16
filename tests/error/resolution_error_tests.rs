@@ -29,7 +29,7 @@ fn test_resolution_error_exposes_unknown_provider_selector() {
             Err(error) => error,
         };
 
-    let ResolutionError::UnknownProvider { selector } = &error else {
+    let ResolutionError::UnknownProvider { selector, .. } = &error else {
         panic!("an empty registry lookup should report an unknown provider");
     };
     assert_eq!("missing", selector.as_str());

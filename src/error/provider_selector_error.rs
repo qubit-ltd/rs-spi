@@ -14,12 +14,14 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum ProviderSelectorError {
     /// Trimming the input produced an empty selector.
+    #[non_exhaustive]
     #[error("provider selector must not be empty")]
     Empty {
         /// Verbatim selector input.
         input: Box<str>,
     },
     /// The normalized selector violated selector syntax.
+    #[non_exhaustive]
     #[error(
         "invalid provider selector {input:?} (normalized as {normalized:?})"
     )]

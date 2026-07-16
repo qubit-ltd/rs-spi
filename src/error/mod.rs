@@ -8,30 +8,35 @@
 //! Errors and diagnostics produced by provider validation, registration, and
 //! resolution.
 //!
-//! # Removed parallel error classifications
+//! Match validation failures directly and retain a wildcard arm for future
+//! variants:
 //!
-//! Validation and registration errors are matched directly. The former
-//! parallel Kind types are intentionally unavailable:
+//! ```rust
+//! use qubit_spi::ProviderSelector;
+//! use qubit_spi::error::ProviderSelectorError;
+//!
+//! let error = ProviderSelector::parse("bad selector")
+//!     .expect_err("the selector contains whitespace");
+//! match error {
+//!     ProviderSelectorError::Invalid { normalized, .. } => {
+//!         assert_eq!("bad selector", normalized.as_ref());
+//!     }
+//!     ProviderSelectorError::Empty { .. } => unreachable!(),
+//!     _ => {}
+//! }
+//! ```
+//!
+//! Error values with correlated fields are produced by this crate rather than
+//! assembled downstream:
 //!
 //! ```compile_fail
-//! use qubit_spi::error::ProviderDescriptorErrorKind;
-//! # fn main() {}
-//! ```
-//! ```compile_fail
-//! use qubit_spi::error::ProviderIdErrorKind;
-//! # fn main() {}
-//! ```
-//! ```compile_fail
-//! use qubit_spi::error::ProviderSelectionErrorKind;
-//! # fn main() {}
-//! ```
-//! ```compile_fail
-//! use qubit_spi::error::ProviderSelectorErrorKind;
-//! # fn main() {}
-//! ```
-//! ```compile_fail
-//! use qubit_spi::error::RegistrationErrorKind;
-//! # fn main() {}
+//! use qubit_spi::error::ResolutionError;
+//! use qubit_spi::ResolutionTermination;
+//!
+//! let _ = ResolutionError::NoProviderSucceeded {
+//!     attempts: Box::new([]),
+//!     termination: ResolutionTermination::Exhausted,
+//! };
 //! ```
 
 mod attempt_failure;

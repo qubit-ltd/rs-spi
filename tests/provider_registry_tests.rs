@@ -116,7 +116,7 @@ fn test_registry_reports_unknown_provider() {
         Err(error) => error,
     };
 
-    let ResolutionError::UnknownProvider { selector } = &error else {
+    let ResolutionError::UnknownProvider { selector, .. } = &error else {
         panic!("missing provider should produce an unknown-provider error");
     };
     assert_eq!("missing", selector.as_str());

@@ -90,6 +90,7 @@ fn test_builder_rejects_a_selector_owned_by_another_provider() {
         selector,
         existing_provider,
         provider,
+        ..
     } = &error
     else {
         panic!("expected a duplicate selector error");
@@ -153,6 +154,7 @@ fn test_builder_rejects_a_duplicate_canonical_id_without_mutation() {
         selector,
         existing_provider,
         provider,
+        ..
     } = &error
     else {
         panic!("expected a duplicate selector error");

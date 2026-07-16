@@ -14,6 +14,7 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum RegistrationError {
     /// A selector is already owned by a registered provider.
+    #[non_exhaustive]
     #[error(
         "provider selector {selector} claimed by {provider} is already owned by {existing_provider}"
     )]

@@ -48,7 +48,7 @@ fn test_descriptor_rejects_an_alias_that_duplicates_its_canonical_id() {
     .expect_err("an alias matching the canonical ID should fail");
 
     assert_eq!("file-command", error.alias());
-    let ProviderDescriptorError::AliasMatchesId { alias } = error else {
+    let ProviderDescriptorError::AliasMatchesId { alias, .. } = error else {
         panic!("matching alias should retain its dedicated variant");
     };
     assert_eq!("file-command", alias.as_ref());
@@ -109,7 +109,7 @@ fn test_descriptor_distinguishes_duplicate_aliases() {
     .expect_err("normalized duplicate aliases should fail");
 
     assert_eq!("file", error.alias());
-    let ProviderDescriptorError::DuplicateAlias { alias } = error else {
+    let ProviderDescriptorError::DuplicateAlias { alias, .. } = error else {
         panic!("duplicate aliases should retain their dedicated variant");
     };
     assert_eq!("file", alias.as_ref());

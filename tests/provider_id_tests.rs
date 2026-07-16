@@ -43,7 +43,7 @@ fn test_provider_id_supports_standard_string_traits() {
 fn test_provider_id_reports_empty_and_noncanonical_input() {
     let empty = ProviderId::new("").expect_err("empty ID should fail");
     assert_eq!("", empty.input());
-    let ProviderIdError::Empty { input } = empty else {
+    let ProviderIdError::Empty { input, .. } = empty else {
         panic!("empty ID should retain the empty variant");
     };
     assert_eq!("", input.as_ref());
@@ -63,7 +63,7 @@ fn test_provider_id_reports_empty_and_noncanonical_input() {
         let error =
             ProviderId::new(input).expect_err("noncanonical ID should fail");
         assert_eq!(input, error.input());
-        let ProviderIdError::NonCanonical { input: actual } = error else {
+        let ProviderIdError::NonCanonical { input: actual, .. } = error else {
             panic!("noncanonical ID should retain its input");
         };
         assert_eq!(input, actual.as_ref());

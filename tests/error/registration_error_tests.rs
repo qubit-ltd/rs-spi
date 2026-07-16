@@ -75,6 +75,7 @@ fn test_registration_error_exposes_its_variant_and_conflict_details() {
         selector,
         existing_provider,
         provider,
+        ..
     } = error
     else {
         panic!("registration conflict should retain all selector owners");

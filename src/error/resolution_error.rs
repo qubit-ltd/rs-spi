@@ -29,6 +29,7 @@ use super::{
 #[non_exhaustive]
 pub enum ResolutionError {
     /// Raw selector input failed normalization or syntax validation.
+    #[non_exhaustive]
     InvalidSelector {
         /// Zero-based chain position, or `None` for direct named selection.
         selector_index: Option<usize>,
@@ -38,6 +39,7 @@ pub enum ResolutionError {
     /// A raw chained selection contained no selectors.
     EmptySelection,
     /// A valid normalized selector matched no registry entry.
+    #[non_exhaustive]
     UnknownProvider {
         /// Normalized selector that matched no provider.
         selector: ProviderSelector,
@@ -45,6 +47,7 @@ pub enum ResolutionError {
     /// Automatic selection was requested from an empty registry.
     EmptyRegistry,
     /// Every considered candidate failed or resolution stopped by policy.
+    #[non_exhaustive]
     NoProviderSucceeded {
         /// Attempt diagnostics in encounter order.
         attempts: Box<[AttemptFailure]>,
