@@ -44,8 +44,7 @@ impl ProviderId {
     ///
     /// Returns [`ProviderIdError`] when `value` is empty or noncanonical.
     #[inline]
-    pub fn new(value: impl AsRef<str>) -> Result<Self, ProviderIdError> {
-        let value = value.as_ref();
+    pub fn new(value: &str) -> Result<Self, ProviderIdError> {
         if value.is_empty() {
             return Err(ProviderIdError::empty(value));
         }

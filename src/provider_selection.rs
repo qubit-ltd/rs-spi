@@ -105,11 +105,8 @@ impl ProviderSelection {
     /// Returns [`ProviderSelectionError`] when `value` cannot form a valid
     /// selector.
     #[inline]
-    pub fn named(
-        value: impl AsRef<str>,
-    ) -> Result<Self, ProviderSelectionError> {
-        let input = value.as_ref();
-        let selector = ProviderSelector::parse(input).map_err(|source| {
+    pub fn named(value: &str) -> Result<Self, ProviderSelectionError> {
+        let selector = ProviderSelector::parse(value).map_err(|source| {
             ProviderSelectionError::invalid_selector(None, source)
         })?;
         Ok(Self(ProviderSelectionRepr::Named(selector)))

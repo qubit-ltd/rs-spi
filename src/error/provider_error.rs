@@ -45,7 +45,7 @@ impl ProviderError {
     /// An error classified as [`ProviderErrorKind::Unsupported`].
     #[inline(always)]
     #[must_use]
-    pub fn unsupported(reason: impl AsRef<str>) -> Self {
+    pub fn unsupported(reason: impl Into<Box<str>>) -> Self {
         Self::new(ProviderErrorKind::Unsupported, reason)
     }
 
@@ -62,7 +62,7 @@ impl ProviderError {
     #[inline(always)]
     #[must_use]
     pub fn unsupported_with_source(
-        reason: impl AsRef<str>,
+        reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
         Self::with_source(ProviderErrorKind::Unsupported, reason, source)
@@ -79,7 +79,7 @@ impl ProviderError {
     /// An error classified as [`ProviderErrorKind::Unavailable`].
     #[inline(always)]
     #[must_use]
-    pub fn unavailable(reason: impl AsRef<str>) -> Self {
+    pub fn unavailable(reason: impl Into<Box<str>>) -> Self {
         Self::new(ProviderErrorKind::Unavailable, reason)
     }
 
@@ -96,7 +96,7 @@ impl ProviderError {
     #[inline(always)]
     #[must_use]
     pub fn unavailable_with_source(
-        reason: impl AsRef<str>,
+        reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
         Self::with_source(ProviderErrorKind::Unavailable, reason, source)
@@ -113,7 +113,7 @@ impl ProviderError {
     /// An error classified as [`ProviderErrorKind::InvalidConfiguration`].
     #[inline(always)]
     #[must_use]
-    pub fn invalid_configuration(reason: impl AsRef<str>) -> Self {
+    pub fn invalid_configuration(reason: impl Into<Box<str>>) -> Self {
         Self::new(ProviderErrorKind::InvalidConfiguration, reason)
     }
 
@@ -130,7 +130,7 @@ impl ProviderError {
     #[inline(always)]
     #[must_use]
     pub fn invalid_configuration_with_source(
-        reason: impl AsRef<str>,
+        reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
         Self::with_source(
@@ -151,7 +151,7 @@ impl ProviderError {
     /// An error classified as [`ProviderErrorKind::InitializationFailed`].
     #[inline(always)]
     #[must_use]
-    pub fn initialization_failed(reason: impl AsRef<str>) -> Self {
+    pub fn initialization_failed(reason: impl Into<Box<str>>) -> Self {
         Self::new(ProviderErrorKind::InitializationFailed, reason)
     }
 
@@ -168,7 +168,7 @@ impl ProviderError {
     #[inline(always)]
     #[must_use]
     pub fn initialization_failed_with_source(
-        reason: impl AsRef<str>,
+        reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
         Self::with_source(
@@ -189,10 +189,10 @@ impl ProviderError {
     ///
     /// The classified provider error.
     #[inline]
-    fn new(kind: ProviderErrorKind, reason: impl AsRef<str>) -> Self {
+    fn new(kind: ProviderErrorKind, reason: impl Into<Box<str>>) -> Self {
         Self {
             kind,
-            reason: reason.as_ref().into(),
+            reason: reason.into(),
             source: None,
         }
     }
@@ -211,12 +211,12 @@ impl ProviderError {
     #[inline]
     fn with_source(
         kind: ProviderErrorKind,
-        reason: impl AsRef<str>,
+        reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> Self {
         Self {
             kind,
-            reason: reason.as_ref().into(),
+            reason: reason.into(),
             source: Some(Arc::new(source)),
         }
     }

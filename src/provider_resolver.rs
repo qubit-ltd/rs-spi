@@ -168,7 +168,7 @@ where
     #[inline]
     pub fn create_named(
         &self,
-        selector: impl AsRef<str>,
+        selector: &str,
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
         let selector = ProviderSelector::parse(selector).map_err(|source| {

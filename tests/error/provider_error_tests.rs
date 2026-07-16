@@ -24,6 +24,18 @@ fn test_provider_error_preserves_kind_reason_and_source() {
     assert!(std::error::Error::source(&error).is_some());
 }
 
+/// Verifies an already owned reason is transferred without copying.
+#[test]
+fn test_provider_error_transfers_an_owned_reason() {
+    let reason: Box<str> = "owned provider reason".into();
+    let reason_pointer = reason.as_ptr();
+
+    let error = ProviderError::unavailable(reason);
+
+    assert_eq!(reason_pointer, error.reason().as_ptr());
+    assert_eq!("owned provider reason", error.reason());
+}
+
 /// Verifies initialization failures retain their original causal error.
 #[test]
 fn test_initialization_failure_preserves_its_source() {

@@ -82,7 +82,7 @@ where
     #[inline]
     pub fn resolve(
         &self,
-        selector: impl AsRef<str>,
+        selector: &str,
     ) -> Result<ResolvedProvider<'_, S>, ResolutionError> {
         let selector = ProviderSelector::parse(selector).map_err(|source| {
             ResolutionError::invalid_selector(None, source)
@@ -103,10 +103,7 @@ where
     /// input.
     #[inline]
     #[must_use]
-    pub fn find(
-        &self,
-        selector: impl AsRef<str>,
-    ) -> Option<ResolvedProvider<'_, S>> {
+    pub fn find(&self, selector: &str) -> Option<ResolvedProvider<'_, S>> {
         ProviderSelector::parse(selector)
             .ok()
             .and_then(|selector| self.resolve_selector(&selector))

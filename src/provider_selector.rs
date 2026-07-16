@@ -52,10 +52,8 @@ impl ProviderSelector {
     /// and retain the optimization only when the measurements show a material
     /// benefit.
     #[inline]
-    pub fn parse(
-        value: impl AsRef<str>,
-    ) -> Result<Self, ProviderSelectorError> {
-        let input = value.as_ref();
+    pub fn parse(value: &str) -> Result<Self, ProviderSelectorError> {
+        let input = value;
         let normalized = input.trim().to_ascii_lowercase();
         if normalized.is_empty() {
             return Err(ProviderSelectorError::empty(input));
