@@ -10,6 +10,7 @@
 use std::{
     fmt,
     str::FromStr,
+    sync::Arc,
 };
 
 use crate::error::ProviderIdError;
@@ -20,8 +21,8 @@ use crate::error::ProviderIdError;
 /// selector, an ID must already be canonical and is never normalized.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ProviderId(
-    /// Canonical ASCII identifier text.
-    Box<str>,
+    /// Shared canonical ASCII identifier text.
+    Arc<str>,
 );
 
 impl ProviderId {
@@ -51,7 +52,7 @@ impl ProviderId {
         if !is_canonical_token(value) {
             return Err(ProviderIdError::noncanonical(value));
         }
-        Ok(Self(value.into()))
+        Ok(Self(Arc::from(value)))
     }
 
     /// Returns the canonical identifier text.
