@@ -67,14 +67,13 @@ fn test_descriptor_reports_invalid_alias_with_position_and_source() {
     assert!(Error::source(&error).is_some());
     let ProviderDescriptorError::InvalidAlias {
         alias_index,
-        alias,
         source,
+        ..
     } = error
     else {
         panic!("invalid alias should retain position and input");
     };
     assert_eq!(1, alias_index);
-    assert_eq!("bad alias", alias.as_ref());
     assert_eq!("bad alias", source.input());
 }
 
@@ -87,14 +86,17 @@ fn test_descriptor_rejects_a_single_invalid_alias() {
     .with_aliases(["bad alias"])
     .expect_err("invalid alias should fail");
 
+    assert_eq!("bad alias", error.alias());
     let ProviderDescriptorError::InvalidAlias {
-        alias_index, alias, ..
+        alias_index,
+        source,
+        ..
     } = error
     else {
         panic!("invalid alias should retain position and input");
     };
     assert_eq!(0, alias_index);
-    assert_eq!("bad alias", alias.as_ref());
+    assert_eq!("bad alias", source.input());
 }
 
 /// Verifies that normalized duplicate aliases have their own classification.

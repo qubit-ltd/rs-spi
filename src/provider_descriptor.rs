@@ -161,7 +161,6 @@ fn normalize_aliases(
             Err(source) => {
                 return Err(ProviderDescriptorError::invalid_alias(
                     alias_index,
-                    &input,
                     source,
                 ));
             }

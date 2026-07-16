@@ -66,36 +66,43 @@ fn test_selection_construction_enforces_invariants() {
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
     assert!(Error::source(&invalid).is_some());
+    assert_eq!(
+        "invalid provider selector at selection index 1: \"bad selector\"",
+        invalid.to_string(),
+    );
     let ProviderSelectionError::InvalidSelector {
         selector_index,
-        selector_input,
         source,
+        ..
     } = invalid
     else {
         panic!("invalid chain selector should retain its context");
     };
-    assert_eq!(1, selector_index);
-    assert_eq!("bad selector", selector_input.as_ref());
+    assert_eq!(Some(1), selector_index);
     assert_eq!("bad selector", source.input());
 }
 
-/// Verifies invalid named selections report position zero and retain a source.
+/// Verifies invalid named selections omit a position and retain their source.
 #[test]
 fn test_invalid_named_selection_preserves_input_and_source() {
     let error = ProviderSelection::named("bad selector")
         .expect_err("invalid named selector should fail");
 
     assert!(Error::source(&error).is_some());
+    assert_eq!(
+        "invalid provider selector \"bad selector\"",
+        error.to_string(),
+    );
     let ProviderSelectionError::InvalidSelector {
         selector_index,
-        selector_input,
-        source: _,
+        source,
+        ..
     } = error
     else {
         panic!("invalid named selector should retain its context");
     };
-    assert_eq!(0, selector_index);
-    assert_eq!("bad selector", selector_input.as_ref());
+    assert_eq!(None, selector_index);
+    assert_eq!("bad selector", source.input());
 }
 
 /// Verifies selection-construction failures convert into resolution failures.
@@ -106,15 +113,29 @@ fn test_selection_error_converts_to_resolution_error() {
             .expect_err("invalid chain selector should fail")
             .into();
     let ResolutionError::InvalidSelector {
-        input,
         selector_index,
-        source: _,
+        source,
+        ..
     } = invalid
     else {
         panic!("invalid selection should retain its resolution context");
     };
-    assert_eq!("bad selector", input.as_ref());
     assert_eq!(Some(1), selector_index);
+    assert_eq!("bad selector", source.input());
+
+    let named: ResolutionError = ProviderSelection::named("bad selector")
+        .expect_err("invalid named selector should fail")
+        .into();
+    let ResolutionError::InvalidSelector {
+        selector_index,
+        source,
+        ..
+    } = named
+    else {
+        panic!("invalid named selection should retain its resolution context");
+    };
+    assert_eq!(None, selector_index);
+    assert_eq!("bad selector", source.input());
 
     let empty: ResolutionError = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail")

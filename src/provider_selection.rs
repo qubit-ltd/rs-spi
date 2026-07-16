@@ -110,7 +110,7 @@ impl ProviderSelection {
     ) -> Result<Self, ProviderSelectionError> {
         let input = value.as_ref();
         let selector = ProviderSelector::parse(input).map_err(|source| {
-            ProviderSelectionError::invalid_selector(0, input, source)
+            ProviderSelectionError::invalid_selector(None, source)
         })?;
         Ok(Self(ProviderSelectionRepr::Named(selector)))
     }
@@ -140,8 +140,7 @@ impl ProviderSelection {
             let selector =
                 ProviderSelector::parse(input).map_err(|source| {
                     ProviderSelectionError::invalid_selector(
-                        selector_index,
-                        input,
+                        Some(selector_index),
                         source,
                     )
                 })?;

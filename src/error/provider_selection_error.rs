@@ -7,29 +7,25 @@
 // =============================================================================
 //! Errors raised while constructing provider selections.
 
-use thiserror::Error;
+use std::{
+    error::Error,
+    fmt,
+};
 
 use super::ProviderSelectorError;
 
 /// Error returned when a provider selection cannot be constructed.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderSelectionError {
     /// One selector input cannot be parsed.
-    #[error(
-        "invalid provider selector at selection index {selector_index}: {selector_input:?}"
-    )]
     InvalidSelector {
-        /// Zero-based selector position.
-        selector_index: usize,
-        /// Verbatim invalid selector input.
-        selector_input: Box<str>,
-        /// Selector parsing failure.
-        #[source]
+        /// Zero-based selector position, or `None` for a named selection.
+        selector_index: Option<usize>,
+        /// Selector parsing failure owning the verbatim input.
         source: ProviderSelectorError,
     },
     /// A chained selection contains no selector inputs.
-    #[error("provider selection chain must not be empty")]
     EmptyChain,
 }
 
@@ -38,8 +34,8 @@ impl ProviderSelectionError {
     ///
     /// # Arguments
     ///
-    /// * `selector_index` - Zero-based selector position.
-    /// * `selector_input` - Verbatim invalid selector input.
+    /// * `selector_index` - Zero-based selector position, or `None` for a named
+    ///   selection.
     /// * `source` - Selector parsing error that rejected the input.
     ///
     /// # Returns
@@ -48,13 +44,11 @@ impl ProviderSelectionError {
     #[inline]
     #[must_use]
     pub(crate) fn invalid_selector(
-        selector_index: usize,
-        selector_input: &str,
+        selector_index: Option<usize>,
         source: ProviderSelectorError,
     ) -> Self {
         Self::InvalidSelector {
             selector_index,
-            selector_input: selector_input.into(),
             source,
         }
     }
@@ -68,5 +62,58 @@ impl ProviderSelectionError {
     #[must_use]
     pub(crate) const fn empty_chain() -> Self {
         Self::EmptyChain
+    }
+}
+
+impl fmt::Display for ProviderSelectionError {
+    /// Formats the selection construction failure.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidSelector {
+                selector_index,
+                source,
+            } => match selector_index {
+                Some(index) => write!(
+                    formatter,
+                    "invalid provider selector at selection index {index}: {:?}",
+                    source.input(),
+                ),
+                None => write!(
+                    formatter,
+                    "invalid provider selector {:?}",
+                    source.input(),
+                ),
+            },
+            Self::EmptyChain => formatter
+                .write_str("provider selection chain must not be empty"),
+        }
+    }
+}
+
+impl Error for ProviderSelectionError {
+    /// Returns the selector parsing failure when one is available.
+    ///
+    /// # Returns
+    ///
+    /// The selector parsing source for invalid input, or `None` for an empty
+    /// chain.
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::InvalidSelector { source, .. } => Some(source),
+            Self::EmptyChain => None,
+        }
     }
 }

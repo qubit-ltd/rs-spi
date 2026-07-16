@@ -84,9 +84,8 @@ where
         &self,
         selector: impl AsRef<str>,
     ) -> Result<ResolvedProvider<'_, S>, ResolutionError> {
-        let input = selector.as_ref();
-        let selector = ProviderSelector::parse(input).map_err(|source| {
-            ResolutionError::invalid_selector(input, None, source)
+        let selector = ProviderSelector::parse(selector).map_err(|source| {
+            ResolutionError::invalid_selector(None, source)
         })?;
         self.resolve_selector(&selector)
             .ok_or_else(|| ResolutionError::unknown_provider(selector))

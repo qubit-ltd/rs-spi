@@ -30,11 +30,9 @@ use super::{
 pub enum ResolutionError {
     /// Raw selector input failed normalization or syntax validation.
     InvalidSelector {
-        /// Verbatim selector supplied by the caller.
-        input: Box<str>,
         /// Zero-based chain position, or `None` for direct named selection.
         selector_index: Option<usize>,
-        /// Parser error explaining why `input` was rejected.
+        /// Parser error owning the verbatim selector input.
         source: ProviderSelectorError,
     },
     /// A raw chained selection contained no selectors.
@@ -75,10 +73,9 @@ impl ResolutionError {
     ///
     /// # Arguments
     ///
-    /// * `input` - Verbatim selector input supplied by the caller.
     /// * `selector_index` - Zero-based chain position, or `None` for a named
     ///   selector.
-    /// * `source` - Selector parsing error that rejected `input`.
+    /// * `source` - Selector parsing error that rejected and owns the input.
     ///
     /// # Returns
     ///
@@ -86,12 +83,10 @@ impl ResolutionError {
     #[inline]
     #[must_use]
     pub(crate) fn invalid_selector(
-        input: &str,
         selector_index: Option<usize>,
         source: ProviderSelectorError,
     ) -> Self {
         Self::InvalidSelector {
-            input: input.into(),
             selector_index,
             source,
         }
@@ -296,13 +291,8 @@ impl From<ProviderSelectionError> for ResolutionError {
         match error {
             ProviderSelectionError::InvalidSelector {
                 selector_index,
-                selector_input,
                 source,
-            } => Self::invalid_selector(
-                &selector_input,
-                Some(selector_index),
-                source,
-            ),
+            } => Self::invalid_selector(selector_index, source),
             ProviderSelectionError::EmptyChain => Self::empty_selection(),
         }
     }
@@ -325,17 +315,19 @@ impl fmt::Display for ResolutionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidSelector {
-                input,
                 selector_index,
-                ..
+                source,
             } => match selector_index {
                 Some(index) => write!(
                     formatter,
-                    "invalid provider selector at chain index {index}: {input:?}",
+                    "invalid provider selector at chain index {index}: {:?}",
+                    source.input(),
                 ),
-                None => {
-                    write!(formatter, "invalid provider selector {input:?}")
-                }
+                None => write!(
+                    formatter,
+                    "invalid provider selector {:?}",
+                    source.input(),
+                ),
             },
             Self::EmptySelection => formatter
                 .write_str("provider selection chain must not be empty"),

@@ -171,18 +171,10 @@ where
         selector: impl AsRef<str>,
         config: &S::Config,
     ) -> Result<CreatedService<S::Output>, ResolutionError> {
-        let input = selector.as_ref();
-        let selection =
-            ProviderSelection::named(input).map_err(|error| match error {
-                crate::error::ProviderSelectionError::InvalidSelector {
-                    source,
-                    ..
-                } => ResolutionError::invalid_selector(input, None, source),
-                crate::error::ProviderSelectionError::EmptyChain => {
-                    ResolutionError::empty_selection()
-                }
-            })?;
-        self.create(&selection, config)
+        let selector = ProviderSelector::parse(selector).map_err(|source| {
+            ResolutionError::invalid_selector(None, source)
+        })?;
+        self.create_named_selector(&selector, config)
     }
 
     /// Creates a service through a nonempty sequence of raw selectors.

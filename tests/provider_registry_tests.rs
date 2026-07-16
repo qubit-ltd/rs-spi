@@ -155,15 +155,15 @@ fn test_registry_preserves_invalid_selector_input_and_source() {
     };
 
     let ResolutionError::InvalidSelector {
-        input,
         selector_index,
         source,
+        ..
     } = &error
     else {
         panic!("invalid provider input should retain its parser error");
     };
-    assert_eq!(" Bad Selector ", input.as_ref());
     assert_eq!(None, *selector_index);
+    assert_eq!(" Bad Selector ", source.input());
     assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert!(
         Error::source(&error)

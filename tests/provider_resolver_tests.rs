@@ -521,15 +521,15 @@ fn test_raw_named_resolution_preserves_invalid_selector_input() {
     };
 
     let ResolutionError::InvalidSelector {
-        input,
         selector_index,
         source,
+        ..
     } = &error
     else {
         panic!("invalid input should produce an invalid-selector error");
     };
-    assert_eq!(" Bad Selector ", input.as_ref());
     assert_eq!(None, *selector_index);
+    assert_eq!(" Bad Selector ", source.input());
     assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert!(error.attempts().is_empty());
     assert!(error.termination().is_none());
@@ -574,15 +574,15 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
         Err(error) => error,
     };
     let ResolutionError::InvalidSelector {
-        input,
         selector_index,
         source,
+        ..
     } = &invalid
     else {
         panic!("invalid chain input should report its selector position");
     };
-    assert_eq!("bad selector", input.as_ref());
     assert_eq!(Some(1), *selector_index);
+    assert_eq!("bad selector", source.input());
     assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
     assert_eq!(
         "invalid provider selector at chain index 1: \"bad selector\"",

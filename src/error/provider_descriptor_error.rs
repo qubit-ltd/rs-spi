@@ -7,33 +7,30 @@
 // =============================================================================
 //! Errors raised while constructing provider descriptors.
 
-use thiserror::Error;
+use std::{
+    error::Error,
+    fmt,
+};
 
 use super::ProviderSelectorError;
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderDescriptorError {
     /// An alias cannot be parsed as a selector.
-    #[error("invalid provider alias at index {alias_index}: {alias:?}")]
     InvalidAlias {
         /// Zero-based position of the invalid alias.
         alias_index: usize,
-        /// Verbatim invalid alias.
-        alias: Box<str>,
-        /// Selector parsing failure.
-        #[source]
+        /// Selector parsing failure owning the verbatim alias.
         source: ProviderSelectorError,
     },
     /// Two aliases normalize to the same selector.
-    #[error("duplicate provider alias: {alias}")]
     DuplicateAlias {
         /// Normalized duplicate alias.
         alias: Box<str>,
     },
     /// An alias normalizes to the canonical provider ID.
-    #[error("provider alias matches canonical ID: {alias}")]
     AliasMatchesId {
         /// Normalized alias matching the canonical ID.
         alias: Box<str>,
@@ -46,7 +43,6 @@ impl ProviderDescriptorError {
     /// # Arguments
     ///
     /// * `alias_index` - Zero-based alias position.
-    /// * `alias` - Verbatim invalid alias.
     /// * `source` - Selector parsing error that rejected the alias.
     ///
     /// # Returns
@@ -56,12 +52,10 @@ impl ProviderDescriptorError {
     #[must_use]
     pub(crate) fn invalid_alias(
         alias_index: usize,
-        alias: &str,
         source: ProviderSelectorError,
     ) -> Self {
         Self::InvalidAlias {
             alias_index,
-            alias: alias.into(),
             source,
         }
     }
@@ -109,9 +103,63 @@ impl ProviderDescriptorError {
     #[must_use]
     pub fn alias(&self) -> &str {
         match self {
-            Self::InvalidAlias { alias, .. }
-            | Self::DuplicateAlias { alias }
-            | Self::AliasMatchesId { alias } => alias,
+            Self::InvalidAlias { source, .. } => source.input(),
+            Self::DuplicateAlias { alias } | Self::AliasMatchesId { alias } => {
+                alias
+            }
+        }
+    }
+}
+
+impl fmt::Display for ProviderDescriptorError {
+    /// Formats the descriptor construction failure.
+    ///
+    /// # Arguments
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidAlias {
+                alias_index,
+                source,
+            } => write!(
+                formatter,
+                "invalid provider alias at index {alias_index}: {:?}",
+                source.input(),
+            ),
+            Self::DuplicateAlias { alias } => {
+                write!(formatter, "duplicate provider alias: {alias}")
+            }
+            Self::AliasMatchesId { alias } => {
+                write!(
+                    formatter,
+                    "provider alias matches canonical ID: {alias}"
+                )
+            }
+        }
+    }
+}
+
+impl Error for ProviderDescriptorError {
+    /// Returns the selector parsing failure when one is available.
+    ///
+    /// # Returns
+    ///
+    /// The selector parsing source for an invalid alias, or `None` for alias
+    /// conflicts.
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::InvalidAlias { source, .. } => Some(source),
+            Self::DuplicateAlias { .. } | Self::AliasMatchesId { .. } => None,
         }
     }
 }
