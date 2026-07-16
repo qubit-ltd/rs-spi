@@ -22,7 +22,6 @@ use super::{
     ProviderErrorKind,
     ProviderSelectionError,
     ProviderSelectorError,
-    ResolutionErrorKind,
 };
 
 /// Aggregate error returned when provider resolution cannot create a service.
@@ -191,86 +190,6 @@ impl ResolutionError {
         }
     }
 
-    /// Returns this resolution error's stable classification.
-    ///
-    /// # Returns
-    ///
-    /// The classification corresponding to the stored error variant.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ResolutionErrorKind {
-        match self {
-            Self::InvalidSelector { .. } => {
-                ResolutionErrorKind::InvalidSelector
-            }
-            Self::EmptySelection => ResolutionErrorKind::EmptySelection,
-            Self::UnknownProvider { .. } => {
-                ResolutionErrorKind::UnknownProvider
-            }
-            Self::EmptyRegistry => ResolutionErrorKind::EmptyRegistry,
-            Self::NoProviderSucceeded { .. } => {
-                ResolutionErrorKind::NoProviderSucceeded
-            }
-        }
-    }
-
-    /// Returns verbatim invalid selector input.
-    ///
-    /// # Returns
-    ///
-    /// The invalid input, or `None` for other error classifications.
-    #[inline(always)]
-    #[must_use]
-    pub fn invalid_selector_input(&self) -> Option<&str> {
-        match self {
-            Self::InvalidSelector { input, .. } => Some(input),
-            _ => None,
-        }
-    }
-
-    /// Returns the invalid selector's chain position.
-    ///
-    /// # Returns
-    ///
-    /// The zero-based chain position, or `None` for direct named input and
-    /// non-selector errors.
-    #[inline(always)]
-    #[must_use]
-    pub const fn invalid_selector_index(&self) -> Option<usize> {
-        match self {
-            Self::InvalidSelector { selector_index, .. } => *selector_index,
-            _ => None,
-        }
-    }
-
-    /// Returns the selector parser error retained by invalid input.
-    ///
-    /// # Returns
-    ///
-    /// The parser source, or `None` for other error classifications.
-    #[inline(always)]
-    #[must_use]
-    pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
-        match self {
-            Self::InvalidSelector { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-
-    /// Returns the valid selector that matched no provider.
-    ///
-    /// # Returns
-    ///
-    /// The unknown selector, or `None` for other error classifications.
-    #[inline(always)]
-    #[must_use]
-    pub const fn unknown_selector(&self) -> Option<&ProviderSelector> {
-        match self {
-            Self::UnknownProvider { selector } => Some(selector),
-            _ => None,
-        }
-    }
-
     /// Returns ordered failed attempts.
     ///
     /// # Returns
@@ -308,6 +227,32 @@ impl ResolutionError {
     #[must_use]
     pub fn terminal_attempt(&self) -> Option<&AttemptFailure> {
         self.attempts().last()
+    }
+
+    /// Returns the attempt that directly explains the aggregate outcome.
+    ///
+    /// # Returns
+    ///
+    /// The terminal attempt after a policy stop, the only attempt after
+    /// singleton exhaustion, or `None` for non-aggregate errors and ambiguous
+    /// multi-attempt exhaustion.
+    #[inline]
+    #[must_use]
+    pub fn decisive_attempt(&self) -> Option<&AttemptFailure> {
+        match self {
+            Self::NoProviderSucceeded {
+                attempts,
+                termination: ResolutionTermination::StoppedByPolicy,
+            } => attempts.last(),
+            Self::NoProviderSucceeded {
+                attempts,
+                termination: ResolutionTermination::Exhausted,
+            } => match attempts.as_ref() {
+                [attempt] => Some(attempt),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// Reports whether failure means providers were absent or unavailable.

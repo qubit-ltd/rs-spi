@@ -108,8 +108,9 @@ source 链。每个 `AttemptFailure` 会显式区分未知 selector 与 Provider
 校验和装配错误按生命周期拆分为 `ProviderIdError`、`ProviderSelectorError`、
 `ProviderDescriptorError`、`ProviderSelectionError` 与 `RegistrationError`；其中
 registration error 只表示 registry 内部的 selector 冲突。公开错误枚举均为
-non-exhaustive；下游代码应优先使用稳定的 `kind()` 和上下文访问器，而不是直接匹配
-具体 variant。
+non-exhaustive；下游代码应直接匹配结构化 variant，并保留通配分支。
+`ResolutionError::decisive_attempt()` 会在某次失败导致策略终止，或耗尽结果仅包含
+一次尝试时，返回能够直接解释结果的那次尝试。
 
 `CreatedService` 暴露实际胜出的 canonical Provider ID，可通过 `into_service()` 或
 `into_parts()` 消费。`ProviderRegistry::len()` 与 `is_empty()` 可无分配查看目录大小。

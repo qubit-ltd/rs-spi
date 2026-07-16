@@ -22,7 +22,6 @@ use qubit_spi::error::{
     ProviderErrorKind,
     ProviderSelectorError,
     ResolutionError,
-    ResolutionErrorKind,
 };
 use qubit_spi::{
     FallbackPolicy,
@@ -162,24 +161,35 @@ fn test_on_absence_stops_after_an_initialization_failure() {
         Err(error) => error,
     };
 
-    assert_eq!(ResolutionErrorKind::NoProviderSucceeded, error.kind());
+    assert!(matches!(
+        &error,
+        ResolutionError::NoProviderSucceeded { .. }
+    ));
     assert_eq!(
         Some(ResolutionTermination::StoppedByPolicy),
         error.termination(),
     );
     assert_eq!(1, error.attempts().len());
+    assert_eq!(
+        error.terminal_attempt().map(ToString::to_string),
+        error.decisive_attempt().map(ToString::to_string),
+    );
     assert!(!error.is_absence());
     assert!(
         error
             .to_string()
             .contains("stopped by fallback policy after 1 attempt"),
     );
+    let Some(AttemptFailure::ProviderError {
+        error: provider_error,
+        ..
+    }) = error.decisive_attempt()
+    else {
+        panic!("policy stop should retain its decisive provider failure");
+    };
     assert_eq!(
-        Some(ProviderErrorKind::InitializationFailed),
-        error
-            .terminal_attempt()
-            .and_then(AttemptFailure::provider_error)
-            .map(ProviderError::kind),
+        ProviderErrorKind::InitializationFailed,
+        provider_error.kind(),
     );
 }
 
@@ -363,6 +373,7 @@ fn test_named_selection_never_falls_back() {
         Err(error) => error,
     };
 
+    assert!(error.decisive_attempt().is_some());
     let ResolutionError::NoProviderSucceeded { attempts, .. } = error else {
         panic!("named provider failure should produce an aggregate error");
     };
@@ -473,11 +484,6 @@ fn test_raw_named_resolution_preserves_invalid_selector_input() {
     assert_eq!(" Bad Selector ", input.as_ref());
     assert_eq!(None, *selector_index);
     assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
-    assert_eq!(ResolutionErrorKind::InvalidSelector, error.kind());
-    assert_eq!(Some(" Bad Selector "), error.invalid_selector_input());
-    assert_eq!(None, error.invalid_selector_index());
-    assert!(error.selector_error().is_some());
-    assert!(error.unknown_selector().is_none());
     assert!(error.attempts().is_empty());
     assert!(error.termination().is_none());
     assert!(error.terminal_attempt().is_none());
@@ -531,7 +537,6 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
     assert_eq!("bad selector", input.as_ref());
     assert_eq!(Some(1), *selector_index);
     assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
-    assert_eq!(Some(1), invalid.invalid_selector_index());
     assert_eq!(
         "invalid provider selector at chain index 1: \"bad selector\"",
         invalid.to_string(),
@@ -542,7 +547,6 @@ fn test_raw_chain_reports_invalid_selector_position_and_empty_input() {
         Err(error) => error,
     };
     assert!(matches!(&empty, ResolutionError::EmptySelection));
-    assert_eq!(ResolutionErrorKind::EmptySelection, empty.kind());
     assert!(!empty.is_absence());
     assert!(Error::source(&empty).is_none());
     assert_eq!(
@@ -564,7 +568,7 @@ fn test_automatic_resolution_distinguishes_an_empty_registry() {
     };
 
     assert!(matches!(&error, ResolutionError::EmptyRegistry));
-    assert_eq!(ResolutionErrorKind::EmptyRegistry, error.kind());
+    assert!(error.decisive_attempt().is_none());
     assert!(!error.is_absence());
     assert!(Error::source(&error).is_none());
     assert!(error.to_string().contains("empty"));
@@ -604,10 +608,10 @@ fn test_aggregate_resolution_display_contains_ordered_attempt_diagnostics() {
         &error,
         ResolutionError::NoProviderSucceeded { .. }
     ));
-    assert_eq!(ResolutionErrorKind::NoProviderSucceeded, error.kind());
     assert_eq!(Some(ResolutionTermination::Exhausted), error.termination(),);
     assert_eq!(2, error.attempts().len());
     assert!(error.terminal_attempt().is_some());
+    assert!(error.decisive_attempt().is_none());
     assert!(error.is_absence());
     assert!(Error::source(&error).is_none());
 

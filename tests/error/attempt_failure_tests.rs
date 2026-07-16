@@ -8,7 +8,6 @@
 
 use qubit_spi::error::{
     AttemptFailure,
-    AttemptFailureKind,
     ProviderError,
     ProviderErrorKind,
     ResolutionError,
@@ -112,19 +111,6 @@ fn test_attempt_failure_preserves_provider_error_source() {
     assert_eq!(ProviderErrorKind::Unavailable, error.kind());
     assert_eq!("file executable is absent", error.reason());
     assert!(std::error::Error::source(error).is_some());
-    assert_eq!(AttemptFailureKind::ProviderError, attempt.kind());
-    assert_eq!(
-        Some("file-command"),
-        attempt.requested_selector().map(ProviderSelector::as_str),
-    );
-    assert_eq!(
-        Some("file-command"),
-        attempt.provider_id().map(ProviderId::as_str),
-    );
-    assert_eq!(
-        Some(ProviderErrorKind::Unavailable),
-        attempt.provider_error().map(ProviderError::kind),
-    );
 }
 
 /// Verifies that an unresolved chain selector uses the unknown-provider
@@ -151,13 +137,6 @@ fn test_unknown_attempt_exposes_requested_selector() {
     };
 
     assert_eq!("missing", requested_selector.as_str());
-    assert_eq!(AttemptFailureKind::UnknownProvider, attempt.kind());
-    assert_eq!(
-        Some("missing"),
-        attempt.requested_selector().map(ProviderSelector::as_str),
-    );
-    assert!(attempt.provider_id().is_none());
-    assert!(attempt.provider_error().is_none());
 }
 
 /// Verifies automatic provider attempts omit explicit selector context.

@@ -12,7 +12,6 @@ use qubit_spi::error::{
     ProviderSelectionError,
     ProviderSelectionErrorKind,
     ResolutionError,
-    ResolutionErrorKind,
 };
 use qubit_spi::{
     ProviderSelection,
@@ -115,13 +114,19 @@ fn test_selection_error_converts_to_resolution_error() {
         ProviderSelection::chain(["valid", "bad selector"])
             .expect_err("invalid chain selector should fail")
             .into();
-    assert_eq!(ResolutionErrorKind::InvalidSelector, invalid.kind());
-    assert_eq!(Some("bad selector"), invalid.invalid_selector_input());
-    assert_eq!(Some(1), invalid.invalid_selector_index());
-    assert!(invalid.selector_error().is_some());
+    let ResolutionError::InvalidSelector {
+        input,
+        selector_index,
+        source: _,
+    } = invalid
+    else {
+        panic!("invalid selection should retain its resolution context");
+    };
+    assert_eq!("bad selector", input.as_ref());
+    assert_eq!(Some(1), selector_index);
 
     let empty: ResolutionError = ProviderSelection::chain(Vec::<&str>::new())
         .expect_err("empty chain should fail")
         .into();
-    assert_eq!(ResolutionErrorKind::EmptySelection, empty.kind());
+    assert!(matches!(empty, ResolutionError::EmptySelection));
 }

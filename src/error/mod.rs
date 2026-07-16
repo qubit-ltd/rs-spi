@@ -9,7 +9,6 @@
 //! resolution.
 
 mod attempt_failure;
-mod attempt_failure_kind;
 mod provider_descriptor_error;
 mod provider_descriptor_error_kind;
 mod provider_error;
@@ -23,10 +22,8 @@ mod provider_selector_error_kind;
 mod registration_error;
 mod registration_error_kind;
 mod resolution_error;
-mod resolution_error_kind;
 
 pub use attempt_failure::AttemptFailure;
-pub use attempt_failure_kind::AttemptFailureKind;
 pub use provider_descriptor_error::ProviderDescriptorError;
 pub use provider_descriptor_error_kind::ProviderDescriptorErrorKind;
 pub use provider_error::ProviderError;
@@ -40,4 +37,3 @@ pub use provider_selector_error_kind::ProviderSelectorErrorKind;
 pub use registration_error::RegistrationError;
 pub use registration_error_kind::RegistrationErrorKind;
 pub use resolution_error::ResolutionError;
-pub use resolution_error_kind::ResolutionErrorKind;

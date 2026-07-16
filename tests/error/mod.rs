@@ -7,7 +7,6 @@
 // =============================================================================
 //! Integration tests for SPI error contracts.
 
-mod attempt_failure_kind_tests;
 mod attempt_failure_tests;
 mod provider_descriptor_error_kind_tests;
 mod provider_error_tests;
@@ -16,5 +15,4 @@ mod provider_selection_error_kind_tests;
 mod provider_selector_error_kind_tests;
 mod registration_error_kind_tests;
 mod registration_error_tests;
-mod resolution_error_kind_tests;
 mod resolution_error_tests;

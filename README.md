@@ -116,8 +116,9 @@ Validation and assembly errors are separated by lifecycle:
 `ProviderIdError`, `ProviderSelectorError`, `ProviderDescriptorError`,
 `ProviderSelectionError`, and `RegistrationError`. Registration errors now
 represent registry conflicts only. Public error enums are non-exhaustive;
-downstream code should prefer their stable `kind()` and context accessors over
-matching concrete variants.
+downstream code should match the structured variants with a wildcard arm.
+`ResolutionError::decisive_attempt()` returns the policy-stopping attempt or a
+singleton exhausted attempt when one failure can explain the outcome.
 
 `CreatedService` exposes the winning canonical provider ID and can be consumed
 through `into_service()` or `into_parts()`. `ProviderRegistry::len()` and
