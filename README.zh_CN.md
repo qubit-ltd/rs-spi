@@ -23,7 +23,7 @@ ServiceSpec 同时定义配置类型和完整输出句柄；SPI 核心不会在 
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.5"
+qubit-spi = "0.6"
 ~~~
 
 ## 快速开始
@@ -97,15 +97,18 @@ assert_eq!("hello", created.service().greet());
   初始化失败时停止。
 - FallbackPolicy::OnAnyError 用于明确要求尽力而为的回退链。
 
-所有错误类型统一从 `qubit_spi::error` 导入。`ProviderError` 对单次工厂失败分类。
+所有错误类型统一从 `qubit_spi::error` 导入。`ProviderError` 对单次工厂失败分类，
+并为每种分类提供保留 source 的构造器。
 `ResolutionError` 会记录已尝试的候选项，保留
 无效 selector 的原始输入及校验错误链，并明确区分空 registry 与空原始 chain；其
-显示文本包含按顺序排列的尝试诊断。每个 `AttemptFailure` 会显式区分未知 selector
+显示文本包含按顺序排列的尝试诊断；仅有一次尝试时，该尝试会进入标准 error source
+链。每个 `AttemptFailure` 会显式区分未知 selector
 与 Provider 创建失败。
 
 校验和装配错误按生命周期拆分为 `ProviderIdError`、`ProviderSelectorError`、
 `ProviderDescriptorError`、`ProviderSelectionError` 与 `RegistrationError`；其中
-registration error 只表示 registry 内部的 selector 冲突。
+registration error 只表示 registry 内部的 selector 冲突。这些错误均为公开枚举，
+调用方可以直接匹配 variant 及其保留的上下文。
 
 `CreatedService` 暴露实际胜出的 canonical Provider ID，可通过 `into_service()` 或
 `into_parts()` 消费。`ProviderRegistry::len()` 与 `is_empty()` 可无分配查看目录大小。

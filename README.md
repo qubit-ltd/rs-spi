@@ -25,7 +25,7 @@ core does not convert between Box, Arc, and Rc.
 
 ~~~toml
 [dependencies]
-qubit-spi = "0.5"
+qubit-spi = "0.6"
 ~~~
 
 ## Quick Start
@@ -101,16 +101,19 @@ assert_eq!("hello", created.service().greet());
 - FallbackPolicy::OnAnyError is available for explicitly best-effort chains.
 
 All error types are available through `qubit_spi::error`. `ProviderError`
-classifies a single factory failure. `ResolutionError` records
+classifies a single factory failure and offers source-preserving constructors
+for every classification. `ResolutionError` records
 all attempted candidates, preserves invalid selector input and its validation
 source, and distinguishes empty registries and empty raw chains. Its display
-text includes ordered attempt diagnostics. Each `AttemptFailure` explicitly
+text includes ordered attempt diagnostics; a single-attempt aggregate exposes
+that attempt through the standard error source chain. Each `AttemptFailure` explicitly
 distinguishes an unknown selector from a provider creation error.
 
 Validation and assembly errors are separated by lifecycle:
 `ProviderIdError`, `ProviderSelectorError`, `ProviderDescriptorError`,
 `ProviderSelectionError`, and `RegistrationError`. Registration errors now
-represent registry conflicts only.
+represent registry conflicts only. These errors are public enums whose
+variants and retained context can be matched directly.
 
 `CreatedService` exposes the winning canonical provider ID and can be consumed
 through `into_service()` or `into_parts()`. `ProviderRegistry::len()` and
