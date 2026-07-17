@@ -5,41 +5,27 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Startup-only assembly of immutable provider registries.
+//! Optional fluent assembly of provider registries.
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use crate::error::RegistrationError;
-use crate::internal::{
-    BuilderEntry,
-    RegistryEntry,
-    RegistryInner,
-};
 use crate::{
-    ProviderDescriptor,
+    ProviderDefinition,
     ProviderRegistry,
-    ProviderSelector,
-    ServiceProvider,
     ServiceSpec,
 };
 
-/// Mutable startup-only builder for an immutable provider registry.
+/// Optional mutable wrapper for assembling a provider registry.
 ///
-/// Use this type to register all providers once during application assembly,
-/// validate selector conflicts, and then call [`Self::build`] for a shared
-/// read-only [`ProviderRegistry`].
+/// Use this type when fluent startup assembly is convenient. The resulting
+/// [`ProviderRegistry`] remains open to later runtime registrations.
 pub struct ProviderRegistryBuilder<S>
 where
     S: ServiceSpec,
 {
-    /// Registrations retained until they are transformed into immutable
-    /// entries.
-    registrations: Vec<BuilderEntry<S>>,
-    /// Mapping from every claimed selector to its pending registration index.
-    selector_indices: HashMap<ProviderSelector, usize>,
+    /// Registry receiving each validated registration immediately.
+    registry: ProviderRegistry<S>,
 }
 
 impl<S> ProviderRegistryBuilder<S>
@@ -50,13 +36,12 @@ where
     ///
     /// # Returns
     ///
-    /// A builder with no registrations or claimed selectors.
+    /// A builder containing an empty runtime registry.
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
-            registrations: Vec::new(),
-            selector_indices: HashMap::new(),
+            registry: ProviderRegistry::default(),
         }
     }
 
@@ -64,8 +49,8 @@ where
     ///
     /// # Arguments
     ///
-    /// * `descriptor` - Provider ID, aliases, and automatic priority.
-    /// * `provider` - Owned factory moved into shared registry storage.
+    /// * `provider` - Self-described factory moved into shared registry
+    ///   storage.
     ///
     /// # Returns
     ///
@@ -73,26 +58,22 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when the descriptor conflicts with an
-    /// earlier registration.
+    /// Returns [`RegistrationError`] when the provider's descriptor conflicts
+    /// with an earlier registration.
     #[inline(always)]
-    pub fn register<P>(
-        &mut self,
-        descriptor: ProviderDescriptor,
-        provider: P,
-    ) -> Result<(), RegistrationError>
+    pub fn register<P>(&mut self, provider: P) -> Result<(), RegistrationError>
     where
-        P: ServiceProvider<S>,
+        P: ProviderDefinition<S>,
     {
-        self.register_shared(descriptor, Arc::new(provider))
+        self.register_shared(Arc::new(provider))
     }
 
     /// Registers an already shared provider factory.
     ///
     /// # Arguments
     ///
-    /// * `descriptor` - Provider ID, aliases, and automatic priority.
-    /// * `provider` - Shared factory retained by the immutable registry.
+    /// * `provider` - Shared self-described factory retained by the runtime
+    ///   registry.
     ///
     /// # Returns
     ///
@@ -100,130 +81,24 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] when the descriptor conflicts with an
-    /// earlier registration.
+    /// Returns [`RegistrationError`] when the provider's descriptor conflicts
+    /// with an earlier registration.
     #[inline(always)]
     pub fn register_shared(
         &mut self,
-        descriptor: ProviderDescriptor,
-        provider: Arc<dyn ServiceProvider<S>>,
+        provider: Arc<dyn ProviderDefinition<S>>,
     ) -> Result<(), RegistrationError> {
-        self.insert(descriptor, provider)
+        self.registry.register_shared(provider)
     }
 
-    /// Builds the immutable provider catalog.
+    /// Returns the assembled runtime provider registry.
     ///
     /// # Returns
     ///
-    /// A registry preserving registration order, the already validated
-    /// selector index, and deterministic automatic-selection order.
+    /// The registry that received every successful builder registration.
     #[must_use]
     pub fn build(self) -> ProviderRegistry<S> {
-        let Self {
-            registrations,
-            selector_indices,
-        } = self;
-        let mut entries = Vec::with_capacity(registrations.len());
-        for BuilderEntry {
-            descriptor,
-            provider,
-        } in registrations
-        {
-            entries.push(RegistryEntry {
-                descriptor,
-                provider,
-            });
-        }
-        let mut automatic_indices = (0..entries.len()).collect::<Vec<_>>();
-        automatic_indices.sort_unstable_by(|left, right| {
-            let left = &entries[*left].descriptor;
-            let right = &entries[*right].descriptor;
-            right
-                .priority()
-                .cmp(&left.priority())
-                .then_with(|| left.id().cmp(right.id()))
-        });
-        ProviderRegistry::from_inner(Arc::new(RegistryInner {
-            entries: entries.into_boxed_slice(),
-            selector_indices,
-            automatic_indices: automatic_indices.into_boxed_slice(),
-        }))
-    }
-
-    /// Validates and records one descriptor and factory.
-    ///
-    /// # Arguments
-    ///
-    /// * `descriptor` - Provider metadata whose selectors must be unclaimed.
-    /// * `provider` - Shared factory stored after validation succeeds.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` after the descriptor, factory, and selector indexes are stored.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RegistrationError`] without modifying the builder when any
-    /// selector is already registered.
-    fn insert(
-        &mut self,
-        descriptor: ProviderDescriptor,
-        provider: Arc<dyn ServiceProvider<S>>,
-    ) -> Result<(), RegistrationError> {
-        let canonical_selector = ProviderSelector::from(descriptor.id());
-        self.validate_selector(&canonical_selector, descriptor.id().as_str())?;
-        for alias in descriptor.aliases() {
-            self.validate_selector(alias, descriptor.id().as_str())?;
-        }
-
-        let registration_index = self.registrations.len();
-        self.selector_indices
-            .insert(canonical_selector, registration_index);
-        for alias in descriptor.aliases() {
-            self.selector_indices
-                .insert(alias.clone(), registration_index);
-        }
-        self.registrations.push(BuilderEntry {
-            descriptor,
-            provider,
-        });
-        Ok(())
-    }
-
-    /// Ensures a normalized selector has not been claimed by another provider.
-    ///
-    /// # Arguments
-    ///
-    /// * `selector` - Candidate canonical ID or alias.
-    /// * `provider` - Canonical ID attempting to claim the selector.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` when the selector is unclaimed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RegistrationError`] naming the existing owner when claimed.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the builder's private selector index refers outside its
-    /// registration vector, which public builder operations cannot produce.
-    #[inline]
-    fn validate_selector(
-        &self,
-        selector: &ProviderSelector,
-        provider: &str,
-    ) -> Result<(), RegistrationError> {
-        if let Some(existing_index) = self.selector_indices.get(selector) {
-            let existing = self.registrations[*existing_index].descriptor.id();
-            return Err(RegistrationError::duplicate_selector(
-                selector.as_str(),
-                existing.as_str(),
-                provider,
-            ));
-        }
-        Ok(())
+        self.registry
     }
 }
 

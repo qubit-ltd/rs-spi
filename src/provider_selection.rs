@@ -10,6 +10,7 @@
 use crate::error::ProviderSelectionError;
 use crate::internal::ProviderSelectionRepr;
 use crate::{
+    FallbackPolicy,
     ProviderSelectionKind,
     ProviderSelector,
 };
@@ -22,61 +23,28 @@ use crate::{
 ///
 /// # Examples
 ///
-/// Parse a configured selection once and reuse it for multiple creations:
+/// Parse a configured selection once and reuse it for multiple resolutions:
 ///
 /// ```rust
-/// use qubit_spi::error::ProviderError;
 /// use qubit_spi::{
 ///     FallbackPolicy,
-///     ProviderDescriptor,
-///     ProviderId,
-///     ProviderRegistry,
-///     ProviderResolver,
 ///     ProviderSelection,
-///     ServiceProvider,
-///     ServiceSpec,
 /// };
 ///
-/// struct GreetingSpec;
+/// let selection = ProviderSelection::chain(["remote", "memory"])?
+///     .with_fallback_policy(FallbackPolicy::OnAbsence);
 ///
-/// impl ServiceSpec for GreetingSpec {
-///     type Config = ();
-///     type Output = &'static str;
-/// }
-///
-/// struct EnglishProvider;
-///
-/// impl ServiceProvider<GreetingSpec> for EnglishProvider {
-///     fn create(&self, _config: &()) -> Result<&'static str, ProviderError> {
-///         Ok("hello")
-///     }
-/// }
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut builder = ProviderRegistry::<GreetingSpec>::builder();
-/// builder.register(
-///     ProviderDescriptor::new(ProviderId::new("english")?),
-///     EnglishProvider,
-/// )?;
-/// let resolver = ProviderResolver::new(
-///     builder.build(),
-///     FallbackPolicy::OnAbsence,
-/// );
-/// let selection = ProviderSelection::named("english")?;
-///
-/// let first = resolver.create(&selection, &())?;
-/// let second = resolver.create(&selection, &())?;
-///
-/// assert_eq!("hello", *first.service());
-/// assert_eq!("hello", *second.service());
-/// # Ok(())
-/// # }
+/// assert_eq!(2, selection.selectors().len());
+/// assert_eq!(FallbackPolicy::OnAbsence, selection.fallback_policy());
+/// # Ok::<(), qubit_spi::error::ProviderSelectionError>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProviderSelection(
-    /// Invariant-safe provider selection consumed by a resolver.
-    ProviderSelectionRepr,
-);
+pub struct ProviderSelection {
+    /// Invariant-safe target consumed by a provider registry.
+    target: ProviderSelectionRepr,
+    /// Policy applied after a selected provider fails to create its service.
+    fallback_policy: FallbackPolicy,
+}
 
 impl ProviderSelection {
     /// Creates an automatic provider selection.
@@ -87,7 +55,10 @@ impl ProviderSelection {
     #[inline]
     #[must_use]
     pub const fn auto() -> Self {
-        Self(ProviderSelectionRepr::Auto)
+        Self {
+            target: ProviderSelectionRepr::Auto,
+            fallback_policy: FallbackPolicy::OnAbsence,
+        }
     }
 
     /// Creates a one-provider selection from configuration input.
@@ -109,7 +80,10 @@ impl ProviderSelection {
         let selector = ProviderSelector::parse(value).map_err(|source| {
             ProviderSelectionError::invalid_selector(None, source)
         })?;
-        Ok(Self(ProviderSelectionRepr::Named(selector)))
+        Ok(Self {
+            target: ProviderSelectionRepr::Named(selector),
+            fallback_policy: FallbackPolicy::OnAbsence,
+        })
     }
 
     /// Creates a nonempty ordered candidate chain from configuration input.
@@ -146,9 +120,10 @@ impl ProviderSelection {
         if selectors.is_empty() {
             return Err(ProviderSelectionError::empty_chain());
         }
-        Ok(Self(ProviderSelectionRepr::Chain(
-            selectors.into_boxed_slice(),
-        )))
+        Ok(Self {
+            target: ProviderSelectionRepr::Chain(selectors.into_boxed_slice()),
+            fallback_policy: FallbackPolicy::OnAbsence,
+        })
     }
 
     /// Returns this validated selection's classification.
@@ -159,7 +134,7 @@ impl ProviderSelection {
     #[inline(always)]
     #[must_use]
     pub const fn kind(&self) -> ProviderSelectionKind {
-        match self.0 {
+        match self.target {
             ProviderSelectionRepr::Auto => ProviderSelectionKind::Auto,
             ProviderSelectionRepr::Named(_) => ProviderSelectionKind::Named,
             ProviderSelectionRepr::Chain(_) => ProviderSelectionKind::Chain,
@@ -175,7 +150,7 @@ impl ProviderSelection {
     #[inline(always)]
     #[must_use]
     pub fn selector(&self) -> Option<&ProviderSelector> {
-        match &self.0 {
+        match &self.target {
             ProviderSelectionRepr::Named(selector) => Some(selector),
             ProviderSelectionRepr::Auto | ProviderSelectionRepr::Chain(_) => {
                 None
@@ -192,12 +167,42 @@ impl ProviderSelection {
     #[inline(always)]
     #[must_use]
     pub fn selectors(&self) -> &[ProviderSelector] {
-        match &self.0 {
+        match &self.target {
             ProviderSelectionRepr::Chain(selectors) => selectors,
             ProviderSelectionRepr::Auto | ProviderSelectionRepr::Named(_) => {
                 &[]
             }
         }
+    }
+
+    /// Returns the policy applied after provider creation failures.
+    ///
+    /// # Returns
+    ///
+    /// The fallback policy stored with this selection.
+    #[inline(always)]
+    #[must_use]
+    pub const fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
+    }
+
+    /// Replaces the policy applied after provider creation failures.
+    ///
+    /// # Arguments
+    ///
+    /// * `fallback_policy` - Replacement policy for candidate traversal.
+    ///
+    /// # Returns
+    ///
+    /// This selection with its target unchanged and policy replaced.
+    #[inline(always)]
+    #[must_use]
+    pub const fn with_fallback_policy(
+        mut self,
+        fallback_policy: FallbackPolicy,
+    ) -> Self {
+        self.fallback_policy = fallback_policy;
+        self
     }
 
     /// Returns the validated representation consumed by the resolver.
@@ -207,7 +212,7 @@ impl ProviderSelection {
     /// A shared reference to the invariant-safe private representation.
     #[inline(always)]
     pub(crate) const fn repr(&self) -> &ProviderSelectionRepr {
-        &self.0
+        &self.target
     }
 }
 

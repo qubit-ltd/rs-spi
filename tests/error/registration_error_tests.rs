@@ -6,69 +6,42 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::{
-    ProviderError,
-    RegistrationError,
-};
+use qubit_spi::error::RegistrationError;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
-    ServiceProvider,
-    ServiceSpec,
 };
 
-/// Service family used to create a registration conflict through public APIs.
-struct ConflictSpec;
-
-impl ServiceSpec for ConflictSpec {
-    type Config = ();
-    type Output = ();
-}
-
-/// Provider used only to populate the conflict-test builder.
-struct EmptyProvider;
-
-impl ServiceProvider<ConflictSpec> for EmptyProvider {
-    /// Creates the unit service used by registration tests.
-    ///
-    /// # Arguments
-    ///
-    /// * `_config` - Unused unit configuration.
-    ///
-    /// # Returns
-    ///
-    /// The unit service.
-    fn create(&self, _config: &()) -> Result<(), ProviderError> {
-        Ok(())
-    }
-}
+use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::string_spec::StringSpec;
+use crate::common::test_provider_definition::define_provider;
 
 /// Verifies that builder conflicts expose both providers and the selector.
 #[test]
 fn test_registration_error_exposes_its_variant_and_conflict_details() {
-    let mut builder = ProviderRegistry::<ConflictSpec>::builder();
+    let mut builder = ProviderRegistry::<StringSpec>::builder();
     builder
-        .register(
+        .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("english")
                     .expect("test provider ID should be valid"),
             )
             .with_aliases(["en"])
             .expect("test alias should be valid"),
-            EmptyProvider,
-        )
+            ConfigurableProvider::success("unused"),
+        ))
         .expect("first provider should register");
     let error = builder
-        .register(
+        .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("spanish")
                     .expect("test provider ID should be valid"),
             )
             .with_aliases(["en"])
             .expect("test alias should be valid"),
-            EmptyProvider,
-        )
+            ConfigurableProvider::success("unused"),
+        ))
         .expect_err("duplicate alias should be rejected");
 
     let RegistrationError::DuplicateSelector {

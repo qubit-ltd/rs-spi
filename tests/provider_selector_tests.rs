@@ -31,6 +31,7 @@ fn test_selector_supports_standard_string_traits() {
         .expect("valid selector should parse");
 
     assert_eq!("git+ssh", AsRef::<str>::as_ref(&selector));
+    assert_eq!("git+ssh", selector.to_string());
 }
 
 /// Verifies that a validated canonical provider ID converts without reparsing.

@@ -6,68 +6,27 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::Arc;
+use qubit_spi::ServiceProvider;
 
-use qubit_spi::error::ProviderError;
-use qubit_spi::{
-    ServiceProvider,
-    ServiceSpec,
-};
-
-/// Minimal service interface returned by the test service specification.
-trait Counter: Send + Sync {
-    /// Returns the stable counter value.
-    ///
-    /// # Returns
-    ///
-    /// The counter's current value.
-    fn value(&self) -> u8;
-}
-
-/// Counter implementation returning a stable value.
-struct StaticCounter;
-
-impl Counter for StaticCounter {
-    /// Returns the test value seven.
-    fn value(&self) -> u8 {
-        7
-    }
-}
-
-/// Service family pairing unit configuration with a shared counter handle.
-struct CounterSpec;
-
-impl ServiceSpec for CounterSpec {
-    type Config = ();
-    type Output = Arc<dyn Counter>;
-}
-
-/// Provider constructing the static counter implementation.
-struct CounterProvider;
-
-impl ServiceProvider<CounterSpec> for CounterProvider {
-    /// Creates a shared static counter.
-    ///
-    /// # Arguments
-    ///
-    /// * `_config` - Unused unit configuration.
-    ///
-    /// # Returns
-    ///
-    /// A shared counter returning seven.
-    fn create(&self, _config: &()) -> Result<Arc<dyn Counter>, ProviderError> {
-        Ok(Arc::new(StaticCounter))
-    }
-}
+use crate::common::configurable_provider::ConfigurableProvider;
 
 /// Verifies that a provider returns the output handle selected by its spec.
 #[test]
 fn test_provider_creates_the_handle_selected_by_the_spec() {
     assert_eq!(
-        7,
-        CounterProvider
-            .create(&())
-            .expect("test provider should create its counter")
-            .value(),
+        "seven",
+        ConfigurableProvider::success("seven")
+            .create(&String::new())
+            .expect("test provider should create its output"),
     );
+}
+
+/// Verifies that default creation supplies the configuration default.
+#[test]
+fn test_provider_create_default_uses_config_default() {
+    let output = ConfigurableProvider::echo()
+        .create_default()
+        .expect("default service creation should succeed");
+
+    assert_eq!(String::default(), output);
 }

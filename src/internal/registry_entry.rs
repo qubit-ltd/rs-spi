@@ -10,8 +10,8 @@
 use std::sync::Arc;
 
 use crate::{
+    ProviderDefinition,
     ProviderDescriptor,
-    ServiceProvider,
     ServiceSpec,
 };
 
@@ -23,5 +23,23 @@ where
     /// Metadata used to identify and order this provider.
     pub(crate) descriptor: ProviderDescriptor,
     /// Shared factory used to create this provider's service.
-    pub(crate) provider: Arc<dyn ServiceProvider<S>>,
+    pub(crate) provider: Arc<dyn ProviderDefinition<S>>,
+}
+
+impl<S> Clone for RegistryEntry<S>
+where
+    S: ServiceSpec,
+{
+    /// Clones the descriptor snapshot and shared provider handle.
+    ///
+    /// # Returns
+    ///
+    /// An owned entry referring to the same provider definition.
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            descriptor: self.descriptor.clone(),
+            provider: Arc::clone(&self.provider),
+        }
+    }
 }

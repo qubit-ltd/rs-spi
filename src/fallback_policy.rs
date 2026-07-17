@@ -14,9 +14,11 @@
 /// and never falls back.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum FallbackPolicy {
+    /// Stops after the first provider creation failure.
+    Never,
     /// Continues only after an unsupported or unavailable provider.
     #[default]
     OnAbsence,
-    /// Continues after every provider creation failure.
+    /// Continues after every leaf provider creation failure.
     OnAnyError,
 }

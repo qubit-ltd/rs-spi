@@ -19,8 +19,8 @@ use super::ProviderErrorKind;
 /// Error returned by one provider while creating a service.
 ///
 /// Use the constructors to report a classified failure from a
-/// [`crate::ServiceProvider`] implementation. The resolver preserves this
-/// information in its attempt diagnostics.
+/// [`crate::ServiceProvider`] implementation. A composing provider preserves
+/// this information in its attempt diagnostics.
 #[derive(Clone, Debug, Error)]
 #[error("provider {kind:?}: {reason}")]
 pub struct ProviderError {

@@ -11,19 +11,42 @@ use std::collections::HashMap;
 
 use crate::internal::RegistryEntry;
 use crate::{
+    ProviderSelection,
     ProviderSelector,
     ServiceSpec,
 };
 
-/// Immutable lookup indexes and entries shared by registry clones.
+/// Mutable provider catalog protected by the registry's synchronization lock.
 pub(crate) struct RegistryInner<S>
 where
     S: ServiceSpec,
 {
     /// Registrations retained in their original registration order.
-    pub(crate) entries: Box<[RegistryEntry<S>]>,
+    pub(crate) entries: Vec<RegistryEntry<S>>,
     /// Mapping from canonical IDs and aliases to positions in `entries`.
     pub(crate) selector_indices: HashMap<ProviderSelector, usize>,
     /// Positions in the deterministic automatic-selection order.
-    pub(crate) automatic_indices: Box<[usize]>,
+    pub(crate) automatic_indices: Vec<usize>,
+    /// Selection used by callers that do not supply an explicit preference.
+    pub(crate) default_selection: ProviderSelection,
+}
+
+impl<S> Default for RegistryInner<S>
+where
+    S: ServiceSpec,
+{
+    /// Creates empty mutable registry state.
+    ///
+    /// # Returns
+    ///
+    /// Empty indexes and automatic default provider selection.
+    #[inline]
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            selector_indices: HashMap::new(),
+            automatic_indices: Vec::new(),
+            default_selection: ProviderSelection::auto(),
+        }
+    }
 }

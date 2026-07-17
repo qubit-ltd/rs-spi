@@ -5,34 +5,51 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Immutable provider catalog and typed provider lookup.
+//! Runtime-mutable provider catalog and typed provider lookup.
 
 use std::{
+    collections::HashSet,
     fmt,
-    sync::Arc,
+    sync::{
+        Arc,
+        RwLock,
+        RwLockReadGuard,
+        RwLockWriteGuard,
+    },
 };
 
-use crate::error::ResolutionError;
-use crate::internal::RegistryInner;
+use crate::error::{
+    ProviderSelectionError,
+    RegistrationError,
+};
+use crate::internal::{
+    ProviderSelectionRepr,
+    RegistryEntry,
+    RegistryInner,
+};
 use crate::{
+    ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistryBuilder,
+    ProviderSelection,
     ProviderSelector,
-    ResolvedProvider,
+    ResolvingServiceProvider,
     ServiceSpec,
 };
 
-/// Immutable catalog of explicitly registered providers.
+/// Shared catalog of providers for one service family.
 ///
-/// Build a registry during application startup, then share or clone it freely
-/// for read-only ID/alias lookup and service resolution.
+/// Clones refer to the same synchronized state. Registrations and default
+/// selection updates are therefore visible through every existing clone.
+/// Metadata and lookup methods return owned snapshots so no registry lock is
+/// held while downstream code uses the result.
 pub struct ProviderRegistry<S>
 where
     S: ServiceSpec,
 {
-    /// Shared immutable storage for all provider entries and lookup indexes.
-    inner: Arc<RegistryInner<S>>,
+    /// Shared synchronized provider entries and lookup indexes.
+    inner: Arc<RwLock<RegistryInner<S>>>,
 }
 
 impl<S> ProviderRegistry<S>
@@ -43,178 +60,317 @@ where
     ///
     /// # Returns
     ///
-    /// A mutable builder used during startup to register providers.
+    /// An optional mutable wrapper around a new runtime registry.
     #[inline(always)]
     #[must_use]
     pub fn builder() -> ProviderRegistryBuilder<S> {
         ProviderRegistryBuilder::new()
     }
 
-    /// Creates a registry from prepared immutable internal storage.
+    /// Registers an owned self-described provider.
     ///
     /// # Arguments
     ///
-    /// * `inner` - Mutually consistent entries and registry-owned indexes.
+    /// * `provider` - Provider definition moved into shared registry storage.
     ///
     /// # Returns
     ///
-    /// A registry sharing the supplied immutable storage.
-    #[inline(always)]
-    #[must_use]
-    pub(crate) fn from_inner(inner: Arc<RegistryInner<S>>) -> Self {
-        Self { inner }
-    }
-
-    /// Resolves a canonical provider ID or alias.
-    ///
-    /// # Arguments
-    ///
-    /// * `selector` - Raw selector normalized and validated before lookup.
-    ///
-    /// # Returns
-    ///
-    /// The matching provider together with its descriptor.
+    /// `Ok(())` after the provider and all selectors are registered atomically.
     ///
     /// # Errors
     ///
-    /// Returns [`ResolutionError`] when `selector` is invalid or does not name
-    /// a registered provider.
-    #[inline]
-    pub fn resolve(
-        &self,
-        selector: &str,
-    ) -> Result<ResolvedProvider<'_, S>, ResolutionError> {
-        let selector = ProviderSelector::parse(selector).map_err(|source| {
-            ResolutionError::invalid_selector(None, source)
-        })?;
-        self.resolve_selector(&selector)
-            .ok_or_else(|| ResolutionError::unknown_provider(selector))
+    /// Returns [`RegistrationError`] without mutation when the canonical ID or
+    /// any alias is already registered.
+    #[inline(always)]
+    pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
+    where
+        P: ProviderDefinition<S>,
+    {
+        self.register_shared(Arc::new(provider))
     }
 
-    /// Finds a provider by canonical ID or alias without constructing an error.
+    /// Registers an already shared self-described provider.
+    ///
+    /// The descriptor is obtained before the registry write lock is acquired,
+    /// so provider-controlled code never runs while shared registry state is
+    /// locked.
     ///
     /// # Arguments
     ///
-    /// * `selector` - Raw selector normalized and validated before lookup.
+    /// * `provider` - Shared provider definition retained by the registry.
     ///
     /// # Returns
     ///
-    /// `Some` with the matching provider, or `None` for invalid or unknown
-    /// input.
+    /// `Ok(())` after the provider and all selectors are registered atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] without mutation when the canonical ID or
+    /// any alias is already registered.
+    pub fn register_shared(
+        &self,
+        provider: Arc<dyn ProviderDefinition<S>>,
+    ) -> Result<(), RegistrationError> {
+        let descriptor = provider.descriptor();
+        let canonical_selector = ProviderSelector::from(descriptor.id());
+        let mut inner = self.write_inner();
+
+        Self::validate_selector(
+            &inner,
+            &canonical_selector,
+            descriptor.id().as_str(),
+        )?;
+        for alias in descriptor.aliases() {
+            Self::validate_selector(&inner, alias, descriptor.id().as_str())?;
+        }
+
+        let registration_index = inner.entries.len();
+        inner
+            .selector_indices
+            .insert(canonical_selector, registration_index);
+        for alias in descriptor.aliases() {
+            inner
+                .selector_indices
+                .insert(alias.clone(), registration_index);
+        }
+        inner.entries.push(RegistryEntry {
+            descriptor,
+            provider,
+        });
+        let mut automatic_indices =
+            (0..inner.entries.len()).collect::<Vec<_>>();
+        automatic_indices.sort_unstable_by(|left, right| {
+            let left = &inner.entries[*left].descriptor;
+            let right = &inner.entries[*right].descriptor;
+            right
+                .priority()
+                .cmp(&left.priority())
+                .then_with(|| left.id().cmp(right.id()))
+        });
+        inner.automatic_indices = automatic_indices;
+        Ok(())
+    }
+
+    /// Returns the selection used when callers request the registry default.
+    ///
+    /// # Returns
+    ///
+    /// An owned snapshot of the current default selection.
     #[inline]
     #[must_use]
-    pub fn find(&self, selector: &str) -> Option<ResolvedProvider<'_, S>> {
-        ProviderSelector::parse(selector)
-            .ok()
-            .and_then(|selector| self.resolve_selector(&selector))
+    pub fn default_selection(&self) -> ProviderSelection {
+        self.read_inner().default_selection.clone()
     }
 
-    /// Iterates over descriptors in registration order.
+    /// Replaces the selection used for future default resolutions.
+    ///
+    /// # Arguments
+    ///
+    /// * `selection` - Validated selection and fallback policy to store.
+    #[inline]
+    pub fn set_default_selection(&self, selection: ProviderSelection) {
+        self.write_inner().default_selection = selection;
+    }
+
+    /// Resolves a validated selection into a composing provider snapshot.
+    ///
+    /// # Arguments
+    ///
+    /// * `selection` - Candidate target and fallback policy to resolve.
     ///
     /// # Returns
     ///
-    /// An exact-size iterator borrowing each immutable descriptor once.
-    #[inline(always)]
-    pub fn descriptors(
+    /// A composing provider owning the selected candidates in attempt order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderSelectionError`] before creation when a named selector
+    /// is unknown, a chain matches no candidates, or automatic selection sees
+    /// an empty registry.
+    pub fn resolve(
         &self,
-    ) -> impl ExactSizeIterator<Item = &ProviderDescriptor> {
-        self.inner.entries.iter().map(|entry| &entry.descriptor)
+        selection: &ProviderSelection,
+    ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
+        let inner = self.read_inner();
+        let candidates = match selection.repr() {
+            ProviderSelectionRepr::Named(selector) => {
+                let index =
+                    inner.selector_indices.get(selector).copied().ok_or_else(
+                        || {
+                            ProviderSelectionError::unknown_provider(
+                                selector.clone(),
+                            )
+                        },
+                    )?;
+                vec![inner.entries[index].clone()]
+            }
+            ProviderSelectionRepr::Chain(selectors) => {
+                let mut seen = HashSet::new();
+                let mut candidates = Vec::new();
+                for selector in selectors {
+                    let Some(index) =
+                        inner.selector_indices.get(selector).copied()
+                    else {
+                        continue;
+                    };
+                    if seen.insert(index) {
+                        candidates.push(inner.entries[index].clone());
+                    }
+                }
+                if candidates.is_empty() {
+                    return Err(ProviderSelectionError::no_candidates(
+                        selectors.to_vec(),
+                    ));
+                }
+                candidates
+            }
+            ProviderSelectionRepr::Auto => {
+                if inner.automatic_indices.is_empty() {
+                    return Err(ProviderSelectionError::empty_registry());
+                }
+                inner
+                    .automatic_indices
+                    .iter()
+                    .map(|index| inner.entries[*index].clone())
+                    .collect()
+            }
+        };
+        Ok(ResolvingServiceProvider::new(
+            candidates,
+            selection.fallback_policy(),
+        ))
     }
 
-    /// Iterates over canonical provider IDs in registration order.
+    /// Resolves the registry's current default selection.
     ///
     /// # Returns
     ///
-    /// An exact-size iterator borrowing every canonical provider ID once.
-    #[inline(always)]
-    pub fn provider_ids(&self) -> impl ExactSizeIterator<Item = &ProviderId> {
-        self.inner.entries.iter().map(|entry| entry.descriptor.id())
+    /// A composing provider owning candidates selected from one current
+    /// registry snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderSelectionError`] under the same conditions as
+    /// [`Self::resolve`].
+    #[inline]
+    pub fn resolve_default(
+        &self,
+    ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
+        let selection = self.default_selection();
+        self.resolve(&selection)
+    }
+
+    /// Returns descriptors in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// An owned descriptor snapshot. Later registrations do not alter it.
+    #[inline]
+    #[must_use]
+    pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
+        self.read_inner()
+            .entries
+            .iter()
+            .map(|entry| entry.descriptor.clone())
+            .collect()
+    }
+
+    /// Returns canonical provider IDs in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// An owned provider-ID snapshot. Later registrations do not alter it.
+    #[inline]
+    #[must_use]
+    pub fn provider_ids(&self) -> Vec<ProviderId> {
+        self.read_inner()
+            .entries
+            .iter()
+            .map(|entry| entry.descriptor.id().clone())
+            .collect()
     }
 
     /// Returns the number of registered providers.
     ///
     /// # Returns
     ///
-    /// The number of immutable registry entries.
+    /// The number of entries visible when the read lock is acquired.
     #[inline(always)]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner.entries.len()
+        self.read_inner().entries.len()
     }
 
     /// Returns whether this registry contains no registered providers.
     ///
     /// # Returns
     ///
-    /// `true` when the registry has no entries; otherwise, `false`.
+    /// `true` when the synchronized catalog is empty; otherwise, `false`.
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Looks up the entry position for a normalized selector.
+    /// Ensures a normalized selector is not already claimed.
     ///
     /// # Arguments
     ///
-    /// * `selector` - Valid normalized selector used as an index key.
+    /// * `inner` - Locked registry state inspected without mutation.
+    /// * `selector` - Candidate canonical ID or alias.
+    /// * `provider` - Canonical ID attempting to claim the selector.
     ///
     /// # Returns
     ///
-    /// `Some` with the internal entry position, or `None` when unregistered.
-    #[inline(always)]
-    pub(crate) fn index_for(
-        &self,
+    /// `Ok(())` when the selector is unclaimed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] naming both owners when the selector is
+    /// already claimed.
+    fn validate_selector(
+        inner: &RegistryInner<S>,
         selector: &ProviderSelector,
-    ) -> Option<usize> {
-        self.inner.selector_indices.get(selector).copied()
+        provider: &str,
+    ) -> Result<(), RegistrationError> {
+        let Some(existing) = inner
+            .selector_indices
+            .get(selector)
+            .and_then(|index| inner.entries.get(*index))
+        else {
+            return Ok(());
+        };
+        Err(RegistrationError::duplicate_selector(
+            selector.as_str(),
+            existing.descriptor.id().as_str(),
+            provider,
+        ))
     }
 
-    /// Borrows the resolved provider at an internal entry position.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - Registry-owned entry position.
+    /// Acquires shared registry state and recovers from lock poisoning.
     ///
     /// # Returns
     ///
-    /// A lookup wrapper borrowing the indexed entry.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `index` is outside the registry entry array. Registry-owned
-    /// indexes satisfy this invariant.
-    #[inline(always)]
-    pub(crate) fn resolved_at(&self, index: usize) -> ResolvedProvider<'_, S> {
-        ResolvedProvider::new(&self.inner.entries[index])
+    /// A read guard, including the state retained after an earlier panic.
+    #[inline]
+    fn read_inner(&self) -> RwLockReadGuard<'_, RegistryInner<S>> {
+        match self.inner.read() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 
-    /// Returns provider positions in automatic-selection order.
+    /// Acquires exclusive registry state and recovers from lock poisoning.
     ///
     /// # Returns
     ///
-    /// A slice of valid registry-owned entry positions.
-    #[inline(always)]
-    pub(crate) fn automatic_indices(&self) -> &[usize] {
-        &self.inner.automatic_indices
-    }
-
-    /// Resolves a normalized selector through the selector index.
-    ///
-    /// # Arguments
-    ///
-    /// * `selector` - Valid normalized selector used as an index key.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for a registered selector, or `None` otherwise.
-    #[inline(always)]
-    fn resolve_selector(
-        &self,
-        selector: &ProviderSelector,
-    ) -> Option<ResolvedProvider<'_, S>> {
-        self.index_for(selector)
-            .map(|index| self.resolved_at(index))
+    /// A write guard, including the state retained after an earlier panic.
+    #[inline]
+    fn write_inner(&self) -> RwLockWriteGuard<'_, RegistryInner<S>> {
+        match self.inner.write() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 }
 
@@ -222,11 +378,11 @@ impl<S> Clone for ProviderRegistry<S>
 where
     S: ServiceSpec,
 {
-    /// Clones the registry by incrementing its shared storage count.
+    /// Clones the registry by incrementing its shared-state reference count.
     ///
     /// # Returns
     ///
-    /// Another handle to the same immutable registry storage.
+    /// Another handle observing the same registrations and default selection.
     #[inline(always)]
     fn clone(&self) -> Self {
         Self {
@@ -239,14 +395,16 @@ impl<S> Default for ProviderRegistry<S>
 where
     S: ServiceSpec,
 {
-    /// Creates an empty registry through its default builder.
+    /// Creates an empty runtime registry.
     ///
     /// # Returns
     ///
-    /// An immutable registry with no providers.
-    #[inline(always)]
+    /// A synchronized catalog with automatic default selection.
+    #[inline]
     fn default() -> Self {
-        Self::builder().build()
+        Self {
+            inner: Arc::new(RwLock::new(RegistryInner::default())),
+        }
     }
 }
 
@@ -254,7 +412,7 @@ impl<S> fmt::Debug for ProviderRegistry<S>
 where
     S: ServiceSpec,
 {
-    /// Formats the registry using descriptors in registration order.
+    /// Formats owned snapshots of registry metadata.
     ///
     /// # Arguments
     ///
@@ -266,13 +424,12 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`fmt::Error`] when the formatter rejects any debug output.
+    /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("ProviderRegistry { descriptors: ")?;
         formatter
-            .debug_list()
-            .entries(self.descriptors())
-            .finish()?;
-        formatter.write_str(" }")
+            .debug_struct("ProviderRegistry")
+            .field("descriptors", &self.descriptors())
+            .field("default_selection", &self.default_selection())
+            .finish()
     }
 }

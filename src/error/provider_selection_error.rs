@@ -12,9 +12,11 @@ use std::{
     fmt,
 };
 
+use crate::ProviderSelector;
+
 use super::ProviderSelectorError;
 
-/// Error returned when a provider selection cannot be constructed.
+/// Error returned when a provider selection cannot be constructed or resolved.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderSelectionError {
@@ -28,6 +30,20 @@ pub enum ProviderSelectionError {
     },
     /// A chained selection contains no selector inputs.
     EmptyChain,
+    /// One named selection matched no registered provider.
+    #[non_exhaustive]
+    UnknownProvider {
+        /// Normalized selector that matched no provider.
+        selector: ProviderSelector,
+    },
+    /// A nonempty selector chain matched no registered provider candidates.
+    #[non_exhaustive]
+    NoCandidates {
+        /// Normalized selectors that matched no candidates, in input order.
+        selectors: Box<[ProviderSelector]>,
+    },
+    /// Automatic selection was requested from an empty registry.
+    EmptyRegistry,
 }
 
 impl ProviderSelectionError {
@@ -64,6 +80,57 @@ impl ProviderSelectionError {
     pub(crate) const fn empty_chain() -> Self {
         Self::EmptyChain
     }
+
+    /// Creates an error for a named selector that matched no provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `selector` - Valid normalized selector that reached no registry entry.
+    ///
+    /// # Returns
+    ///
+    /// An unknown-provider selection error.
+    #[inline]
+    #[must_use]
+    pub(crate) fn unknown_provider(selector: ProviderSelector) -> Self {
+        Self::UnknownProvider { selector }
+    }
+
+    /// Creates an error when a selector chain yields no provider candidates.
+    ///
+    /// # Arguments
+    ///
+    /// * `selectors` - Non-empty normalized selectors in input order.
+    ///
+    /// # Returns
+    ///
+    /// A no-candidates selection error retaining every requested selector.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `selectors` is empty.
+    #[inline]
+    #[must_use]
+    pub(crate) fn no_candidates(selectors: Vec<ProviderSelector>) -> Self {
+        assert!(
+            !selectors.is_empty(),
+            "no-candidates errors require at least one selector",
+        );
+        Self::NoCandidates {
+            selectors: selectors.into_boxed_slice(),
+        }
+    }
+
+    /// Creates an error for automatic selection from an empty registry.
+    ///
+    /// # Returns
+    ///
+    /// The empty-registry selection error.
+    #[inline]
+    #[must_use]
+    pub(crate) const fn empty_registry() -> Self {
+        Self::EmptyRegistry
+    }
 }
 
 impl fmt::Display for ProviderSelectionError {
@@ -99,6 +166,18 @@ impl fmt::Display for ProviderSelectionError {
             },
             Self::EmptyChain => formatter
                 .write_str("provider selection chain must not be empty"),
+            Self::UnknownProvider { selector } => {
+                write!(formatter, "unknown provider: {selector}")
+            }
+            Self::NoCandidates { selectors } => {
+                formatter.write_str("no provider candidates matched")?;
+                for selector in selectors {
+                    write!(formatter, "; {selector}")?;
+                }
+                Ok(())
+            }
+            Self::EmptyRegistry => formatter
+                .write_str("cannot select a provider from an empty registry"),
         }
     }
 }
@@ -108,13 +187,16 @@ impl Error for ProviderSelectionError {
     ///
     /// # Returns
     ///
-    /// The selector parsing source for invalid input, or `None` for an empty
-    /// chain.
+    /// The selector parsing source for invalid input, or `None` for
+    /// non-parser selection failures.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSelector { source, .. } => Some(source),
-            Self::EmptyChain => None,
+            Self::EmptyChain
+            | Self::UnknownProvider { .. }
+            | Self::NoCandidates { .. }
+            | Self::EmptyRegistry => None,
         }
     }
 }
