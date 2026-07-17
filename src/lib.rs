@@ -7,11 +7,11 @@
 // =============================================================================
 //! # Qubit SPI
 //!
-//! Typed, explicitly assembled service-provider infrastructure for Qubit Rust
-//! crates. A service specification chooses a configuration type and complete
-//! output handle. Applications build an immutable provider registry during
-//! startup, then use a resolver to create services through an explicit
-//! selection and fallback policy.
+//! Typed service-provider infrastructure for Qubit Rust crates. A service
+//! specification chooses a configuration type and output handle. Applications
+//! register self-described providers in a shared runtime registry. Downstream
+//! code resolves an explicit or default selection into a composing provider,
+//! then creates the service with explicit or default configuration.
 //!
 //! # Example
 //!
@@ -19,14 +19,15 @@
 //! use std::sync::Arc;
 //!
 //! use qubit_spi::{
-//!     FallbackPolicy,
+//!     ProviderDefinition,
 //!     ProviderDescriptor,
 //!     ProviderId,
 //!     ProviderRegistry,
-//!     ProviderResolver,
+//!     ProviderSelection,
 //!     ServiceProvider,
 //!     ServiceSpec,
 //! };
+//! use qubit_spi::error::ProviderCreationError;
 //!
 //! trait Greeter: Send + Sync {
 //!     fn greet(&self) -> &'static str;
@@ -47,58 +48,64 @@
 //!     type Output = Arc<dyn Greeter>;
 //! }
 //!
-//! struct EnglishProvider;
+//! struct EnglishProvider {
+//!     descriptor: ProviderDescriptor,
+//! }
 //!
 //! impl ServiceProvider<GreeterSpec> for EnglishProvider {
 //!     fn create(
 //!         &self,
 //!         _config: &(),
-//!     ) -> Result<Arc<dyn Greeter>, qubit_spi::error::ProviderError> {
+//!     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
 //!         Ok(Arc::new(EnglishGreeter))
 //!     }
 //! }
 //!
+//! impl ProviderDefinition<GreeterSpec> for EnglishProvider {
+//!     fn descriptor(&self) -> ProviderDescriptor {
+//!         self.descriptor.clone()
+//!     }
+//! }
+//!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-//! builder.register(
-//!     ProviderDescriptor::new(ProviderId::new("english")?).with_aliases(["en"])?,
-//!     EnglishProvider,
-//! )?;
-//! let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-//! let created = resolver.create_named("en", &())?;
-//! assert_eq!("hello", created.service().greet());
+//! let registry = ProviderRegistry::<GreeterSpec>::default();
+//! registry.register(EnglishProvider {
+//!     descriptor: ProviderDescriptor::new(ProviderId::new("english")?),
+//! })?;
+//! registry.set_default_selection(ProviderSelection::named("english")?);
+//!
+//! let greeter = registry.resolve_default()?.create_default()?;
+//! assert_eq!("hello", greeter.greet());
 //! # Ok(())
 //! # }
 //! ```
 
-mod created_service;
 pub mod error;
 mod fallback_policy;
 mod internal;
+mod provider_creation_termination;
+mod provider_definition;
 mod provider_descriptor;
 mod provider_id;
 mod provider_registry;
 mod provider_registry_builder;
-mod provider_resolver;
 mod provider_selection;
 mod provider_selection_kind;
 mod provider_selector;
-mod resolution_termination;
-mod resolved_provider;
+mod resolving_service_provider;
 mod service_provider;
 mod service_spec;
 
-pub use created_service::CreatedService;
 pub use fallback_policy::FallbackPolicy;
+pub use provider_creation_termination::ProviderCreationTermination;
+pub use provider_definition::ProviderDefinition;
 pub use provider_descriptor::ProviderDescriptor;
 pub use provider_id::ProviderId;
 pub use provider_registry::ProviderRegistry;
 pub use provider_registry_builder::ProviderRegistryBuilder;
-pub use provider_resolver::ProviderResolver;
 pub use provider_selection::ProviderSelection;
 pub use provider_selection_kind::ProviderSelectionKind;
 pub use provider_selector::ProviderSelector;
-pub use resolution_termination::ResolutionTermination;
-pub use resolved_provider::ResolvedProvider;
+pub use resolving_service_provider::ResolvingServiceProvider;
 pub use service_provider::ServiceProvider;
 pub use service_spec::ServiceSpec;

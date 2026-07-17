@@ -9,8 +9,8 @@
 
 /// Classification of a failure reported while a provider creates a service.
 ///
-/// Providers return these variants so [`crate::ProviderResolver`] can decide
-/// whether its fallback policy permits another provider to be tried.
+/// Leaf providers return these variants so [`crate::ResolvingServiceProvider`]
+/// can decide whether its fallback policy permits another provider attempt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderErrorKind {

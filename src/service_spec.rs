@@ -22,7 +22,6 @@ pub trait ServiceSpec: 'static {
 
     /// Complete output handle returned by provider factories.
     ///
-    /// This is the service value wrapped in [`crate::CreatedService`] after
-    /// successful resolution.
+    /// This is the service value returned directly after successful creation.
     type Output;
 }
