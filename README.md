@@ -7,16 +7,57 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-## What This Crate Does
+## Why This Crate Exists
 
-An application can register several implementations of one service and select
-the appropriate implementation at runtime without global state or untyped
-lookup.
+Applications usually depend on a capability, not on one concrete
+implementation. A MIME subsystem, for example, may use a model-backed detector
+when its model is installed, a system command when that command is available,
+or a lightweight detector as a fallback.
 
-For example, an application can prefer a cloud backend, fall back to a local
-backend when the cloud is unavailable, or select one backend by configuration.
-Rust checks that every provider accepts the same configuration type and returns
-the same output type.
+Without shared infrastructure, each service family tends to repeat the same
+startup code: parse a configured name, find a factory, order alternatives,
+decide which failures permit fallback, create the service, and preserve enough
+context to explain the result. Those handwritten branches are easy to make
+inconsistent and hard to diagnose.
+
+Qubit SPI centralizes that lifecycle in a typed, explicitly assembled model. It
+does not use global state, and it does not look up untyped objects from a
+container.
+
+## What It Provides
+
+- A compile-time contract that gives every Provider in one service family the
+  same construction configuration and output service type.
+- An immutable Registry assembled explicitly during application startup.
+- Named, automatic, and caller-ordered Provider selection.
+- Deterministic priority ordering, classified creation errors, controlled
+  fallback, and structured attempt diagnostics.
+- The canonical ID of the Provider that actually created the service.
+
+## When to Use It
+
+Use Qubit SPI when one capability has multiple interchangeable implementations
+and the application must choose among them by configuration, environment, or
+fallback rules. Typical examples include MIME detectors, filesystems,
+serializers, model backends, and platform-specific adapters.
+
+It is unnecessary for a service with only one implementation. It is also not a
+dynamic-library loader, a dependency-injection framework, or a service cache.
+
+## Core Model
+
+| Role | Responsibility |
+| --- | --- |
+| Service | The application-facing capability that business code calls repeatedly. |
+| `ServiceProvider` | A factory that creates one Service implementation from construction configuration. |
+| `ServiceSpec` | Binds the shared `Config` type to the complete `Output` service handle. |
+| `ProviderDescriptor` | Stores canonical ID, aliases, and priority separately from factory code. |
+| `ProviderRegistry` | Holds the immutable catalog of registered Provider factories. |
+| `ProviderResolver` | Selects candidates, calls `create`, and applies fallback policy. |
+| `CreatedService` | Returns the usable service together with the winning canonical Provider ID. |
+
+The important boundary is: a Provider **creates** a service; the returned
+Service then handles business operations.
 
 ## Installation
 
@@ -30,55 +71,97 @@ Qubit SPI requires Rust 1.94 or later.
 ## Quick Start
 
 ```rust
+use std::sync::Arc;
+
 use qubit_spi::error::ProviderError;
 use qubit_spi::{
     FallbackPolicy, ProviderDescriptor, ProviderId, ProviderRegistry, ProviderResolver,
     ServiceProvider, ServiceSpec,
 };
 
-struct GreetingSpec;
-
-impl ServiceSpec for GreetingSpec {
-    type Config = ();
-    type Output = &'static str;
+trait MimeDetector: Send + Sync {
+    fn detect(&self, file_name: &str, content: &[u8]) -> &str;
 }
 
-struct EnglishProvider;
+struct MimeConfig {
+    default_type: String,
+}
 
-impl ServiceProvider<GreetingSpec> for EnglishProvider {
-    fn create(&self, _config: &()) -> Result<&'static str, ProviderError> {
-        Ok("hello")
+struct MimeDetectorSpec;
+
+impl ServiceSpec for MimeDetectorSpec {
+    type Config = MimeConfig;
+    type Output = Arc<dyn MimeDetector>;
+}
+
+struct ExtensionDetector {
+    default_type: String,
+}
+
+impl MimeDetector for ExtensionDetector {
+    fn detect(&self, file_name: &str, _content: &[u8]) -> &str {
+        if file_name.ends_with(".png") {
+            "image/png"
+        } else {
+            &self.default_type
+        }
+    }
+}
+
+struct ExtensionProvider;
+
+impl ServiceProvider<MimeDetectorSpec> for ExtensionProvider {
+    fn create(
+        &self,
+        config: &MimeConfig,
+    ) -> Result<Arc<dyn MimeDetector>, ProviderError> {
+        if config.default_type.trim().is_empty() {
+            return Err(ProviderError::invalid_configuration(
+                "default_type must not be empty",
+            ));
+        }
+        Ok(Arc::new(ExtensionDetector {
+            default_type: config.default_type.clone(),
+        }))
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+    let mut builder = ProviderRegistry::<MimeDetectorSpec>::builder();
     builder.register(
-        ProviderDescriptor::new(ProviderId::new("english")?),
-        EnglishProvider,
+        ProviderDescriptor::new(ProviderId::new("extension")?),
+        ExtensionProvider,
     )?;
 
     let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-    let created = resolver.create_named("english", &())?;
+    let config = MimeConfig {
+        default_type: "application/octet-stream".to_owned(),
+    };
+    let created = resolver.create_named("extension", &config)?;
 
-    assert_eq!("english", created.provider_id().as_str());
-    assert_eq!("hello", *created.service());
+    assert_eq!("extension", created.provider_id().as_str());
+    assert_eq!(
+        "image/png",
+        created.service().detect("photo.png", b"PNG contents"),
+    );
     Ok(())
 }
 ```
 
 ## How the Example Works
 
-1. `GreetingSpec` fixes the provider input as `()` and the output as
-   `&'static str`.
-2. `EnglishProvider` implements the factory operation that returns the
-   greeting.
-3. `ProviderDescriptor` assigns the canonical name `english` during
-   registration.
-4. `ProviderRegistry::builder()` collects providers during startup, and
-   `build()` freezes the catalog for runtime use.
-5. `ProviderResolver::create_named` selects `english`; the returned
-   `CreatedService` contains both the output and the winning canonical ID.
+1. `MimeDetector` is the reusable service. File names and content bytes belong
+   to its `detect` business operation.
+2. `MimeConfig` contains construction-time configuration, while
+   `MimeDetectorSpec` requires every Provider to return
+   `Arc<dyn MimeDetector>`.
+3. `ExtensionProvider::create` validates that configuration and constructs a
+   complete detector. It does not detect a file.
+4. `ProviderDescriptor` gives that factory the canonical ID `extension`, and
+   the Registry stores it in an immutable catalog.
+5. `create_named` chooses the Provider and invokes its factory. The returned
+   `CreatedService` exposes both the winning ID and the usable detector.
+6. Only after creation does the application call `detect("photo.png", ...)`.
 
 ## Common Selection Modes
 
@@ -93,11 +176,15 @@ default: it continues after unsupported or unavailable providers but stops on
 configuration and initialization errors. Use `OnAnyError` only when
 best-effort fallback is intentional.
 
+Resolver calls do not cache service outputs. If service construction is
+expensive, create it once during startup and retain or clone the returned
+`Arc`.
+
 ## Learn More
 
-- Read the [User Guide](doc/user_guide.md) for a complete annotated example and
-  details about realistic output handles, aliases, priorities, fallback,
-  diagnostics, sharing, and performance.
+- Read the [User Guide](doc/user_guide.md) for the complete mental model, a
+  detailed annotated example, aliases, priorities, fallback, diagnostics,
+  lifecycle, sharing, and performance.
 - Browse the [API reference](https://docs.rs/qubit-spi).
 - 阅读[中文说明](README.zh_CN.md)。
 
