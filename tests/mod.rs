@@ -7,15 +7,16 @@
 // =============================================================================
 //! Integration tests for the public Qubit SPI contract.
 
-mod created_service_tests;
+mod common;
 mod error;
+mod provider_creation_termination_tests;
+mod provider_definition_tests;
 mod provider_descriptor_tests;
 mod provider_id_tests;
 mod provider_registry_builder_tests;
 mod provider_registry_tests;
-mod provider_resolver_tests;
 mod provider_selection_tests;
 mod provider_selector_tests;
-mod resolution_termination_tests;
+mod resolving_service_provider_tests;
 mod service_provider_tests;
 mod service_spec_tests;

@@ -1,13 +1,13 @@
 // =============================================================================
-//    Copyright (c) 2026 Haixing Hu.
+//    Copyright (c) 2025 - 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for SPI error contracts.
+//! Shared support code for integration tests.
 
-mod provider_attempt_failure_tests;
-mod provider_creation_error_tests;
-mod provider_error_tests;
-mod registration_error_tests;
+pub(crate) mod configurable_provider;
+pub(crate) mod self_described_provider;
+pub(crate) mod string_spec;
+pub(crate) mod test_provider_definition;

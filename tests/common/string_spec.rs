@@ -1,13 +1,17 @@
 // =============================================================================
-//    Copyright (c) 2026 Haixing Hu.
+//    Copyright (c) 2025 - 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for SPI error contracts.
 
-mod provider_attempt_failure_tests;
-mod provider_creation_error_tests;
-mod provider_error_tests;
-mod registration_error_tests;
+use qubit_spi::ServiceSpec;
+
+/// Service family pairing string configuration with string output.
+pub(crate) struct StringSpec;
+
+impl ServiceSpec for StringSpec {
+    type Config = String;
+    type Output = String;
+}

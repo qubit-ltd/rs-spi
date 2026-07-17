@@ -8,11 +8,9 @@
 
 use std::error::Error;
 
-use qubit_spi::error::{
-    ProviderSelectionError,
-    ResolutionError,
-};
+use qubit_spi::error::ProviderSelectionError;
 use qubit_spi::{
+    FallbackPolicy,
     ProviderSelection,
     ProviderSelectionKind,
     ProviderSelector,
@@ -49,6 +47,27 @@ fn test_chain_selection_preserves_candidate_order() {
             .collect::<Vec<_>>()
             .as_slice(),
     );
+}
+
+/// Verifies that every selection starts with absence-only fallback.
+#[test]
+fn test_selection_uses_on_absence_by_default() {
+    assert_eq!(
+        FallbackPolicy::OnAbsence,
+        ProviderSelection::auto().fallback_policy(),
+    );
+}
+
+/// Verifies immutable fallback-policy replacement without changing the target.
+#[test]
+fn test_selection_replaces_its_fallback_policy_immutably() {
+    let original = ProviderSelection::named("memory")
+        .expect("test selector should be valid");
+    let replaced = original.clone().with_fallback_policy(FallbackPolicy::Never);
+
+    assert_eq!(FallbackPolicy::OnAbsence, original.fallback_policy());
+    assert_eq!(FallbackPolicy::Never, replaced.fallback_policy());
+    assert_eq!(original.selector(), replaced.selector());
 }
 
 /// Verifies automatic defaults and invalid chain construction boundaries.
@@ -107,48 +126,4 @@ fn test_invalid_named_selection_preserves_input_and_source() {
     };
     assert_eq!(None, selector_index);
     assert_eq!("bad selector", source.input());
-}
-
-/// Verifies selection-construction failures convert into resolution failures.
-#[test]
-fn test_selection_error_converts_to_resolution_error() {
-    let selection_error = ProviderSelection::chain(["valid", "bad selector"])
-        .expect_err("invalid chain selector should fail");
-    let source_input_pointer = match &selection_error {
-        ProviderSelectionError::InvalidSelector { source, .. } => {
-            source.input().as_ptr()
-        }
-        _ => panic!("invalid chain selector should retain its source"),
-    };
-    let invalid: ResolutionError = selection_error.into();
-    let ResolutionError::InvalidSelector {
-        selector_index,
-        source,
-        ..
-    } = invalid
-    else {
-        panic!("invalid selection should retain its resolution context");
-    };
-    assert_eq!(Some(1), selector_index);
-    assert_eq!("bad selector", source.input());
-    assert_eq!(source_input_pointer, source.input().as_ptr());
-
-    let named: ResolutionError = ProviderSelection::named("bad selector")
-        .expect_err("invalid named selector should fail")
-        .into();
-    let ResolutionError::InvalidSelector {
-        selector_index,
-        source,
-        ..
-    } = named
-    else {
-        panic!("invalid named selection should retain its resolution context");
-    };
-    assert_eq!(None, selector_index);
-    assert_eq!("bad selector", source.input());
-
-    let empty: ResolutionError = ProviderSelection::chain(Vec::<&str>::new())
-        .expect_err("empty chain should fail")
-        .into();
-    assert!(matches!(empty, ResolutionError::EmptySelection));
 }

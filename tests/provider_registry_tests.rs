@@ -6,205 +6,248 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    error::Error,
-    sync::Arc,
-    thread,
-};
+use std::thread;
 
 use qubit_spi::error::{
-    ProviderError,
-    ProviderSelectorError,
-    ResolutionError,
+    ProviderSelectionError,
+    RegistrationError,
 };
 use qubit_spi::{
+    FallbackPolicy,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
+    ProviderSelection,
     ServiceProvider,
-    ServiceSpec,
 };
 
-/// Service family used by provider registry integration tests.
-struct TextSpec;
+use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::string_spec::StringSpec;
+use crate::common::test_provider_definition::define_provider;
 
-impl ServiceSpec for TextSpec {
-    type Config = ();
-    type Output = String;
-}
-
-/// Provider returning one stable text value.
-struct TextProvider;
-
-impl ServiceProvider<TextSpec> for TextProvider {
-    /// Creates the stable text service.
-    ///
-    /// # Arguments
-    ///
-    /// * `_config` - Unused unit configuration.
-    ///
-    /// # Returns
-    ///
-    /// The owned string `"hello"`.
-    fn create(&self, _config: &()) -> Result<String, ProviderError> {
-        Ok("hello".to_owned())
-    }
-}
-
-/// Verifies case-insensitive alias lookup and provider creation.
+/// Verifies that a registry accepts a self-described provider after creation.
 #[test]
-fn test_registry_resolves_case_insensitive_aliases() {
-    let mut builder = ProviderRegistry::<TextSpec>::builder();
-    builder
-        .register(
+fn test_registry_registers_a_self_described_provider_at_runtime() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+
+    registry
+        .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("english")
                     .expect("test provider ID should be valid"),
-            )
-            .with_aliases(["en"])
-            .expect("test alias should be valid"),
-            TextProvider,
-        )
-        .expect("test provider should register");
-    let registry = builder.build();
-
-    let provider = registry
-        .resolve(" EN ")
-        .expect("normalized alias should resolve");
-
-    assert_eq!("english", provider.descriptor().id().as_str());
-    assert_eq!(
-        "hello",
-        provider
-            .create(&())
-            .expect("test provider should create its service"),
-    );
-}
-
-/// Verifies the optional lookup API for known, unknown, and invalid selectors.
-#[test]
-fn test_registry_find_distinguishes_known_unknown_and_invalid_selectors() {
-    let mut builder = ProviderRegistry::<TextSpec>::builder();
-    builder
-        .register(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            )
-            .with_aliases(["en"])
-            .expect("test alias should be valid"),
-            TextProvider,
-        )
-        .expect("test provider should register");
-    let registry = builder.build();
-
-    assert!(registry.find(" EN ").is_some_and(|provider| {
-        provider.descriptor().id().as_str() == "english"
-    }),);
-    assert!(registry.find("missing").is_none());
-    assert!(registry.find("bad selector").is_none());
-}
-
-/// Verifies structured diagnostics for an unknown normalized selector.
-#[test]
-fn test_registry_reports_unknown_provider() {
-    let registry = ProviderRegistry::<TextSpec>::default();
-
-    let result = registry.resolve("missing");
-    let error = match result {
-        Ok(_) => panic!("missing provider must not resolve"),
-        Err(error) => error,
-    };
-
-    let ResolutionError::UnknownProvider { selector, .. } = &error else {
-        panic!("missing provider should produce an unknown-provider error");
-    };
-    assert_eq!("missing", selector.as_str());
-    assert!(Error::source(&error).is_none());
-}
-
-/// Verifies registry size and emptiness before and after registration.
-#[test]
-fn test_registry_length_matches_emptiness_and_registration_count() {
-    let empty = ProviderRegistry::<TextSpec>::default();
-    assert_eq!(0, empty.len());
-    assert!(empty.is_empty());
-
-    let mut builder = ProviderRegistry::<TextSpec>::builder();
-    builder
-        .register(
-            ProviderDescriptor::new(
-                ProviderId::new("english").expect("valid ID"),
             ),
-            TextProvider,
-        )
-        .expect("unique provider should register");
-    let registry = builder.build();
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("runtime registration should succeed");
+
     assert_eq!(1, registry.len());
-    assert!(!registry.is_empty());
+    assert_eq!("english", registry.provider_ids()[0].as_str());
 }
 
-/// Verifies preservation of raw invalid selector input and its parse source.
+/// Verifies that a failed registration leaves every selector unclaimed.
 #[test]
-fn test_registry_preserves_invalid_selector_input_and_source() {
-    let registry = ProviderRegistry::<TextSpec>::default();
+fn test_registry_rejects_conflicts_without_partial_mutation() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("english")
+                    .expect("test provider ID should be valid"),
+            )
+            .with_aliases(["en"])
+            .expect("test alias should be valid"),
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("first provider should register");
 
-    let error = match registry.resolve(" Bad Selector ") {
-        Ok(_) => panic!("invalid selector must not resolve"),
-        Err(error) => error,
-    };
+    let error = registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("spanish")
+                    .expect("test provider ID should be valid"),
+            )
+            .with_aliases(["es", "en"])
+            .expect("test aliases should be valid"),
+            ConfigurableProvider::success("hola"),
+        ))
+        .expect_err("duplicate alias should be rejected");
 
-    let ResolutionError::InvalidSelector {
-        selector_index,
-        source,
-        ..
-    } = &error
-    else {
-        panic!("invalid provider input should retain its parser error");
-    };
-    assert_eq!(None, *selector_index);
-    assert_eq!(" Bad Selector ", source.input());
-    assert!(matches!(source, ProviderSelectorError::Invalid { .. }));
-    assert!(
-        Error::source(&error)
-            .and_then(|source| source.downcast_ref::<ProviderSelectorError>())
-            .is_some()
+    assert!(matches!(error, RegistrationError::DuplicateSelector { .. }));
+    assert_eq!(
+        vec!["english"],
+        registry
+            .provider_ids()
+            .iter()
+            .map(ProviderId::as_str)
+            .collect::<Vec<_>>()
     );
-    assert!(error.to_string().contains(" Bad Selector "));
+    let selection =
+        ProviderSelection::named("es").expect("test selector should be valid");
+    assert!(matches!(
+        registry.resolve(&selection),
+        Err(ProviderSelectionError::UnknownProvider { .. }),
+    ));
 }
 
-/// Verifies that cloned immutable registries support concurrent resolution.
+/// Verifies that cloned handles observe providers registered later.
 #[test]
-fn test_cloned_registry_supports_concurrent_lookup_and_creation() {
-    let mut builder = ProviderRegistry::<TextSpec>::builder();
-    builder
-        .register(
+fn test_registry_clones_share_later_registrations() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    let clone = registry.clone();
+
+    registry
+        .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("english")
                     .expect("test provider ID should be valid"),
             ),
-            TextProvider,
-        )
-        .expect("test provider should register");
-    let registry = Arc::new(builder.build());
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("runtime registration should succeed");
 
+    assert_eq!(
+        vec!["english"],
+        clone
+            .provider_ids()
+            .iter()
+            .map(ProviderId::as_str)
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Verifies reading and replacing the registry's default selection.
+#[test]
+fn test_registry_uses_and_updates_default_selection() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    assert_eq!(ProviderSelection::auto(), registry.default_selection());
+
+    let selection = ProviderSelection::named("english")
+        .expect("test selector should be valid")
+        .with_fallback_policy(FallbackPolicy::OnAnyError);
+    registry.set_default_selection(selection.clone());
+
+    assert_eq!(selection, registry.default_selection());
+}
+
+/// Verifies default resolution and registry debug metadata snapshots.
+#[test]
+fn test_registry_resolves_default_and_formats_snapshot() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("english")
+                    .expect("test provider ID should be valid"),
+            ),
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("test provider should register");
+    registry.set_default_selection(
+        ProviderSelection::named("english")
+            .expect("test selector should be valid"),
+    );
+
+    let output = registry
+        .resolve_default()
+        .expect("default selection should resolve")
+        .create_default()
+        .expect("default provider should create its service");
+    let debug = format!("{registry:?}");
+
+    assert_eq!("hello", output);
+    assert!(debug.contains("ProviderRegistry"));
+    assert!(debug.contains("english"));
+    assert!(debug.contains("default_selection"));
+}
+
+/// Verifies that descriptor snapshots retain successful registration order.
+#[test]
+fn test_registry_preserves_registration_order_in_descriptor_snapshots() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    for id in ["third", "first", "second"] {
+        registry
+            .register(define_provider(
+                ProviderDescriptor::new(
+                    ProviderId::new(id)
+                        .expect("test provider ID should be valid"),
+                ),
+                ConfigurableProvider::success("hello"),
+            ))
+            .expect("unique provider should register");
+    }
+
+    assert_eq!(
+        vec!["third", "first", "second"],
+        registry
+            .descriptors()
+            .iter()
+            .map(|descriptor| descriptor.id().as_str())
+            .collect::<Vec<_>>(),
+    );
+}
+
+/// Verifies concurrent registration and owned metadata snapshots.
+#[test]
+fn test_registry_supports_concurrent_registration_and_snapshot_reads() {
+    let registry = ProviderRegistry::<StringSpec>::default();
     let threads = (0..8)
-        .map(|_| {
-            let registry = Arc::clone(&registry);
+        .map(|index| {
+            let registry = registry.clone();
             thread::spawn(move || {
+                let id = format!("provider-{index}");
                 registry
-                    .resolve("english")
-                    .expect("registered provider should resolve")
-                    .create(&())
-                    .expect("test provider should create its service")
+                    .register(define_provider(
+                        ProviderDescriptor::new(
+                            ProviderId::new(&id)
+                                .expect("test provider ID should be valid"),
+                        ),
+                        ConfigurableProvider::success("hello"),
+                    ))
+                    .expect("unique provider should register");
+                registry.descriptors()
             })
         })
         .collect::<Vec<_>>();
 
     for thread in threads {
-        assert_eq!(
-            "hello",
-            thread.join().expect("lookup thread should not panic"),
+        assert!(
+            !thread
+                .join()
+                .expect("registration thread should not panic")
+                .is_empty()
         );
     }
+    let mut ids = registry
+        .provider_ids()
+        .into_iter()
+        .map(|id| id.as_str().to_owned())
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    assert_eq!(
+        (0..8)
+            .map(|index| format!("provider-{index}"))
+            .collect::<Vec<_>>(),
+        ids,
+    );
+}
+
+/// Verifies registry size and emptiness before and after registration.
+#[test]
+fn test_registry_length_matches_emptiness_and_registration_count() {
+    let empty = ProviderRegistry::<StringSpec>::default();
+    assert_eq!(0, empty.len());
+    assert!(empty.is_empty());
+
+    let mut builder = ProviderRegistry::<StringSpec>::builder();
+    builder
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("english").expect("valid ID"),
+            ),
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("unique provider should register");
+    let registry = builder.build();
+    assert_eq!(1, registry.len());
+    assert!(!registry.is_empty());
 }
