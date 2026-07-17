@@ -7,24 +7,16 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Typed, explicitly assembled service-provider infrastructure for Rust.
+## What This Crate Does
 
-## Overview
+An application can register several implementations of one service and select
+the appropriate implementation at runtime without global state or untyped
+lookup.
 
-Qubit SPI lets an application define a service family, register provider
-factories during startup, and resolve one provider through automatic, named, or
-ordered selection. A built `ProviderRegistry` is immutable and cheaply
-cloneable, while `ProviderResolver` applies a configured `FallbackPolicy` when
-a provider cannot create the requested service.
-
-The crate owns provider identity and selection metadata, but it does not impose
-a service handle type or convert between `Box`, `Arc`, and `Rc`.
-
-## Documentation
-
-- [User Guide](doc/user_guide.md)
-- [API Reference](https://docs.rs/qubit-spi)
-- [Chinese README](README.zh_CN.md)
+For example, an application can prefer a cloud backend, fall back to a local
+backend when the cloud is unavailable, or select one backend by configuration.
+Rust checks that every provider accepts the same configuration type and returns
+the same output type.
 
 ## Installation
 
@@ -38,81 +30,76 @@ Qubit SPI requires Rust 1.94 or later.
 ## Quick Start
 
 ```rust
-use std::sync::Arc;
-
 use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    FallbackPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderResolver,
-    ServiceProvider,
-    ServiceSpec,
+    FallbackPolicy, ProviderDescriptor, ProviderId, ProviderRegistry, ProviderResolver,
+    ServiceProvider, ServiceSpec,
 };
 
-trait Greeter: Send + Sync {
-    fn greet(&self) -> &'static str;
-}
+struct GreetingSpec;
 
-struct GreeterSpec;
-
-impl ServiceSpec for GreeterSpec {
+impl ServiceSpec for GreetingSpec {
     type Config = ();
-    type Output = Arc<dyn Greeter>;
-}
-
-struct EnglishGreeter;
-
-impl Greeter for EnglishGreeter {
-    fn greet(&self) -> &'static str {
-        "hello"
-    }
+    type Output = &'static str;
 }
 
 struct EnglishProvider;
 
-impl ServiceProvider<GreeterSpec> for EnglishProvider {
-    fn create(&self, _config: &()) -> Result<Arc<dyn Greeter>, ProviderError> {
-        Ok(Arc::new(EnglishGreeter))
+impl ServiceProvider<GreetingSpec> for EnglishProvider {
+    fn create(&self, _config: &()) -> Result<&'static str, ProviderError> {
+        Ok("hello")
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut builder = ProviderRegistry::<GreeterSpec>::builder();
+    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
     builder.register(
-        ProviderDescriptor::new(ProviderId::new("english")?)
-            .with_aliases(["en"])?
-            .with_priority(100),
+        ProviderDescriptor::new(ProviderId::new("english")?),
         EnglishProvider,
     )?;
 
-    let resolver = ProviderResolver::new(
-        builder.build(),
-        FallbackPolicy::OnAbsence,
-    );
-    let created = resolver.create_named("en", &())?;
+    let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
+    let created = resolver.create_named("english", &())?;
 
     assert_eq!("english", created.provider_id().as_str());
-    assert_eq!("hello", created.service().greet());
+    assert_eq!("hello", *created.service());
     Ok(())
 }
 ```
 
+## How the Example Works
+
+1. `GreetingSpec` fixes the provider input as `()` and the output as
+   `&'static str`.
+2. `EnglishProvider` implements the factory operation that returns the
+   greeting.
+3. `ProviderDescriptor` assigns the canonical name `english` during
+   registration.
+4. `ProviderRegistry::builder()` collects providers during startup, and
+   `build()` freezes the catalog for runtime use.
+5. `ProviderResolver::create_named` selects `english`; the returned
+   `CreatedService` contains both the output and the winning canonical ID.
+
 ## Common Selection Modes
 
-- `create_auto` tries providers by descending priority and then ascending
-  canonical provider ID.
-- `create_named` resolves one canonical ID or alias and never falls back.
-- `create_chain` tries selectors in caller-provided order, records unknown
-  selectors, and does not invoke the same provider twice through aliases.
-- `FallbackPolicy::OnAbsence` continues after unsupported or unavailable
-  providers. `FallbackPolicy::OnAnyError` continues after every provider
-  creation error.
+| Need | Method | Behavior |
+| --- | --- | --- |
+| One configured provider | `create_named` | Tries exactly one canonical ID or alias; never falls back. |
+| Best available provider | `create_auto` | Uses priority descending, then canonical ID ascending. |
+| Ordered preferences | `create_chain` | Tries selectors in caller order and avoids invoking one provider twice through aliases. |
 
-See the [User Guide](doc/user_guide.md) for reusable validated selections,
-registry lookup, complete fallback semantics, error diagnostics, concurrency,
-and recommended practices.
+Every resolver has a fallback policy. `FallbackPolicy::OnAbsence` is the safer
+default: it continues after unsupported or unavailable providers but stops on
+configuration and initialization errors. Use `OnAnyError` only when
+best-effort fallback is intentional.
+
+## Learn More
+
+- Read the [User Guide](doc/user_guide.md) for a complete annotated example and
+  details about realistic output handles, aliases, priorities, fallback,
+  diagnostics, sharing, and performance.
+- Browse the [API reference](https://docs.rs/qubit-spi).
+- 阅读[中文说明](README.zh_CN.md)。
 
 ## Testing
 
