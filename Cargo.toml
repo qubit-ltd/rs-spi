@@ -18,6 +18,7 @@ include = [
     "/LICENSE",
     "/README.md",
     "/README.zh_CN.md",
+    "/doc/**/user_guide*.md",
     "/src/**",
 ]
 
