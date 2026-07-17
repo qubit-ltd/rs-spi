@@ -12,7 +12,6 @@ use qubit_spi::error::ProviderSelectionError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderSelection,
-    ProviderSelectionKind,
     ProviderSelector,
 };
 
@@ -22,12 +21,15 @@ fn test_named_selection_normalizes_its_selector() {
     let selection = ProviderSelection::named(" File+Command ")
         .expect("valid named selector should parse");
 
-    assert_eq!(ProviderSelectionKind::Named, selection.kind());
     assert_eq!(
-        Some("file+command"),
-        selection.selector().map(ProviderSelector::as_str),
+        ["file+command"],
+        selection
+            .selectors()
+            .iter()
+            .map(ProviderSelector::as_str)
+            .collect::<Vec<_>>()
+            .as_slice(),
     );
-    assert!(selection.selectors().is_empty());
 }
 
 /// Verifies that chained selection preserves caller-supplied ordering.
@@ -36,8 +38,6 @@ fn test_chain_selection_preserves_candidate_order() {
     let selection = ProviderSelection::chain(["remote", "memory"])
         .expect("valid selector chain should parse");
 
-    assert_eq!(ProviderSelectionKind::Chain, selection.kind());
-    assert_eq!(None, selection.selector());
     assert_eq!(
         ["remote", "memory"],
         selection
@@ -67,14 +67,14 @@ fn test_selection_replaces_its_fallback_policy_immutably() {
 
     assert_eq!(FallbackPolicy::OnAbsence, original.fallback_policy());
     assert_eq!(FallbackPolicy::Never, replaced.fallback_policy());
-    assert_eq!(original.selector(), replaced.selector());
+    assert_eq!(original.selectors(), replaced.selectors());
 }
 
 /// Verifies automatic defaults and invalid chain construction boundaries.
 #[test]
 fn test_selection_construction_enforces_invariants() {
     let automatic = ProviderSelection::auto();
-    assert_eq!(ProviderSelectionKind::Auto, automatic.kind());
+    assert!(automatic.selectors().is_empty());
     assert_eq!(automatic, ProviderSelection::default());
 
     let empty = ProviderSelection::chain(Vec::<&str>::new())

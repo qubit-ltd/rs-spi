@@ -18,8 +18,8 @@ use crate::common::string_spec::StringSpec;
 /// Verifies that registration obtains metadata from the Provider itself.
 #[test]
 fn test_definition_supplies_registration_descriptor() {
-    let mut builder = ProviderRegistry::<StringSpec>::builder();
-    builder
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
         .register(SelfDescribedProvider::new(
             ProviderDescriptor::new(
                 ProviderId::new("english")
@@ -29,7 +29,6 @@ fn test_definition_supplies_registration_descriptor() {
         ))
         .expect("self-described provider should register");
 
-    let registry = builder.build();
     assert_eq!(1, registry.len());
     assert_eq!("english", registry.provider_ids()[0].as_str());
 }

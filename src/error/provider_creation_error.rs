@@ -139,17 +139,6 @@ impl ProviderCreationError {
         }
     }
 
-    /// Returns the final recorded provider failure.
-    ///
-    /// # Returns
-    ///
-    /// The last aggregate attempt, or `None` for a direct provider error.
-    #[inline(always)]
-    #[must_use]
-    pub fn terminal_attempt(&self) -> Option<&ProviderAttemptFailure> {
-        self.attempts().last()
-    }
-
     /// Returns the provider failure that directly explains the aggregate.
     ///
     /// # Returns

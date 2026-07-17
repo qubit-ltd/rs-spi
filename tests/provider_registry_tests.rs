@@ -84,7 +84,7 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
     let selection =
         ProviderSelection::named("es").expect("test selector should be valid");
     assert!(matches!(
-        registry.resolve(&selection),
+        registry.resolve_selected(&selection),
         Err(ProviderSelectionError::UnknownProvider { .. }),
     ));
 }
@@ -131,7 +131,7 @@ fn test_registry_uses_and_updates_default_selection() {
 
 /// Verifies default resolution and registry debug metadata snapshots.
 #[test]
-fn test_registry_resolves_default_and_formats_snapshot() {
+fn test_registry_resolves_configured_default_and_formats_snapshot() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
@@ -148,9 +148,9 @@ fn test_registry_resolves_default_and_formats_snapshot() {
     );
 
     let output = registry
-        .resolve_default()
+        .resolve()
         .expect("default selection should resolve")
-        .create_default()
+        .create()
         .expect("default provider should create its service");
     let debug = format!("{registry:?}");
 
@@ -238,8 +238,8 @@ fn test_registry_length_matches_emptiness_and_registration_count() {
     assert_eq!(0, empty.len());
     assert!(empty.is_empty());
 
-    let mut builder = ProviderRegistry::<StringSpec>::builder();
-    builder
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
         .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("english").expect("valid ID"),
@@ -247,7 +247,6 @@ fn test_registry_length_matches_emptiness_and_registration_count() {
             ConfigurableProvider::success("hello"),
         ))
         .expect("unique provider should register");
-    let registry = builder.build();
     assert_eq!(1, registry.len());
     assert!(!registry.is_empty());
 }

@@ -53,7 +53,7 @@ impl ServiceProvider<StringSpec> for SelfDescribedProvider {
     /// # Returns
     ///
     /// An owned copy of the configured output.
-    fn create(
+    fn create_configured(
         &self,
         _config: &String,
     ) -> Result<String, ProviderCreationError> {

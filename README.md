@@ -88,8 +88,8 @@ use qubit_spi::ServiceProvider;
 
 /// Creates the App-selected default Greeter and prints one greeting.
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
     println!("{}", greeter.greet("Rust"));
     Ok(())
 }
@@ -127,7 +127,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -178,11 +178,11 @@ specific requirements can supply either one without forcing the other:
 
 ```rust,ignore
 let selection = ProviderSelection::named("friendly")?;
-let provider = GREETER_REGISTRY.resolve(&selection)?;
+let provider = GREETER_REGISTRY.resolve_selected(&selection)?;
 let config = GreeterConfig {
     prefix: "Welcome".to_owned(),
 };
-let greeter = provider.create(&config)?;
+let greeter = provider.create_configured(&config)?;
 ```
 
 ## Why This Crate Exists
@@ -231,10 +231,10 @@ App startup
                          │
                          ▼
 shared ProviderRegistry<ServiceSpec>
-                         │ resolve / resolve_default
+                         │ resolve_selected / resolve
                          ▼
 ResolvingServiceProvider<ServiceSpec>
-                         │ create(config) / create_default()
+                         │ create_configured(config) / create()
                          ▼
 ServiceSpec::Output
 ```
@@ -242,8 +242,8 @@ ServiceSpec::Output
 | Stage | Main API | Success | Failure |
 | --- | --- | --- | --- |
 | Registration | `register(provider)` | Provider becomes visible through every Registry clone | `RegistrationError` |
-| Selection | `resolve(&selection)` or `resolve_default()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderSelectionError` |
-| Creation | `create(&config)` or `create_default()` | `ServiceSpec::Output` directly | `ProviderCreationError` |
+| Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderSelectionError` |
+| Creation | `create_configured(&config)` or `create()` | `ServiceSpec::Output` directly | `ProviderCreationError` |
 
 ## Selection and Fallback
 
@@ -289,14 +289,13 @@ provider code never runs under a Registry lock.
 
 A reusable domain crate can wrap one Registry in a `LazyLock` and expose a
 domain-specific `global()` method. This is how an App can install a provider
-that a separately published library later receives through `resolve_default()`.
+that a separately published library later receives through `resolve()`.
 The App must configure that Registry before downstream code first needs the
 service. If Cargo links incompatible versions of the domain crate, each linked
 crate version owns its own static Registry.
 
-Use `ProviderRegistry::default()` or `ProviderRegistry::builder()` when an
-isolated Registry is preferable for tests or scoped components. Builder output
-remains runtime mutable.
+Use `ProviderRegistry::default()` when an isolated Registry is preferable for
+tests or scoped components. The Registry remains open to runtime registration.
 
 ## Learn More
 

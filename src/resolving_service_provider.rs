@@ -114,13 +114,13 @@ where
     /// failures when all candidates fail or fallback policy stops traversal.
     /// A nested aggregate from a registered provider is classified as an
     /// initialization failure and always stops traversal.
-    fn create(
+    fn create_configured(
         &self,
         config: &S::Config,
     ) -> Result<S::Output, ProviderCreationError> {
         let mut failures = Vec::new();
         for candidate in &self.candidates {
-            match candidate.provider.create(config) {
+            match candidate.provider.create_configured(config) {
                 Ok(service) => return Ok(service),
                 Err(ProviderCreationError::Provider(error)) => {
                     let kind = error.kind();

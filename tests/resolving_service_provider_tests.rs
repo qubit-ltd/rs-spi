@@ -52,14 +52,14 @@ fn test_resolving_provider_returns_service_output_directly() {
     );
 
     let provider: ResolvingServiceProvider<StringSpec> = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve");
     let debug = format!("{provider:?}");
 
     assert_eq!(
         "service",
         provider
-            .create(&String::new())
+            .create_configured(&String::new())
             .expect("provider should create its service"),
     );
     assert!(debug.contains("ResolvingServiceProvider"));
@@ -80,11 +80,11 @@ fn test_resolving_provider_passes_explicit_config_unchanged() {
         ConfigurableProvider::echo().with_seen_config(Arc::clone(&seen_config)),
     );
     let provider = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve");
 
     let output = provider
-        .create(&"explicit".to_owned())
+        .create_configured(&"explicit".to_owned())
         .expect("echo provider should succeed");
 
     assert_eq!("explicit", output);
@@ -100,14 +100,12 @@ fn test_resolving_provider_uses_default_config() {
     let registry = ProviderRegistry::<StringSpec>::default();
     register_provider(&registry, "echo", &[], 0, ConfigurableProvider::echo());
     let provider = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve");
 
     assert_eq!(
         String::default(),
-        provider
-            .create_default()
-            .expect("default creation should succeed"),
+        provider.create().expect("default creation should succeed"),
     );
 }
 
@@ -135,9 +133,9 @@ fn test_registry_resolves_named_alias_to_one_candidate() {
         ProviderSelection::named("EN").expect("test selector should be valid");
 
     let output = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("alias should resolve")
-        .create_default()
+        .create()
         .expect("selected provider should succeed");
 
     assert_eq!("hello", output);
@@ -170,9 +168,9 @@ fn test_registry_resolves_chain_in_input_order_and_deduplicates_aliases() {
             .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let output = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("chain should resolve known candidates")
-        .create_default()
+        .create()
         .expect("second provider should succeed");
 
     assert_eq!("second", output);
@@ -194,9 +192,9 @@ fn test_registry_resolves_auto_by_priority_then_id() {
     }
 
     let output = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect("highest-ranked provider should succeed");
 
     assert_eq!("alpha", output);
@@ -218,7 +216,7 @@ fn test_registry_reports_named_unknown_before_creation() {
         .expect("test selector should be valid");
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect_err("unknown selection should fail");
     let message = error.to_string();
 
@@ -246,7 +244,7 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
         .expect("test chain should be valid");
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect_err("unmatched chain should fail");
     let message = error.to_string();
 
@@ -270,7 +268,7 @@ fn test_registry_reports_empty_auto_selection_before_creation() {
     let registry = ProviderRegistry::<StringSpec>::default();
 
     let error = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect_err("empty automatic selection should fail");
 
     assert!(matches!(&error, ProviderSelectionError::EmptyRegistry));
@@ -304,9 +302,9 @@ fn test_never_stops_after_first_failure() {
         ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never);
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect_err("never policy should stop after one failure");
 
     assert_eq!(
@@ -344,9 +342,9 @@ fn test_on_absence_continues_after_unsupported_and_unavailable() {
     );
 
     let output = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect("absence policy should reach fallback");
 
     assert_eq!("fallback", output);
@@ -376,9 +374,9 @@ fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
         );
 
         let error = registry
-            .resolve(&ProviderSelection::auto())
+            .resolve_selected(&ProviderSelection::auto())
             .expect("automatic selection should resolve")
-            .create_default()
+            .create()
             .expect_err("absence policy should stop");
 
         assert_eq!(
@@ -417,9 +415,9 @@ fn test_on_any_error_continues_after_every_leaf_failure_kind() {
             .with_fallback_policy(FallbackPolicy::OnAnyError);
 
         let output = registry
-            .resolve(&selection)
+            .resolve_selected(&selection)
             .expect("automatic selection should resolve")
-            .create_default()
+            .create()
             .expect("any-error policy should reach fallback");
 
         assert_eq!("fallback", output);
@@ -448,9 +446,9 @@ fn test_creation_error_preserves_ordered_provider_ids_and_sources() {
         .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect_err("both providers should fail");
 
     assert_eq!(
@@ -486,9 +484,9 @@ fn test_named_selection_failure_contains_exact_provider_id() {
         .expect("test selector should be valid");
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("named alias should resolve")
-        .create_default()
+        .create()
         .expect_err("selected provider should fail");
 
     assert_eq!(1, error.attempts().len());
@@ -513,7 +511,7 @@ fn test_nested_aggregate_candidate_error_stops_as_initialization_failure() {
     let inner_selection = ProviderSelection::auto()
         .with_fallback_policy(FallbackPolicy::OnAnyError);
     let inner_provider = inner_registry
-        .resolve(&inner_selection)
+        .resolve_selected(&inner_selection)
         .expect("inner selection should resolve");
 
     let fallback_calls = Arc::new(AtomicUsize::new(0));
@@ -531,9 +529,9 @@ fn test_nested_aggregate_candidate_error_stops_as_initialization_failure() {
         .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = outer_registry
-        .resolve(&outer_selection)
+        .resolve_selected(&outer_selection)
         .expect("outer selection should resolve")
-        .create_default()
+        .create()
         .expect_err("nested aggregate must stop outer fallback");
 
     assert_eq!(1, error.attempts().len());
@@ -557,7 +555,7 @@ fn test_resolved_candidate_snapshot_ignores_later_registration() {
         ConfigurableProvider::success("initial"),
     );
     let snapshot = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("initial selection should resolve");
 
     register_provider(
@@ -570,16 +568,14 @@ fn test_resolved_candidate_snapshot_ignores_later_registration() {
 
     assert_eq!(
         "initial",
-        snapshot
-            .create_default()
-            .expect("snapshot provider should succeed"),
+        snapshot.create().expect("snapshot provider should succeed"),
     );
     assert_eq!(
         "later",
         registry
-            .resolve(&ProviderSelection::auto())
+            .resolve_selected(&ProviderSelection::auto())
             .expect("updated selection should resolve")
-            .create_default()
+            .create()
             .expect("new highest-priority provider should succeed"),
     );
 }
@@ -590,7 +586,7 @@ fn test_cloned_resolving_provider_supports_concurrent_creation() {
     let registry = ProviderRegistry::<StringSpec>::default();
     register_provider(&registry, "echo", &[], 0, ConfigurableProvider::echo());
     let provider = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve");
 
     let threads = (0..8)
@@ -599,7 +595,7 @@ fn test_cloned_resolving_provider_supports_concurrent_creation() {
             thread::spawn(move || {
                 let config = format!("config-{index}");
                 provider
-                    .create(&config)
+                    .create_configured(&config)
                     .expect("echo provider should succeed")
             })
         })

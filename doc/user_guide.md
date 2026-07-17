@@ -132,8 +132,8 @@ impl ServiceSpec for GreeterSpec {
 `Arc<dyn Trait>`, a concrete client, or a lightweight handle. Qubit SPI does not
 wrap successful outputs with provider metadata and does not cache them.
 
-`ServiceSpec::Config` may be unsized. `create_default()` is available only when
-that config implements `Default`; `create(&config)` is always available.
+`ServiceSpec::Config` may be unsized. `create()` is available only when
+that config implements `Default`; `create_configured(&config)` is always available.
 
 ## Implementing a Self-Described Provider
 
@@ -166,7 +166,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -233,14 +233,12 @@ let registry = ProviderRegistry::<GreeterSpec>::default();
 registry.register(FriendlyGreeterProvider)?;
 ```
 
-`ProviderRegistry::builder()` is an optional fluent assembly convenience:
+An isolated Registry is assembled directly through its runtime registration
+API:
 
 ```rust,ignore
-let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(FriendlyGreeterProvider)?;
-let registry = builder.build();
-
-// Builder output is still runtime mutable.
+let registry = ProviderRegistry::<GreeterSpec>::default();
+registry.register(FriendlyGreeterProvider)?;
 registry.register(AnotherProvider)?;
 ```
 
@@ -335,8 +333,8 @@ use qubit_spi::ServiceProvider;
 
 /// Creates the App-selected default Greeter and prints one greeting.
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
     println!("{}", greeter.greet("Rust"));
     Ok(())
 }
@@ -374,7 +372,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -440,7 +438,7 @@ inside the service's config type.
 
 ```rust,ignore
 let selection = ProviderSelection::named("friendly")?;
-let provider = registry.resolve(&selection)?;
+let provider = registry.resolve_selected(&selection)?;
 ```
 
 Named selection resolves exactly one canonical ID or alias. An unknown selector
@@ -455,7 +453,7 @@ let selection = ProviderSelection::chain([
     "friendly",
     "minimal",
 ])?;
-let provider = registry.resolve(&selection)?;
+let provider = registry.resolve_selected(&selection)?;
 ```
 
 Chain order is caller order. Unknown selectors are skipped. If multiple
@@ -466,7 +464,7 @@ when no chain entry matches.
 ### Automatic Selection
 
 ```rust,ignore
-let provider = registry.resolve(&ProviderSelection::auto())?;
+let provider = registry.resolve_selected(&ProviderSelection::auto())?;
 ```
 
 Automatic selection includes every registered Provider in deterministic order:
@@ -487,12 +485,12 @@ let default = ProviderSelection::chain(["remote", "friendly"])?
 registry.set_default_selection(default);
 
 let snapshot = registry.default_selection();
-let provider = registry.resolve_default()?;
+let provider = registry.resolve()?;
 ```
 
 `set_default_selection` stores a validated selection but does not require its
 providers to exist yet. This permits setting policy before registration.
-`resolve_default` evaluates the current selection against the current Registry.
+`resolve` evaluates the current selection against the current Registry.
 
 ### Selection and Config Are Independent
 
@@ -500,16 +498,16 @@ These are all valid:
 
 ```rust,ignore
 // Registry default selection and default config.
-let service = registry.resolve_default()?.create_default()?;
+let service = registry.resolve()?.create()?;
 
 // Explicit selection and default config.
-let service = registry.resolve(&selection)?.create_default()?;
+let service = registry.resolve_selected(&selection)?.create()?;
 
 // Registry default selection and explicit config.
-let service = registry.resolve_default()?.create(&config)?;
+let service = registry.resolve()?.create_configured(&config)?;
 
 // Explicit selection and explicit config.
-let service = registry.resolve(&selection)?.create(&config)?;
+let service = registry.resolve_selected(&selection)?.create_configured(&config)?;
 ```
 
 Do not force a Provider selection field into every service config. A config may
@@ -525,8 +523,8 @@ selection's fallback policy when `create` is called.
 ```rust,ignore
 use qubit_spi::ServiceProvider;
 
-let provider = registry.resolve(&selection)?;
-let service = provider.create(&config)?;
+let provider = registry.resolve_selected(&selection)?;
+let service = provider.create_configured(&config)?;
 ```
 
 Import the `ServiceProvider` trait so its methods are in scope.
@@ -672,7 +670,7 @@ Check the canonical ID and normalized aliases returned by `descriptor()`. Use
 `registry.provider_ids()` and `registry.descriptors()` to inspect snapshots.
 Remember that `ProviderId` is not normalized, while `ProviderSelector` is.
 
-### `resolve_default()` chooses an unexpected provider
+### `resolve()` chooses an unexpected provider
 
 Inspect `registry.default_selection()`. A new Registry defaults to automatic
 selection, which uses priority descending and canonical ID ascending. If App
@@ -690,10 +688,10 @@ Existing Registry clones see new registrations, but an already resolved
 `ResolvingServiceProvider` is a snapshot. Resolve again. For global facades,
 also confirm App and library link the same domain-crate version.
 
-### `create_default()` is unavailable
+### `create()` is unavailable
 
 `S::Config` must implement `Default`, and `ServiceProvider` must be imported.
-Otherwise construct a config and call `create(&config)`.
+Otherwise construct a config and call `create_configured(&config)`.
 
 ### Duplicate registration fails during repeated tests
 
@@ -707,13 +705,13 @@ an isolated process.
 | --- | --- |
 | `ServiceSpec` | Bind config and output types |
 | `ServiceProvider::create` | Create with explicit config |
-| `ServiceProvider::create_default` | Create with `Config::default()` |
+| `ServiceProvider::create` | Create with `Config::default()` |
 | `ProviderDefinition::descriptor` | Self-describe a registrable Provider |
 | `ProviderRegistry::register` | Register an owned Provider at runtime |
 | `ProviderRegistry::register_shared` | Register an existing shared Provider |
 | `ProviderRegistry::set_default_selection` | Replace the process/component default policy |
 | `ProviderRegistry::resolve` | Resolve an explicit selection |
-| `ProviderRegistry::resolve_default` | Resolve the current Registry default |
+| `ProviderRegistry::resolve` | Resolve the current Registry default |
 | `ProviderRegistry::descriptors` | Snapshot registration metadata |
 | `ProviderRegistry::provider_ids` | Snapshot canonical IDs |
 | `ProviderSelection::named` | Select exactly one ID or alias |

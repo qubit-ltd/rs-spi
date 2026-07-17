@@ -41,7 +41,7 @@ fn test_provider_error_converts_to_creation_error_without_losing_source() {
     assert!(error.is_absence());
     assert!(error.attempts().is_empty());
     assert!(error.termination().is_none());
-    assert!(error.terminal_attempt().is_none());
+    assert!(error.attempts().last().is_none());
     assert!(error.decisive_attempt().is_none());
     assert_eq!("provider Unavailable: runtime is absent", error.to_string());
 
@@ -71,9 +71,9 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect_err("both providers should fail");
 
     assert_eq!(
@@ -84,7 +84,8 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
     assert_eq!(
         "second",
         error
-            .terminal_attempt()
+            .attempts()
+            .last()
             .expect("aggregate should have a terminal attempt")
             .provider_id()
             .as_str()
@@ -119,9 +120,9 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         .expect("fallback provider should register");
 
     let error = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect_err("invalid configuration should stop absence fallback");
 
     assert_eq!(
@@ -157,9 +158,9 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
         .expect("test selector should be valid");
 
     let error = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("named selection should resolve")
-        .create_default()
+        .create()
         .expect_err("selected provider should fail");
 
     assert_eq!(

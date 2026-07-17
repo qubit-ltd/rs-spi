@@ -25,11 +25,11 @@ where
     S: ServiceSpec,
     P: ServiceProvider<S>,
 {
-    fn create(
+    fn create_configured(
         &self,
         config: &S::Config,
     ) -> Result<S::Output, ProviderCreationError> {
-        self.provider.create(config)
+        self.provider.create_configured(config)
     }
 }
 

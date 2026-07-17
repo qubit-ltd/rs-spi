@@ -11,7 +11,6 @@ use crate::error::ProviderSelectionError;
 use crate::internal::ProviderSelectionRepr;
 use crate::{
     FallbackPolicy,
-    ProviderSelectionKind,
     ProviderSelector,
 };
 
@@ -126,52 +125,21 @@ impl ProviderSelection {
         })
     }
 
-    /// Returns this validated selection's classification.
+    /// Returns the explicitly selected provider selectors.
     ///
     /// # Returns
     ///
-    /// The automatic, named, or chained selection kind.
-    #[inline(always)]
-    #[must_use]
-    pub const fn kind(&self) -> ProviderSelectionKind {
-        match self.target {
-            ProviderSelectionRepr::Auto => ProviderSelectionKind::Auto,
-            ProviderSelectionRepr::Named(_) => ProviderSelectionKind::Named,
-            ProviderSelectionRepr::Chain(_) => ProviderSelectionKind::Chain,
-        }
-    }
-
-    /// Returns the named selector.
-    ///
-    /// # Returns
-    ///
-    /// `Some` for a named selection, or `None` for automatic and chained
-    /// selections.
-    #[inline(always)]
-    #[must_use]
-    pub fn selector(&self) -> Option<&ProviderSelector> {
-        match &self.target {
-            ProviderSelectionRepr::Named(selector) => Some(selector),
-            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Chain(_) => {
-                None
-            }
-        }
-    }
-
-    /// Returns the ordered selector chain.
-    ///
-    /// # Returns
-    ///
-    /// The nonempty chain slice, or an empty slice for automatic and named
-    /// selections.
+    /// An empty slice for automatic selection, a one-element slice for named
+    /// selection, or the ordered nonempty slice for chained selection.
     #[inline(always)]
     #[must_use]
     pub fn selectors(&self) -> &[ProviderSelector] {
         match &self.target {
-            ProviderSelectionRepr::Chain(selectors) => selectors,
-            ProviderSelectionRepr::Auto | ProviderSelectionRepr::Named(_) => {
-                &[]
+            ProviderSelectionRepr::Named(selector) => {
+                std::slice::from_ref(selector)
             }
+            ProviderSelectionRepr::Chain(selectors) => selectors,
+            ProviderSelectionRepr::Auto => &[],
         }
     }
 

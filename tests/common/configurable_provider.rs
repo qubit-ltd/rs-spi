@@ -132,7 +132,10 @@ impl ServiceProvider<StringSpec> for ConfigurableProvider {
     /// # Errors
     ///
     /// Returns the configured leaf provider failure.
-    fn create(&self, config: &String) -> Result<String, ProviderCreationError> {
+    fn create_configured(
+        &self,
+        config: &String,
+    ) -> Result<String, ProviderCreationError> {
         if let Some(calls) = &self.calls {
             calls.fetch_add(1, Ordering::SeqCst);
         }

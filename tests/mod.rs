@@ -13,7 +13,6 @@ mod provider_creation_termination_tests;
 mod provider_definition_tests;
 mod provider_descriptor_tests;
 mod provider_id_tests;
-mod provider_registry_builder_tests;
 mod provider_registry_tests;
 mod provider_selection_tests;
 mod provider_selector_tests;

@@ -53,7 +53,7 @@
 //! }
 //!
 //! impl ServiceProvider<GreeterSpec> for EnglishProvider {
-//!     fn create(
+//!     fn create_configured(
 //!         &self,
 //!         _config: &(),
 //!     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -74,7 +74,7 @@
 //! })?;
 //! registry.set_default_selection(ProviderSelection::named("english")?);
 //!
-//! let greeter = registry.resolve_default()?.create_default()?;
+//! let greeter = registry.resolve()?.create()?;
 //! assert_eq!("hello", greeter.greet());
 //! # Ok(())
 //! # }
@@ -88,9 +88,7 @@ mod provider_definition;
 mod provider_descriptor;
 mod provider_id;
 mod provider_registry;
-mod provider_registry_builder;
 mod provider_selection;
-mod provider_selection_kind;
 mod provider_selector;
 mod resolving_service_provider;
 mod service_provider;
@@ -102,9 +100,7 @@ pub use provider_definition::ProviderDefinition;
 pub use provider_descriptor::ProviderDescriptor;
 pub use provider_id::ProviderId;
 pub use provider_registry::ProviderRegistry;
-pub use provider_registry_builder::ProviderRegistryBuilder;
 pub use provider_selection::ProviderSelection;
-pub use provider_selection_kind::ProviderSelectionKind;
 pub use provider_selector::ProviderSelector;
 pub use resolving_service_provider::ResolvingServiceProvider;
 pub use service_provider::ServiceProvider;

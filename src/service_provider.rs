@@ -37,7 +37,7 @@ where
     /// requested service. A leaf provider should convert its classified
     /// [`crate::error::ProviderError`] with [`Into::into`]. A composing
     /// provider may instead return an aggregate creation error.
-    fn create(
+    fn create_configured(
         &self,
         config: &S::Config,
     ) -> Result<S::Output, ProviderCreationError>;
@@ -53,10 +53,10 @@ where
     /// Returns [`ProviderCreationError`] when the provider cannot create the
     /// service from the default configuration.
     #[inline]
-    fn create_default(&self) -> Result<S::Output, ProviderCreationError>
+    fn create(&self) -> Result<S::Output, ProviderCreationError>
     where
         S::Config: Default,
     {
-        self.create(&S::Config::default())
+        self.create_configured(&S::Config::default())
     }
 }

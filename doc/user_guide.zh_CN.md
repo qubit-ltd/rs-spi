@@ -124,7 +124,7 @@ impl ServiceSpec for GreeterSpec {
 client 或轻量 handle。Qubit SPI 不会用 Provider 元数据包装成功结果，也不会缓存它。
 
 `ServiceSpec::Config` 可以是 unsized 类型。只有 config 实现 `Default` 时才能调用
-`create_default()`；`create(&config)` 始终可用。
+`create()`；`create_configured(&config)` 始终可用。
 
 ## 实现自描述 Provider
 
@@ -157,7 +157,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -218,14 +218,11 @@ let registry = ProviderRegistry::<GreeterSpec>::default();
 registry.register(FriendlyGreeterProvider)?;
 ```
 
-`ProviderRegistry::builder()` 是可选的流式装配工具：
+隔离 Registry 直接通过运行时注册 API 装配：
 
 ```rust,ignore
-let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(FriendlyGreeterProvider)?;
-let registry = builder.build();
-
-// builder 产出的 Registry 仍然允许运行时注册。
+let registry = ProviderRegistry::<GreeterSpec>::default();
+registry.register(FriendlyGreeterProvider)?;
 registry.register(AnotherProvider)?;
 ```
 
@@ -315,8 +312,8 @@ use qubit_spi::ServiceProvider;
 
 /// 创建 App 选定的默认 Greeter，并打印一条问候语。
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
     println!("{}", greeter.greet("Rust"));
     Ok(())
 }
@@ -353,7 +350,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -415,7 +412,7 @@ Selection 是一个值对象，可以来自配置文件、命令行、库内硬�
 
 ```rust,ignore
 let selection = ProviderSelection::named("friendly")?;
-let provider = registry.resolve(&selection)?;
+let provider = registry.resolve_selected(&selection)?;
 ```
 
 named selection 只解析一个 canonical ID 或 alias。selector 不存在时返回
@@ -430,7 +427,7 @@ let selection = ProviderSelection::chain([
     "friendly",
     "minimal",
 ])?;
-let provider = registry.resolve(&selection)?;
+let provider = registry.resolve_selected(&selection)?;
 ```
 
 chain 按调用方顺序排列。不存在的 selector 会被跳过。如果多个 selector 通过 ID 和
@@ -440,7 +437,7 @@ alias 指向同一个 Provider，该 Provider 只在首次出现的位置保留�
 ### 自动选择
 
 ```rust,ignore
-let provider = registry.resolve(&ProviderSelection::auto())?;
+let provider = registry.resolve_selected(&ProviderSelection::auto())?;
 ```
 
 自动选择按照确定顺序包含全部已注册 Provider：
@@ -461,11 +458,11 @@ let default = ProviderSelection::chain(["remote", "friendly"])?
 registry.set_default_selection(default);
 
 let snapshot = registry.default_selection();
-let provider = registry.resolve_default()?;
+let provider = registry.resolve()?;
 ```
 
 `set_default_selection` 保存已经校验的 selection，但不要求对应 Provider 当时已经
-存在，因此可以先设置策略、后注册实现。`resolve_default` 使用当前 selection 和当前
+存在，因此可以先设置策略、后注册实现。`resolve` 使用当前 selection 和当前
 Registry 状态进行解析。
 
 ### Selection 与 config 相互独立
@@ -474,16 +471,16 @@ Registry 状态进行解析。
 
 ```rust,ignore
 // Registry 默认 selection + 默认 config。
-let service = registry.resolve_default()?.create_default()?;
+let service = registry.resolve()?.create()?;
 
 // 显式 selection + 默认 config。
-let service = registry.resolve(&selection)?.create_default()?;
+let service = registry.resolve_selected(&selection)?.create()?;
 
 // Registry 默认 selection + 显式 config。
-let service = registry.resolve_default()?.create(&config)?;
+let service = registry.resolve()?.create_configured(&config)?;
 
 // 显式 selection + 显式 config。
-let service = registry.resolve(&selection)?.create(&config)?;
+let service = registry.resolve_selected(&selection)?.create_configured(&config)?;
 ```
 
 不要强迫每种 Service config 都包含 Provider selection 字段。config 可以把 selection
@@ -498,8 +495,8 @@ let service = registry.resolve(&selection)?.create(&config)?;
 ```rust,ignore
 use qubit_spi::ServiceProvider;
 
-let provider = registry.resolve(&selection)?;
-let service = provider.create(&config)?;
+let provider = registry.resolve_selected(&selection)?;
+let service = provider.create_configured(&config)?;
 ```
 
 必须导入 `ServiceProvider` trait，才能调用它的方法。
@@ -636,7 +633,7 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 `registry.provider_ids()` 和 `registry.descriptors()` 查看快照。注意
 `ProviderId` 不执行规范化，而 `ProviderSelector` 会规范化。
 
-### `resolve_default()` 选择了意外 Provider
+### `resolve()` 选择了意外 Provider
 
 检查 `registry.default_selection()`。新 Registry 默认自动选择，按 priority 降序和
 canonical ID 升序排列。如果 App 启动时应固定一个 Provider，请显式调用
@@ -653,10 +650,10 @@ canonical ID 升序排列。如果 App 启动时应固定一个 Provider，请�
 Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvider` 是快照，需要
 重新解析。对于全局 facade，还应确认 App 与库链接的是同一领域 crate 版本。
 
-### 无法调用 `create_default()`
+### 无法调用 `create()`
 
 `S::Config` 必须实现 `Default`，并且必须导入 `ServiceProvider` trait。否则构造 config
-并调用 `create(&config)`。
+并调用 `create_configured(&config)`。
 
 ### 重复执行测试时全局注册冲突
 
@@ -669,13 +666,13 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | --- | --- |
 | `ServiceSpec` | 绑定 config 与 output 类型 |
 | `ServiceProvider::create` | 使用显式 config 创建 |
-| `ServiceProvider::create_default` | 使用 `Config::default()` 创建 |
+| `ServiceProvider::create` | 使用 `Config::default()` 创建 |
 | `ProviderDefinition::descriptor` | 让可注册 Provider 自描述 |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |
 | `ProviderRegistry::register_shared` | 注册已有 shared Provider |
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
 | `ProviderRegistry::resolve` | 解析显式 selection |
-| `ProviderRegistry::resolve_default` | 解析 Registry 当前默认值 |
+| `ProviderRegistry::resolve` | 解析 Registry 当前默认值 |
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
 | `ProviderSelection::named` | 选择一个 ID 或 alias |

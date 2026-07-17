@@ -17,11 +17,11 @@ use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
 
-/// Verifies that builder conflicts expose both providers and the selector.
+/// Verifies that registry conflicts expose both providers and the selector.
 #[test]
 fn test_registration_error_exposes_its_variant_and_conflict_details() {
-    let mut builder = ProviderRegistry::<StringSpec>::builder();
-    builder
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
         .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("english")
@@ -32,7 +32,7 @@ fn test_registration_error_exposes_its_variant_and_conflict_details() {
             ConfigurableProvider::success("unused"),
         ))
         .expect("first provider should register");
-    let error = builder
+    let error = registry
         .register(define_provider(
             ProviderDescriptor::new(
                 ProviderId::new("spanish")

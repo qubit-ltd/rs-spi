@@ -31,7 +31,6 @@ use crate::{
     ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
-    ProviderRegistryBuilder,
     ProviderSelection,
     ProviderSelector,
     ResolvingServiceProvider,
@@ -56,17 +55,6 @@ impl<S> ProviderRegistry<S>
 where
     S: ServiceSpec,
 {
-    /// Creates an empty builder for this service specification.
-    ///
-    /// # Returns
-    ///
-    /// An optional mutable wrapper around a new runtime registry.
-    #[inline(always)]
-    #[must_use]
-    pub fn builder() -> ProviderRegistryBuilder<S> {
-        ProviderRegistryBuilder::new()
-    }
-
     /// Registers an owned self-described provider.
     ///
     /// # Arguments
@@ -187,7 +175,7 @@ where
     /// Returns [`ProviderSelectionError`] before creation when a named selector
     /// is unknown, a chain matches no candidates, or automatic selection sees
     /// an empty registry.
-    pub fn resolve(
+    pub fn resolve_selected(
         &self,
         selection: &ProviderSelection,
     ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
@@ -251,13 +239,13 @@ where
     /// # Errors
     ///
     /// Returns [`ProviderSelectionError`] under the same conditions as
-    /// [`Self::resolve`].
+    /// [`Self::resolve_selected`].
     #[inline]
-    pub fn resolve_default(
+    pub fn resolve(
         &self,
     ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
         let selection = self.default_selection();
-        self.resolve(&selection)
+        self.resolve_selected(&selection)
     }
 
     /// Returns descriptors in successful registration order.

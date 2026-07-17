@@ -85,8 +85,8 @@ use qubit_spi::ServiceProvider;
 
 /// 创建 App 选定的默认 Greeter，并打印一条问候语。
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
     println!("{}", greeter.greet("Rust"));
     Ok(())
 }
@@ -123,7 +123,7 @@ impl Greeter for FriendlyGreeter {
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
@@ -172,11 +172,11 @@ Registry 默认 selection 与 Service 配置相互独立。有明确需求的调
 
 ```rust,ignore
 let selection = ProviderSelection::named("friendly")?;
-let provider = GREETER_REGISTRY.resolve(&selection)?;
+let provider = GREETER_REGISTRY.resolve_selected(&selection)?;
 let config = GreeterConfig {
     prefix: "Welcome".to_owned(),
 };
-let greeter = provider.create(&config)?;
+let greeter = provider.create_configured(&config)?;
 ```
 
 ## 为什么需要这个库
@@ -216,10 +216,10 @@ App 启动
                          │
                          ▼
 共享 ProviderRegistry<ServiceSpec>
-                         │ resolve / resolve_default
+                         │ resolve_selected / resolve
                          ▼
 ResolvingServiceProvider<ServiceSpec>
-                         │ create(config) / create_default()
+                         │ create_configured(config) / create()
                          ▼
 ServiceSpec::Output
 ```
@@ -227,8 +227,8 @@ ServiceSpec::Output
 | 阶段 | 主要 API | 成功结果 | 失败类型 |
 | --- | --- | --- | --- |
 | 注册 | `register(provider)` | Provider 对所有 Registry clone 可见 | `RegistrationError` |
-| 选择 | `resolve(&selection)` 或 `resolve_default()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderSelectionError` |
-| 创建 | `create(&config)` 或 `create_default()` | 直接返回 `ServiceSpec::Output` | `ProviderCreationError` |
+| 选择 | `resolve_selected(&selection)` 或 `resolve()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderSelectionError` |
+| 创建 | `create_configured(&config)` 或 `create()` | 直接返回 `ServiceSpec::Output` | `ProviderCreationError` |
 
 ## 选择与回退
 
@@ -270,12 +270,12 @@ selection 修改，都对其他 clone 可见。descriptor 和候选查询返回�
 Provider 代码时不会持有 Registry 锁。
 
 可复用的领域 crate 可以用 `LazyLock` 持有一个 Registry，并暴露领域专用的 `global()`
-方法。这样 App 启动时注册的 Provider，之后可以被独立发布的库通过 `resolve_default()`
+方法。这样 App 启动时注册的 Provider，之后可以被独立发布的库通过 `resolve()`
 获得。App 必须在下游代码首次需要服务之前完成配置。如果 Cargo 链接了同一领域 crate
 的不兼容版本，每个被链接的 crate 版本会拥有各自的静态 Registry。
 
-测试或局部组件需要隔离状态时，可以使用 `ProviderRegistry::default()` 或
-`ProviderRegistry::builder()`。builder 构造完成后的 Registry 仍然允许运行时注册。
+测试或局部组件需要隔离状态时，可以使用 `ProviderRegistry::default()`。构造后的
+Registry 仍然允许运行时注册。
 
 ## 延伸阅读
 

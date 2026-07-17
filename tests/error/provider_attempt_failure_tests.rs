@@ -43,9 +43,9 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
         ))
         .expect("test provider should register");
     let error = registry
-        .resolve(&ProviderSelection::auto())
+        .resolve_selected(&ProviderSelection::auto())
         .expect("automatic selection should resolve")
-        .create_default()
+        .create()
         .expect_err("test provider should fail");
     let attempt = &error.attempts()[0];
 
