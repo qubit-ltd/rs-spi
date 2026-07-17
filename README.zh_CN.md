@@ -73,25 +73,30 @@ Qubit SPI 要求 Rust 1.94 或更高版本。
 
 ## 快速开始
 
-下面的示例对应最常见的 App/库 X 场景：App 在启动时配置共享 Registry；库 X 只负责
-解析并创建服务，不依赖具体 Provider 实现。
+下面的示例由三个独立发布的库和一个 App 组成，分别承载 Service 契约、下游消费者、
+第三方 Provider 和应用装配入口，明确展示每一部分在运行时的职责。
+
+下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
+为简洁起见，示例省略各个 `Cargo.toml` 文件。
+
+### 1. `lib-greater`：定义 Service 和全局 Registry
+
+`lib-greater` 持有 Service 契约。所有消费者和 Provider 都使用这个 crate 中同一个
+`GreeterSpec` 和 `GREETER_REGISTRY` 单体。
 
 ```rust
+// lib-greater/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::error::{ProviderCreationError, ProviderError};
-use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ProviderRegistry,
-    ProviderSelection, ServiceProvider, ServiceSpec,
-};
+use qubit_spi::{ProviderRegistry, ServiceSpec};
 
-trait Greeter: Send + Sync {
+pub trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
 
 #[derive(Clone)]
-struct GreeterConfig {
-    prefix: String,
+pub struct GreeterConfig {
+    pub prefix: String,
 }
 
 impl Default for GreeterConfig {
@@ -102,12 +107,49 @@ impl Default for GreeterConfig {
     }
 }
 
-struct GreeterSpec;
+pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     type Config = GreeterConfig;
     type Output = Arc<dyn Greeter>;
 }
+
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+    LazyLock::new(ProviderRegistry::default);
+```
+
+### 2. `lib-foo`：使用默认 Service
+
+`lib-foo` 只了解 Service 契约，不了解具体实现。`foo()` 从共享 Registry 中解析默认
+Provider，用默认配置创建 Greeter，然后把结果打印到控制台。
+
+```rust
+// lib-foo/src/lib.rs
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ServiceProvider;
+
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve_default()?;
+    let greeter = provider.create_default()?;
+    println!("{}", greeter.greet("Rust"));
+    Ok(())
+}
+```
+
+### 3. `lib-friend-greater`：提供第三方 Provider
+
+`lib-friend-greater` 依赖 `lib-greater` 中的契约，实现 Service，并导出一个自描述
+Provider。它不会自行注册；最终 App 负责决定是否安装这个实现。
+
+```rust
+// lib-friend-greater/src/lib.rs
+use std::sync::Arc;
+
+use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+};
 
 struct FriendlyGreeter {
     prefix: String,
@@ -119,74 +161,58 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
-struct FriendlyProvider;
+pub struct FriendlyGreeterProvider;
 
-impl ServiceProvider<GreeterSpec> for FriendlyProvider {
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create(
         &self,
         config: &GreeterConfig,
     ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
-        if config.prefix.trim().is_empty() {
-            return Err(ProviderError::invalid_configuration(
-                "the greeting prefix must not be empty",
-            )
-            .into());
-        }
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyProvider {
+impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
         )
-        .with_aliases(["default-greeter"])
-        .expect("static aliases are valid")
         .with_priority(100)
     }
 }
+```
 
-// 领域 crate 通常持有这个 facade，并暴露类型化的 global() 方法。
-// Qubit SPI 提供 Registry，而不是一个适用于所有服务族的全局实例。
-static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
-    LazyLock::new(ProviderRegistry::default);
+### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
 
-fn greeter_registry() -> &'static ProviderRegistry<GreeterSpec> {
-    &GREETER_REGISTRY
-}
+App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greater` 持有的单体中，
+将其设为默认 Provider，然后调用 `foo()`。
 
-// App 启动代码负责安装 Provider 和设置进程默认 selection。
-fn configure_app() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = greeter_registry();
-    registry.register(FriendlyProvider)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
-    Ok(())
-}
-
-// 这个函数代表独立发布的库 X。
-fn library_x_greeter() -> Result<Arc<dyn Greeter>, Box<dyn std::error::Error>> {
-    let provider = greeter_registry().resolve_default()?;
-    Ok(provider.create_default()?)
-}
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friend_greater::FriendlyGreeterProvider;
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    configure_app()?;
-
-    let greeter = library_x_greeter()?;
-    assert_eq!("Hello, Rust!", greeter.greet("Rust"));
-    Ok(())
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY
+        .set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
 }
 ```
+
+程序会打印 `Hello, Rust!`。虽然 `lib-foo` 与第三方 Provider 互不依赖，`lib-foo` 仍会
+获得 App 选定的实现；它们的共享协调点是 `lib-greater` 定义的单体。
 
 Registry 默认 selection 与 Service 配置相互独立。有明确需求的调用方可以只显式提供
 其中一个，也可以同时提供：
 
 ```rust,ignore
 let selection = ProviderSelection::named("friendly")?;
-let provider = greeter_registry().resolve(&selection)?;
+let provider = GREETER_REGISTRY.resolve(&selection)?;
 let config = GreeterConfig {
     prefix: "Welcome".to_owned(),
 };
@@ -240,25 +266,10 @@ Provider 代码时不会持有 Registry 锁。
 测试或局部组件需要隔离状态时，可以使用 `ProviderRegistry::default()` 或
 `ProviderRegistry::builder()`。builder 构造完成后的 Registry 仍然允许运行时注册。
 
-## 破坏性迁移
-
-本版本有意移除以前的“不可变目录 + 独立 resolver”工作流，主要迁移关系如下：
-
-| 旧工作流 | 当前工作流 |
-| --- | --- |
-| descriptor 与 provider 分开注册 | 实现 `ProviderDefinition::descriptor()`，调用 `register(provider)` |
-| 单独创建 `ProviderResolver` | 调用 `ProviderRegistry::resolve()` 或 `resolve_default()` |
-| fallback policy 保存在 resolver 中 | fallback policy 保存在 `ProviderSelection` 中 |
-| 一次操作同时解析并创建 | 先解析 `ResolvingServiceProvider`，再调用 `create` |
-| 返回 `CreatedService` 包装 | 直接返回 `ServiceSpec::Output` |
-| 处理统一的 `ResolutionError` | 在正确阶段处理 `ProviderSelectionError` 或 `ProviderCreationError` |
-
-本版本不提供兼容层。下游 crate 必须一起迁移 Provider 定义、注册、选择、创建和错误转换。
-
 ## 延伸阅读
 
 - 阅读[用户手册](doc/user_guide.zh_CN.md)，了解完整生命周期、Provider 实现、运行时共享、
-  selection 语义、fallback、诊断、全局 facade 模式和迁移方法。
+  selection 语义、fallback、诊断和全局 facade 模式。
 - 浏览 [API 文档](https://docs.rs/qubit-spi)。
 - Read the [English README](README.md).
 

@@ -1,23 +1,20 @@
 # Qubit SPI 用户手册
 
-本手册介绍 Qubit SPI 0.8 的运行时 Provider 模型，覆盖从 App 启动注册到下游使用
-Service 的完整生命周期，包括 selection、配置、fallback、错误诊断、并发、全局 facade
-以及从旧 resolver API 迁移的方法。
-
-如果只需要快速了解，请先阅读[项目说明](../README.zh_CN.md)。
+本手册介绍 Qubit SPI 的运行时 Provider 模型，覆盖从 App 启动注册到下游使用 Service
+的完整生命周期，包括 selection、配置、fallback、错误诊断、并发和全局 facade。
 
 ## Qubit SPI 解决什么问题
 
-假设一个可复用的库 X 需要 MIME 检测器。库 X 不应该自己选择或构造具体实现，因为最终
-App 可能需要模型检测器、系统命令检测器，或者部署环境提供的自定义 Provider。
+假设一个可复用的 `lib-foo` 库需要 Greeter。`lib-foo` 不应该自己选择或构造具体实现，
+因为最终 App 可能需要部署环境提供的 Provider。
 
 预期的运行时关系是：
 
 1. App 在启动时注册当前可用的 Provider。
 2. App 可以设置进程级默认 Provider selection。
-3. 库 X 随后解析自己的显式 selection，或者使用这个默认值。
+3. `lib-foo` 随后解析自己的显式 selection，或者使用这个默认值。
 4. 解析出的 Provider 使用显式或默认 config 创建 Service。
-5. 库 X 使用返回的 Service，不需要了解其具体类型。
+5. `lib-foo` 使用返回的 Service，不需要了解其具体类型。
 
 这是 Service Provider Registry，而不是通用依赖注入框架。它统一实现的注册、选择和
 创建方式；Service 的业务接口仍然属于具体领域 crate。
@@ -148,9 +145,9 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
-struct FriendlyProvider;
+pub struct FriendlyGreeterProvider;
 
-impl ServiceProvider<GreeterSpec> for FriendlyProvider {
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create(
         &self,
         config: &GreeterConfig,
@@ -167,7 +164,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyProvider {
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyProvider {
+impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -185,7 +182,7 @@ Provider 身份和创建实现共同构成一个注册单元。要求调用方�
 元数据与实现不匹配，也会让第三方安装过程变得繁琐。自描述 Provider 让 App 只需：
 
 ```rust,ignore
-registry.register(FriendlyProvider)?;
+registry.register(FriendlyGreeterProvider)?;
 ```
 
 注册会先调用 `descriptor()`，随后才获取 Registry 写锁，并保存 descriptor 快照。
@@ -209,14 +206,14 @@ alias 规范化后不能与 canonical ID 或另一个 alias 重复。priority �
 
 ```rust,ignore
 let registry = ProviderRegistry::<GreeterSpec>::default();
-registry.register(FriendlyProvider)?;
+registry.register(FriendlyGreeterProvider)?;
 ```
 
 `ProviderRegistry::builder()` 是可选的流式装配工具：
 
 ```rust,ignore
 let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(FriendlyProvider)?;
+builder.register(FriendlyGreeterProvider)?;
 let registry = builder.build();
 
 // builder 产出的 Registry 仍然允许运行时注册。
@@ -232,7 +229,7 @@ Registry clone 共享同一个 `Arc<RwLock<...>>` 状态：
 
 ```rust,ignore
 let library_registry = registry.clone();
-registry.register(FriendlyProvider)?;
+registry.register(FriendlyGreeterProvider)?;
 assert_eq!(1, library_registry.len());
 ```
 
@@ -243,47 +240,150 @@ Registry 锁。
 对于 selector 冲突，注册是原子的。ID 或 alias 已被占用时，Registry 保持不变，并返回
 `RegistrationError::DuplicateSelector`，其中包含现有 Provider 和新 Provider 的 ID。
 
-## 完整的 App 与库 X 模式
+## 三个库与 App 的完整模式
 
 Qubit SPI 有意不定义统一的全局 Registry：每个服务族都有不同的 `ServiceSpec`。拥有
-Service trait 的领域 crate 应暴露适合自己的单体或 facade。
+Service trait 的领域 crate 应暴露适合自己的单体。下面的完整示例把四项职责拆分到三个
+独立发布的库和一个 App 中。
+
+下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
+为简洁起见，示例省略各个 `Cargo.toml` 文件。
+
+### 1. `lib-greater`：定义 Service 和全局 Registry
+
+`lib-greater` 持有 Service 契约，以及供消费者、Provider 和最终 App 共享的唯一
+Registry 实例。
 
 ```rust
+// lib-greater/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::{ProviderRegistry, ProviderSelection, ServiceProvider};
+use qubit_spi::{ProviderRegistry, ServiceSpec};
 
-static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
+}
+
+#[derive(Clone)]
+pub struct GreeterConfig {
+    pub prefix: String,
+}
+
+impl Default for GreeterConfig {
+    fn default() -> Self {
+        Self {
+            prefix: "Hello".to_owned(),
+        }
+    }
+}
+
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = GreeterConfig;
+    type Output = Arc<dyn Greeter>;
+}
+
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
     LazyLock::new(ProviderRegistry::default);
+```
 
-fn greeter_registry() -> &'static ProviderRegistry<GreeterSpec> {
-    &GREETER_REGISTRY
-}
+### 2. `lib-foo`：使用默认 Service
 
-// App 启动：
-fn configure_app() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = greeter_registry();
-    registry.register(FriendlyProvider)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+`lib-foo` 依赖 `lib-greater` 和 `qubit-spi`，但不依赖任何具体 Greeter 实现。
+
+```rust
+// lib-foo/src/lib.rs
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ServiceProvider;
+
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve_default()?;
+    let greeter = provider.create_default()?;
+    println!("{}", greeter.greet("Rust"));
     Ok(())
-}
-
-// 独立发布的库 X：
-fn library_x_greeter() -> Result<Arc<dyn Greeter>, Box<dyn std::error::Error>> {
-    let provider = greeter_registry().resolve_default()?;
-    Ok(provider.create_default()?)
 }
 ```
 
-App 控制安装哪些实现以及默认策略。库 X 只依赖服务族和 Registry facade。如果库 X 有
-明确要求，也可以解析自己的显式 `ProviderSelection`。
+### 3. `lib-friend-greater`：提供第三方 Provider
+
+`lib-friend-greater` 依赖 `lib-greater` 和 `qubit-spi`。它实现 Greeter 契约并发布一个
+自描述 Provider，但不会通过自行注册来修改全局状态。
+
+```rust
+// lib-friend-greater/src/lib.rs
+use std::sync::Arc;
+
+use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+};
+
+struct FriendlyGreeter {
+    prefix: String,
+}
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {}!", self.prefix, name)
+    }
+}
+
+pub struct FriendlyGreeterProvider;
+
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
+    fn create(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+        Ok(Arc::new(FriendlyGreeter {
+            prefix: config.prefix.clone(),
+        }))
+    }
+}
+
+impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("friendly").expect("static provider ID is valid"),
+        )
+        .with_priority(100)
+    }
+}
+```
+
+### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
+
+App 依赖这三个库并负责装配策略。它在任何下游代码请求 Greeter 之前注册第三方 Provider，
+将其设为进程默认实现，然后调用 `foo()`。
+
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friend_greater::FriendlyGreeterProvider;
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY
+        .set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
+}
+```
+
+程序会打印 `Hello, Rust!`。App 与 `lib-foo` 通过 `lib-greater` 中同一个
+`GREETER_REGISTRY` 协作；`lib-foo` 和 `lib-greater` 都不依赖
+`lib-friend-greater`。
 
 启动顺序很重要：必须在下游代码首次请求 Service 前配置全局 Registry。消费者已经拿到
 的 `ResolvingServiceProvider` 是时间点快照；后续注册只影响未来的解析，不会修改现有
 快照。
 
-Cargo 通常会统一兼容版本的领域 crate。如果同时链接不兼容版本，每个 crate 版本会拥有
-独立的静态 Registry。App 和库必须使用同一个领域 crate 实例才能共享单体。
+Cargo 通常会统一兼容版本的 `lib-greater`。如果同时链接不兼容版本，每个 crate 版本
+会拥有独立的静态 Registry。App 和 `lib-foo` 必须使用同一个 `lib-greater` 实例才能
+共享单体。
 
 ## 选择 Provider
 
@@ -493,51 +593,6 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 
 解析出的 Provider 持有候选的 `Arc` handle，因此 Registry 被 clone、修改或 drop 后仍
 可使用，但不会看到后续注册。需要新候选时重新解析。
-
-## 从旧 API 迁移
-
-0.8 是有意的破坏性版本，不提供兼容 facade。
-
-### Provider 定义
-
-以前调用方同时传递 `ProviderDescriptor` 和 Provider。现在 Provider 自己实现
-`ProviderDefinition<S>`，注册只接收一个值：
-
-```rust,ignore
-// 当前 API
-registry.register(FriendlyProvider)?;
-```
-
-这样可以防止元数据与实现错配，并把第三方安装简化为一次操作。
-
-### Registry 与解析
-
-以前的 `ProviderResolver` 已删除。`ProviderRegistry` 现在同时负责运行时修改、默认
-selection 和解析：
-
-```rust,ignore
-let provider = registry.resolve(&selection)?;
-let service = provider.create(&config)?;
-```
-
-`FallbackPolicy` 从 resolver 移入 `ProviderSelection`。
-
-### 成功结果
-
-以前的 `CreatedService<T>` 和 `ResolvedProvider` 包装已删除。创建直接返回
-`S::Output`。解析对象现在是具体的 `ResolvingServiceProvider<S>`，它本身实现
-`ServiceProvider<S>`。
-
-### 失败结果
-
-以前统一的 `ResolutionError`、`ResolutionTermination` 和 `AttemptFailure` 模型改为：
-
-- 创建前使用 `ProviderSelectionError`；
-- 创建阶段使用 `ProviderCreationError`；
-- 聚合创建诊断内部使用 `ProviderCreationTermination` 和
-  `ProviderAttemptFailure`。
-
-迁移下游错误转换时，应根据失败阶段重新划分，而不是把一个旧类型机械改名成一个新类型。
 
 ## 推荐实践
 
