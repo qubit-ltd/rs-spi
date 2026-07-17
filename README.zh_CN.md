@@ -1,43 +1,51 @@
 # Qubit SPI
 
 [![Rust CI](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-spi/coverage-badge.json)](https://qubit-ltd.github.io/rs-spi/coverage/)
 [![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
-[![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-面向 Rust 的类型安全、显式装配式服务提供者基础设施。
+为 Rust 应用与库提供类型安全的服务 Provider 注册、选择和创建基础设施。
 
 ## 模型
 
-应用在启动阶段通过 ProviderRegistryBuilder 注册 Provider。调用 build() 后得到
-不可变且可低成本克隆的 ProviderRegistry。ProviderResolver 将该目录与
-ProviderSelection、FallbackPolicy 组合起来创建服务。Resolver 持有 registry，
-通过 `registry()` 提供只读访问，并通过 `fallback_policy()` 暴露当前回退策略。
+`ServiceSpec` 定义一个服务族的配置类型与输出类型；`ServiceProvider` 负责创建该
+输出；`ProviderDefinition` 则通过 `descriptor()` 为 Provider 增加稳定 ID、别名和
+自动选择优先级。
 
-ServiceSpec 同时定义配置类型和完整输出句柄；SPI 核心不会在 Box、Arc 和 Rc 之间
-转换。
+`ProviderRegistry` 是可克隆的同步目录。应用既可以在启动阶段注册自描述 Provider，
+也可以在运行期间继续注册。所有 clone 都能看到后续注册和默认 selection 的更新。
+
+服务获取包含两个彼此独立的输入：
+
+1. `ProviderSelection` 选择候选 Provider，并携带相应的 `FallbackPolicy`。
+2. `S::Config` 配置由已选 Provider 创建的服务。
+
+`resolve()` 或 `resolve_default()` 会把 Registry 当前状态转换为一个候选快照
+`ResolvingServiceProvider`。随后调用 `create()` 或 `create_default()`，成功时直接
+返回 `S::Output`。
 
 ## 安装
 
-~~~toml
+```toml
 [dependencies]
 qubit-spi = "0.8"
-~~~
+```
 
 ## 快速开始
 
-~~~rust
+```rust
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
-    FallbackPolicy,
+    ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
-    ProviderResolver,
+    ProviderSelection,
     ServiceProvider,
     ServiceSpec,
 };
@@ -61,67 +69,116 @@ impl ServiceSpec for GreeterSpec {
     type Output = Arc<dyn Greeter>;
 }
 
-struct EnglishProvider;
+struct EnglishProvider {
+    descriptor: ProviderDescriptor,
+}
 
 impl ServiceProvider<GreeterSpec> for EnglishProvider {
-    fn create(&self, _config: &()) -> Result<Arc<dyn Greeter>, ProviderError> {
+    fn create(
+        &self,
+        _config: &(),
+    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
         Ok(Arc::new(EnglishGreeter))
     }
 }
 
+impl ProviderDefinition<GreeterSpec> for EnglishProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
+    }
+}
+
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(
-    ProviderDescriptor::new(ProviderId::new("english")?).with_aliases(["en"])?,
-    EnglishProvider,
-)?;
-let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-let created = resolver.create_named("en", &())?;
-assert_eq!("hello", created.service().greet());
+let registry = ProviderRegistry::<GreeterSpec>::default();
+registry.register(EnglishProvider {
+    descriptor: ProviderDescriptor::new(ProviderId::new("english")?)
+        .with_aliases(["en"])?
+        .with_priority(100),
+})?;
+
+registry.set_default_selection(ProviderSelection::named("en")?);
+let greeter = registry.resolve_default()?.create_default()?;
+
+assert_eq!("hello", greeter.greet());
 # Ok(())
 # }
-~~~
+```
 
-## 选择与失败
+## 选择与回退
 
-- `ProviderSelection::auto()` 按 descriptor priority 降序、canonical Provider ID
-  升序选择。
-- `ProviderSelection::named(...)` 只选择一个 Provider。
-- `ProviderSelection::chain(...)` 按配置顺序尝试候选项，并避免通过多个别名重复尝试同一
-  Provider。
-- `ProviderResolver::create_auto`、`create_named`、`create_chain` 可直接接收运行时
-  原始输入，并把解析失败统一报告为 `ResolutionError`。
-- 配置需要跨调用复用时，预先构造并复用已校验的 `ProviderSelection`；在运行时输入
-  边界则优先使用 resolver 的原始输入方法。
-- FallbackPolicy::OnAbsence 会在未知、不支持或不可用时继续回退；遇到无效配置和
-  初始化失败时停止。
-- FallbackPolicy::OnAnyError 用于明确要求尽力而为的回退链。
+- `ProviderSelection::auto()` 按 priority 降序、canonical Provider ID 升序生成
+  候选快照。
+- `ProviderSelection::named(...)` 解析一个 canonical ID 或别名。
+- `ProviderSelection::chain(...)` 保持配置顺序、跳过未知 selector，并根据实际
+  Provider 去重其多个别名。
+- `FallbackPolicy::Never` 在首次 Provider 创建失败后停止。
+- `FallbackPolicy::OnAbsence` 仅在 leaf failure 为 `Unsupported` 或
+  `Unavailable` 时继续，也是默认策略。
+- `FallbackPolicy::OnAnyError` 在任意 leaf failure 后继续。
 
-所有错误类型统一从 `qubit_spi::error` 导入。`ProviderError` 对单次工厂失败分类，
-并为每种分类提供保留 source 的构造器。`ResolutionError` 会记录已尝试的候选项，保留
-无效 selector 的原始输入及校验错误链，并明确区分空 registry 与空原始 chain。
-聚合失败通过 `ResolutionTermination::Exhausted` 和
-`ResolutionTermination::StoppedByPolicy` 区分候选项已全部耗尽与被策略提前终止。
-其显示文本包含按顺序排列的尝试诊断。当某次尝试能够无歧义地解释聚合结果（包括导致
-策略终止的末次尝试）时，该尝试会进入标准 error source 链。每个
-`AttemptFailure` 会显式区分未知 selector 与 Provider 创建失败。
+Selection 是不可变值，可以用 `with_fallback_policy()` 派生不同回退行为。解析完成的
+Provider 持有当时的候选快照：此后新增的注册只影响未来的解析，不改变已有快照。
 
-校验和装配错误按生命周期拆分为 `ProviderIdError`、`ProviderSelectorError`、
-`ProviderDescriptorError`、`ProviderSelectionError` 与 `RegistrationError`；其中
-registration error 只表示 registry 内部的 selector 冲突。公开错误枚举均为
-non-exhaustive；下游代码应直接匹配结构化 variant，并保留通配分支。
-`ResolutionError::decisive_attempt()` 会在某次失败导致策略终止，或耗尽结果仅包含
-一次尝试时，返回能够直接解释结果的那次尝试。
+## 错误边界
 
-`CreatedService` 暴露实际胜出的 canonical Provider ID，可通过 `into_service()` 或
-`into_parts()` 消费。`ProviderRegistry::len()` 与 `is_empty()` 可无分配查看目录大小。
+选择失败与创建失败发生在不同生命周期：
 
-## 注册
+- `ProviderSelectionError` 表示 selection 构造无效、named Provider 未知、chain
+  没有匹配候选，或 auto 面对空 Registry。返回该错误时不会调用任何 Provider。
+- `ProviderCreationError` 表示候选确定后的创建失败。leaf `ProviderError` 对单个
+  Provider 失败分类；聚合错误保留按顺序排列的 `ProviderAttemptFailure`，并通过
+  `Exhausted` 与 `StoppedByPolicy` 区分终止原因。
 
-Provider 身份属于注册过程，而不是 Provider 工厂本身。持有具体 Provider 时使用
-`register(descriptor, provider)`；已经持有 `Arc` 工厂时使用
-`register_shared(descriptor, provider)`。Builder 会在修改内部状态前完整校验
-canonical ID 和全部别名，因此失败的注册不会占用部分 selector。
+尝试诊断只包含真正调用过的 Provider，错误对象会保留完整 source 链。成功调用只返回
+服务值；本 crate 不提供成功包装，也不提供面向消费者的观测 API。
 
-核心不提供全局 registry。应用应在启动阶段显式装配所需 Provider，并共享构建出的
-不可变 registry 或 resolver。
+## 注册与全局门面
+
+注册只接收一个自描述 Provider：
+
+```rust,ignore
+registry.register(provider)?;
+registry.register_shared(shared_provider)?;
+```
+
+Registry 会在获取写锁前调用并快照 `ProviderDefinition::descriptor()`。它在修改状态前
+完整校验 canonical ID 与所有别名，因此冲突注册不会留下部分 selector。
+
+这个通用 crate 不为任何具体服务族定义全局单例。领域 crate 可以在
+`ProviderRegistry<MimeDetectorSpec>` 之上提供 MIME Detector Registry 之类的全局
+门面。App 在启动时通过该门面注册自定义 Provider；下游库则从同一个共享 Registry
+按显式或默认 selection 解析服务，无需依赖具体实现。
+
+## 测试
+
+```bash
+# 使用默认的空 feature 集测试核心 API
+cargo test --no-default-features
+
+# 测试核心 API 和正则校验
+cargo test --all-features
+
+# 运行项目 CI 检查
+./ci-check.sh
+
+# 检查代码覆盖率
+./coverage.sh
+```
+
+## 许可证
+
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+
+本项目基于 Apache License 2.0 授权。完整许可证文本请参阅
+[LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
+
+## 作者
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+仓库地址：[https://github.com/qubit-ltd/rs-spi](https://github.com/qubit-ltd/rs-spi)

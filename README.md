@@ -1,45 +1,55 @@
 # Qubit SPI
 
 [![Rust CI](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-spi/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-spi/coverage-badge.json)](https://qubit-ltd.github.io/rs-spi/coverage/)
 [![Crates.io](https://img.shields.io/crates/v/qubit-spi.svg?color=blue)](https://crates.io/crates/qubit-spi)
-[![Documentation](https://docs.rs/qubit-spi/badge.svg)](https://docs.rs/qubit-spi)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Typed, explicitly assembled service-provider infrastructure for Rust.
+Typed service-provider registration, selection, and creation infrastructure for
+Rust applications and libraries.
 
 ## Model
 
-Applications register providers during startup through ProviderRegistryBuilder.
-Build produces an immutable, cheaply cloneable ProviderRegistry. A
-ProviderResolver combines that catalog with a ProviderSelection and
-FallbackPolicy to create a service. The resolver owns its registry handle and
-offers read-only access through `registry()` together with its configured
-`fallback_policy()`.
+`ServiceSpec` defines one service family's configuration and output types.
+`ServiceProvider` creates that output, while `ProviderDefinition` adds the
+provider's stable identity, aliases, and automatic-selection priority through
+`descriptor()`.
 
-ServiceSpec owns both the configuration and complete output handle. The SPI
-core does not convert between Box, Arc, and Rc.
+`ProviderRegistry` is a cloneable, synchronized catalog. Applications may
+register self-described providers during startup or later at runtime. Every
+clone observes subsequent registrations and default-selection updates.
+
+Service acquisition has two independent inputs:
+
+1. `ProviderSelection` chooses candidate providers and carries their
+   `FallbackPolicy`.
+2. `S::Config` configures the service created by the selected provider.
+
+`resolve()` or `resolve_default()` converts current registry state into a
+point-in-time `ResolvingServiceProvider` candidate snapshot. Calling `create()`
+or `create_default()` on that provider returns `S::Output` directly.
 
 ## Installation
 
-~~~toml
+```toml
 [dependencies]
 qubit-spi = "0.8"
-~~~
+```
 
 ## Quick Start
 
-~~~rust
+```rust
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
-    FallbackPolicy,
+    ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
-    ProviderResolver,
+    ProviderSelection,
     ServiceProvider,
     ServiceSpec,
 };
@@ -63,76 +73,126 @@ impl ServiceSpec for GreeterSpec {
     type Output = Arc<dyn Greeter>;
 }
 
-struct EnglishProvider;
+struct EnglishProvider {
+    descriptor: ProviderDescriptor,
+}
 
 impl ServiceProvider<GreeterSpec> for EnglishProvider {
-    fn create(&self, _config: &()) -> Result<Arc<dyn Greeter>, ProviderError> {
+    fn create(
+        &self,
+        _config: &(),
+    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
         Ok(Arc::new(EnglishGreeter))
     }
 }
 
+impl ProviderDefinition<GreeterSpec> for EnglishProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
+    }
+}
+
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(
-    ProviderDescriptor::new(ProviderId::new("english")?).with_aliases(["en"])?,
-    EnglishProvider,
-)?;
-let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
-let created = resolver.create_named("en", &())?;
-assert_eq!("hello", created.service().greet());
+let registry = ProviderRegistry::<GreeterSpec>::default();
+registry.register(EnglishProvider {
+    descriptor: ProviderDescriptor::new(ProviderId::new("english")?)
+        .with_aliases(["en"])?
+        .with_priority(100),
+})?;
+
+registry.set_default_selection(ProviderSelection::named("en")?);
+let greeter = registry.resolve_default()?.create_default()?;
+
+assert_eq!("hello", greeter.greet());
 # Ok(())
 # }
-~~~
+```
 
-## Selection and failures
+## Selection and Fallback
 
-- `ProviderSelection::auto()` uses descending descriptor priority and then
-  ascending canonical provider ID.
-- `ProviderSelection::named(...)` selects exactly one provider.
-- `ProviderSelection::chain(...)` tries configuration-provided candidates in order and
-  does not attempt the same provider twice through aliases.
-- `ProviderResolver::create_auto`, `create_named`, and `create_chain` accept raw
-  runtime input and report parsing failures as `ResolutionError` values.
-- Reuse a validated `ProviderSelection` when configuration is applied across
-  calls; prefer the raw resolver methods at runtime input boundaries.
-- FallbackPolicy::OnAbsence continues after unknown, unsupported, or
-  unavailable optional providers; it stops at invalid configuration and
-  initialization failures.
-- FallbackPolicy::OnAnyError is available for explicitly best-effort chains.
+- `ProviderSelection::auto()` snapshots providers by descending priority and
+  then ascending canonical provider ID.
+- `ProviderSelection::named(...)` resolves one canonical ID or alias.
+- `ProviderSelection::chain(...)` preserves configured order, skips unknown
+  selectors, and deduplicates aliases that identify the same provider.
+- `FallbackPolicy::Never` stops after the first provider creation failure.
+- `FallbackPolicy::OnAbsence` continues only after `Unsupported` or
+  `Unavailable` leaf failures and is the default policy.
+- `FallbackPolicy::OnAnyError` continues after every leaf failure kind.
 
-All error types are available through `qubit_spi::error`. `ProviderError`
-classifies a single factory failure and offers source-preserving constructors
-for every classification. `ResolutionError` records all attempted candidates,
-preserves invalid selector input and its validation source, and distinguishes
-empty registries and empty raw chains. Aggregate failures expose
-`ResolutionTermination::Exhausted` or
-`ResolutionTermination::StoppedByPolicy`, so callers can distinguish complete
-candidate exhaustion from an early policy stop. Its display text includes
-ordered attempt diagnostics. When one attempt unambiguously explains the
-aggregate outcome, including a policy-stopping terminal attempt, it is exposed
-through the standard error source chain. Each `AttemptFailure` explicitly
-distinguishes an unknown selector from a provider creation error.
+Selections are immutable values. Use `with_fallback_policy()` to derive a
+selection with different fallback behavior. A resolved provider owns a
+candidate snapshot: registrations made afterward affect future resolutions,
+not an already resolved provider.
 
-Validation and assembly errors are separated by lifecycle:
-`ProviderIdError`, `ProviderSelectorError`, `ProviderDescriptorError`,
-`ProviderSelectionError`, and `RegistrationError`. Registration errors now
-represent registry conflicts only. Public error enums are non-exhaustive;
-downstream code should match the structured variants with a wildcard arm.
-`ResolutionError::decisive_attempt()` returns the policy-stopping attempt or a
-singleton exhausted attempt when one failure can explain the outcome.
+## Error Boundaries
 
-`CreatedService` exposes the winning canonical provider ID and can be consumed
-through `into_service()` or `into_parts()`. `ProviderRegistry::len()` and
-`is_empty()` expose catalog size without allocation.
+Selection and creation fail at different lifecycle stages:
 
-## Registration
+- `ProviderSelectionError` reports invalid selection construction, unknown
+  named providers, chains without matching candidates, and empty automatic
+  registries. No provider is invoked when this error is returned.
+- `ProviderCreationError` reports failures after candidates were selected. A
+  leaf `ProviderError` classifies one provider failure. Aggregate creation
+  errors retain ordered `ProviderAttemptFailure` values and distinguish
+  `Exhausted` from `StoppedByPolicy` termination.
 
-Provider identity belongs to registration rather than to the provider factory.
-Use `register(descriptor, provider)` for an owned provider and
-`register_shared(descriptor, provider)` when the factory is already held in an
-`Arc`. Registration validates every canonical ID and alias before mutating the
-builder, so a rejected registration never reserves a partial set of selectors.
+Attempt diagnostics contain only providers that were actually invoked. Error
+objects preserve causal source chains. Successful calls return only the service
+value; there is no success wrapper or consumer-facing observation API in this
+crate.
 
-The core exports no global registry. Applications explicitly assemble the
-providers they need during startup and share the resulting immutable registry
-or resolver.
+## Registration and Global Facades
+
+Registration accepts one self-described provider:
+
+```rust,ignore
+registry.register(provider)?;
+registry.register_shared(shared_provider)?;
+```
+
+The registry snapshots `ProviderDefinition::descriptor()` before taking its
+write lock. It validates the canonical ID and every alias before mutation, so a
+conflicting registration cannot reserve a partial selector set.
+
+This generic crate intentionally defines no global singleton for a concrete
+service family. A domain crate can expose a global facade, such as a MIME
+detector registry backed by `ProviderRegistry<MimeDetectorSpec>`. The
+application can register custom providers through that facade during startup,
+while downstream libraries resolve explicit or default selections from the
+same shared registry without depending on concrete implementations.
+
+## Testing
+
+```bash
+# Core API with the default empty feature set
+cargo test --no-default-features
+
+# Core API plus regex validation
+cargo test --all-features
+
+# Project CI checks
+./ci-check.sh
+
+# Check code coverage
+./coverage.sh
+```
+
+## License
+
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full license text.
+
+## Contributing
+
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
+
+## Author
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+Repository: [https://github.com/qubit-ltd/rs-spi](https://github.com/qubit-ltd/rs-spi)
