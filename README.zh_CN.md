@@ -7,9 +7,177 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-Qubit SPI 是 Rust 中构建 Service Provider Registry 的类型安全基础设施。
-App 在启动时注册自描述 Provider；独立开发的下游库无需了解具体实现，只需按照显式
-selection 或 App 设置的默认 selection 解析 Provider，再使用显式或默认配置创建服务。
+Qubit SPI 为 Rust 提供类型安全、允许运行时注册的 Service Provider Registry。App 在
+启动时注册 Provider；下游库无需依赖具体实现，即可创建显式选择或 App 默认选择的 Service。
+
+## 安装
+
+```toml
+[dependencies]
+qubit-spi = "0.8"
+```
+
+Qubit SPI 要求 Rust 1.94 或更高版本。
+
+## 快速开始
+
+下面的示例由三个独立发布的库和一个 App 组成，分别承载 Service 契约、下游消费者、
+第三方 Provider 和应用装配入口，明确展示每一部分在运行时的职责。
+
+下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
+为简洁起见，示例省略各个 `Cargo.toml` 文件。
+
+### 1. `lib-greater`：定义 Service 和全局 Registry
+
+`lib-greater` 持有 Service 契约。所有消费者和 Provider 都使用这个 crate 中同一个
+`GreeterSpec` 和 `GREETER_REGISTRY` 单体。
+
+```rust
+// lib-greater/src/lib.rs
+use std::sync::{Arc, LazyLock};
+
+use qubit_spi::{ProviderRegistry, ServiceSpec};
+
+/// 所有 Greeter Service 都要实现的业务接口。
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
+}
+
+/// Provider 创建 Greeter 时接收的配置。
+#[derive(Clone)]
+pub struct GreeterConfig {
+    /// 每条问候语中放在名字前面的文本。
+    pub prefix: String,
+}
+
+impl Default for GreeterConfig {
+    fn default() -> Self {
+        Self {
+            prefix: "Hello".to_owned(),
+        }
+    }
+}
+
+/// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    // Provider 创建 Greeter 时接收的输入类型。
+    type Config = GreeterConfig;
+    // 创建成功后返回给消费者的 Service 类型。
+    type Output = Arc<dyn Greeter>;
+}
+
+/// 供 App 和所有下游库共享的进程级 Greeter Provider Registry。
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+    LazyLock::new(ProviderRegistry::default);
+```
+
+### 2. `lib-foo`：使用默认 Service
+
+`lib-foo` 只了解 Service 契约，不了解具体实现。`foo()` 从共享 Registry 中解析默认
+Provider，用默认配置创建 Greeter，然后把结果打印到控制台。
+
+```rust
+// lib-foo/src/lib.rs
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ServiceProvider;
+
+/// 创建 App 选定的默认 Greeter，并打印一条问候语。
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve_default()?;
+    let greeter = provider.create_default()?;
+    println!("{}", greeter.greet("Rust"));
+    Ok(())
+}
+```
+
+### 3. `lib-friend-greater`：提供第三方 Provider
+
+`lib-friend-greater` 依赖 `lib-greater` 中的契约，实现 Service，并导出一个自描述
+Provider。它不会自行注册；最终 App 负责决定是否安装这个实现。
+
+```rust
+// lib-friend-greater/src/lib.rs
+use std::sync::Arc;
+
+use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+};
+
+/// friendly Provider 创建的具体 Greeter 实现。
+struct FriendlyGreeter {
+    /// 从创建配置复制得到的问候语前缀。
+    prefix: String,
+}
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {}!", self.prefix, name)
+    }
+}
+
+/// 导出给 App，由 App 显式注册的自描述 Provider。
+pub struct FriendlyGreeterProvider;
+
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
+    fn create(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+        Ok(Arc::new(FriendlyGreeter {
+            prefix: config.prefix.clone(),
+        }))
+    }
+}
+
+impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("friendly").expect("static provider ID is valid"),
+        )
+        .with_priority(100)
+    }
+}
+```
+
+### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
+
+App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greater` 持有的单体中，
+将其设为默认 Provider，然后调用 `foo()`。
+
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friend_greater::FriendlyGreeterProvider;
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
+
+// 应用装配入口：先安装 Provider，再调用 lib-foo。
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY
+        .set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
+}
+```
+
+程序会打印 `Hello, Rust!`。虽然 `lib-foo` 与第三方 Provider 互不依赖，`lib-foo` 仍会
+获得 App 选定的实现；它们的共享协调点是 `lib-greater` 定义的单体。
+
+Registry 默认 selection 与 Service 配置相互独立。有明确需求的调用方可以只显式提供
+其中一个，也可以同时提供：
+
+```rust,ignore
+let selection = ProviderSelection::named("friendly")?;
+let provider = GREETER_REGISTRY.resolve(&selection)?;
+let config = GreeterConfig {
+    prefix: "Welcome".to_owned(),
+};
+let greeter = provider.create(&config)?;
+```
 
 ## 为什么需要这个库
 
@@ -61,163 +229,6 @@ ServiceSpec::Output
 | 注册 | `register(provider)` | Provider 对所有 Registry clone 可见 | `RegistrationError` |
 | 选择 | `resolve(&selection)` 或 `resolve_default()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderSelectionError` |
 | 创建 | `create(&config)` 或 `create_default()` | 直接返回 `ServiceSpec::Output` | `ProviderCreationError` |
-
-## 安装
-
-```toml
-[dependencies]
-qubit-spi = "0.8"
-```
-
-Qubit SPI 要求 Rust 1.94 或更高版本。
-
-## 快速开始
-
-下面的示例由三个独立发布的库和一个 App 组成，分别承载 Service 契约、下游消费者、
-第三方 Provider 和应用装配入口，明确展示每一部分在运行时的职责。
-
-下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
-为简洁起见，示例省略各个 `Cargo.toml` 文件。
-
-### 1. `lib-greater`：定义 Service 和全局 Registry
-
-`lib-greater` 持有 Service 契约。所有消费者和 Provider 都使用这个 crate 中同一个
-`GreeterSpec` 和 `GREETER_REGISTRY` 单体。
-
-```rust
-// lib-greater/src/lib.rs
-use std::sync::{Arc, LazyLock};
-
-use qubit_spi::{ProviderRegistry, ServiceSpec};
-
-pub trait Greeter: Send + Sync {
-    fn greet(&self, name: &str) -> String;
-}
-
-#[derive(Clone)]
-pub struct GreeterConfig {
-    pub prefix: String,
-}
-
-impl Default for GreeterConfig {
-    fn default() -> Self {
-        Self {
-            prefix: "Hello".to_owned(),
-        }
-    }
-}
-
-pub struct GreeterSpec;
-
-impl ServiceSpec for GreeterSpec {
-    type Config = GreeterConfig;
-    type Output = Arc<dyn Greeter>;
-}
-
-pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
-    LazyLock::new(ProviderRegistry::default);
-```
-
-### 2. `lib-foo`：使用默认 Service
-
-`lib-foo` 只了解 Service 契约，不了解具体实现。`foo()` 从共享 Registry 中解析默认
-Provider，用默认配置创建 Greeter，然后把结果打印到控制台。
-
-```rust
-// lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
-
-pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
-    println!("{}", greeter.greet("Rust"));
-    Ok(())
-}
-```
-
-### 3. `lib-friend-greater`：提供第三方 Provider
-
-`lib-friend-greater` 依赖 `lib-greater` 中的契约，实现 Service，并导出一个自描述
-Provider。它不会自行注册；最终 App 负责决定是否安装这个实现。
-
-```rust
-// lib-friend-greater/src/lib.rs
-use std::sync::Arc;
-
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
-use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
-};
-
-struct FriendlyGreeter {
-    prefix: String,
-}
-
-impl Greeter for FriendlyGreeter {
-    fn greet(&self, name: &str) -> String {
-        format!("{}, {}!", self.prefix, name)
-    }
-}
-
-pub struct FriendlyGreeterProvider;
-
-impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
-        Ok(Arc::new(FriendlyGreeter {
-            prefix: config.prefix.clone(),
-        }))
-    }
-}
-
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("friendly").expect("static provider ID is valid"),
-        )
-        .with_priority(100)
-    }
-}
-```
-
-### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
-
-App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greater` 持有的单体中，
-将其设为默认 Provider，然后调用 `foo()`。
-
-```rust
-// app.rs
-use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ProviderSelection;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
-    GREETER_REGISTRY
-        .set_default_selection(ProviderSelection::named("friendly")?);
-    foo()
-}
-```
-
-程序会打印 `Hello, Rust!`。虽然 `lib-foo` 与第三方 Provider 互不依赖，`lib-foo` 仍会
-获得 App 选定的实现；它们的共享协调点是 `lib-greater` 定义的单体。
-
-Registry 默认 selection 与 Service 配置相互独立。有明确需求的调用方可以只显式提供
-其中一个，也可以同时提供：
-
-```rust,ignore
-let selection = ProviderSelection::named("friendly")?;
-let provider = GREETER_REGISTRY.resolve(&selection)?;
-let config = GreeterConfig {
-    prefix: "Welcome".to_owned(),
-};
-let greeter = provider.create(&config)?;
-```
 
 ## 选择与回退
 

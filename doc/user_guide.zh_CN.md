@@ -89,12 +89,15 @@ use std::sync::Arc;
 
 use qubit_spi::ServiceSpec;
 
+/// 所有 Greeter Service 都要实现的业务接口。
 trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
 
+/// Provider 创建 Greeter 时接收的配置。
 #[derive(Clone)]
 struct GreeterConfig {
+    /// 每条问候语中放在名字前面的文本。
     prefix: String,
 }
 
@@ -106,10 +109,13 @@ impl Default for GreeterConfig {
     }
 }
 
+/// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
 struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
+    // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+    // 创建成功后返回给消费者的 Service 类型。
     type Output = Arc<dyn Greeter>;
 }
 ```
@@ -135,7 +141,9 @@ use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
 };
 
+/// friendly Provider 创建的具体 Greeter 实现。
 struct FriendlyGreeter {
+    /// 从创建配置复制得到的问候语前缀。
     prefix: String,
 }
 
@@ -145,6 +153,7 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
+/// 导出给 App，由 App 显式注册的自描述 Provider。
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
@@ -260,12 +269,15 @@ use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
 
+/// 所有 Greeter Service 都要实现的业务接口。
 pub trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
 
+/// Provider 创建 Greeter 时接收的配置。
 #[derive(Clone)]
 pub struct GreeterConfig {
+    /// 每条问候语中放在名字前面的文本。
     pub prefix: String,
 }
 
@@ -277,13 +289,17 @@ impl Default for GreeterConfig {
     }
 }
 
+/// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
+    // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+    // 创建成功后返回给消费者的 Service 类型。
     type Output = Arc<dyn Greeter>;
 }
 
+/// 供 App 和所有下游库共享的进程级 Greeter Provider Registry。
 pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
     LazyLock::new(ProviderRegistry::default);
 ```
@@ -297,6 +313,7 @@ pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
 use lib_greater::GREETER_REGISTRY;
 use qubit_spi::ServiceProvider;
 
+/// 创建 App 选定的默认 Greeter，并打印一条问候语。
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
     let provider = GREETER_REGISTRY.resolve_default()?;
     let greeter = provider.create_default()?;
@@ -320,7 +337,9 @@ use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
 };
 
+/// friendly Provider 创建的具体 Greeter 实现。
 struct FriendlyGreeter {
+    /// 从创建配置复制得到的问候语前缀。
     prefix: String,
 }
 
@@ -330,6 +349,7 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
+/// 导出给 App，由 App 显式注册的自描述 Provider。
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
@@ -365,6 +385,7 @@ use lib_friend_greater::FriendlyGreeterProvider;
 use lib_greater::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
+// 应用装配入口：先安装 Provider，再调用 lib-foo。
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
     GREETER_REGISTRY

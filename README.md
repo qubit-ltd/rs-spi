@@ -7,11 +7,183 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Qubit SPI is typed infrastructure for service-provider registries in Rust.
-Applications register self-described providers at startup. Independently
-developed libraries resolve an explicit or application-defined default
-provider without knowing its concrete implementation, then create the service
-with explicit or default configuration.
+Qubit SPI provides typed, runtime-mutable service-provider registries for Rust.
+Apps register providers at startup; libraries can then create an explicitly
+selected or App-defined default service without depending on its concrete type.
+
+## Installation
+
+```toml
+[dependencies]
+qubit-spi = "0.8"
+```
+
+Qubit SPI requires Rust 1.94 or later.
+
+## Quick Start
+
+This example uses three independently published libraries and one App. It
+separates the service contract, downstream consumer, third-party provider, and
+application composition root so the runtime ownership is explicit.
+
+Cargo package names use hyphens below; Rust refers to those crates with
+underscores. The `Cargo.toml` files are omitted for brevity.
+
+### 1. `lib-greater`: Define the Service and Global Registry
+
+`lib-greater` owns the service contract. Every consumer and provider uses the
+same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
+
+```rust
+// lib-greater/src/lib.rs
+use std::sync::{Arc, LazyLock};
+
+use qubit_spi::{ProviderRegistry, ServiceSpec};
+
+/// Business interface implemented by every Greeter service.
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
+}
+
+/// Configuration passed to a provider when it creates a Greeter.
+#[derive(Clone)]
+pub struct GreeterConfig {
+    /// Text placed before the name in each greeting.
+    pub prefix: String,
+}
+
+impl Default for GreeterConfig {
+    fn default() -> Self {
+        Self {
+            prefix: "Hello".to_owned(),
+        }
+    }
+}
+
+/// Connects the Greeter configuration and output types to Qubit SPI.
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    // Input accepted by Greeter providers during service creation.
+    type Config = GreeterConfig;
+    // Service object returned to consumers after successful creation.
+    type Output = Arc<dyn Greeter>;
+}
+
+/// Process-wide Greeter provider registry shared by the App and all libraries.
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+    LazyLock::new(ProviderRegistry::default);
+```
+
+### 2. `lib-foo`: Consume the Default Service
+
+`lib-foo` knows the service contract but not its implementation. `foo()` asks
+the shared Registry for its default provider, creates a Greeter with default
+configuration, and prints the result.
+
+```rust
+// lib-foo/src/lib.rs
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ServiceProvider;
+
+/// Creates the App-selected default Greeter and prints one greeting.
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve_default()?;
+    let greeter = provider.create_default()?;
+    println!("{}", greeter.greet("Rust"));
+    Ok(())
+}
+```
+
+### 3. `lib-friend-greater`: Supply a Third-Party Provider
+
+`lib-friend-greater` depends on the contract from `lib-greater`, implements the
+service, and exports one self-described provider. It does not register itself;
+the final App owns that policy decision.
+
+```rust
+// lib-friend-greater/src/lib.rs
+use std::sync::Arc;
+
+use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+};
+
+/// Concrete Greeter created by the friendly provider.
+struct FriendlyGreeter {
+    /// Greeting prefix copied from the creation configuration.
+    prefix: String,
+}
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {}!", self.prefix, name)
+    }
+}
+
+/// Self-described provider exported for Apps to register explicitly.
+pub struct FriendlyGreeterProvider;
+
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
+    fn create(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+        Ok(Arc::new(FriendlyGreeter {
+            prefix: config.prefix.clone(),
+        }))
+    }
+}
+
+impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("friendly").expect("static provider ID is valid"),
+        )
+        .with_priority(100)
+    }
+}
+```
+
+### 4. `app.rs`: Register the Provider and Run `lib-foo`
+
+The App is the composition root. During startup it installs the third-party
+provider into the singleton owned by `lib-greater`, makes that provider the
+default, and then calls `foo()`.
+
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friend_greater::FriendlyGreeterProvider;
+use lib_greater::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
+
+// Application composition root: install a provider before calling lib-foo.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY
+        .set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
+}
+```
+
+The program prints `Hello, Rust!`. `lib-foo` receives the provider selected by
+the App even though those two crates do not depend on each other. Their shared
+coordination point is the singleton defined by `lib-greater`.
+
+The Registry default and service configuration are independent. A caller with
+specific requirements can supply either one without forcing the other:
+
+```rust,ignore
+let selection = ProviderSelection::named("friendly")?;
+let provider = GREETER_REGISTRY.resolve(&selection)?;
+let config = GreeterConfig {
+    prefix: "Welcome".to_owned(),
+};
+let greeter = provider.create(&config)?;
+```
 
 ## Why This Crate Exists
 
@@ -72,168 +244,6 @@ ServiceSpec::Output
 | Registration | `register(provider)` | Provider becomes visible through every Registry clone | `RegistrationError` |
 | Selection | `resolve(&selection)` or `resolve_default()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderSelectionError` |
 | Creation | `create(&config)` or `create_default()` | `ServiceSpec::Output` directly | `ProviderCreationError` |
-
-## Installation
-
-```toml
-[dependencies]
-qubit-spi = "0.8"
-```
-
-Qubit SPI requires Rust 1.94 or later.
-
-## Quick Start
-
-This example uses three independently published libraries and one App. It
-separates the service contract, downstream consumer, third-party provider, and
-application composition root so the runtime ownership is explicit.
-
-Cargo package names use hyphens below; Rust refers to those crates with
-underscores. The `Cargo.toml` files are omitted for brevity.
-
-### 1. `lib-greater`: Define the Service and Global Registry
-
-`lib-greater` owns the service contract. Every consumer and provider uses the
-same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
-
-```rust
-// lib-greater/src/lib.rs
-use std::sync::{Arc, LazyLock};
-
-use qubit_spi::{ProviderRegistry, ServiceSpec};
-
-pub trait Greeter: Send + Sync {
-    fn greet(&self, name: &str) -> String;
-}
-
-#[derive(Clone)]
-pub struct GreeterConfig {
-    pub prefix: String,
-}
-
-impl Default for GreeterConfig {
-    fn default() -> Self {
-        Self {
-            prefix: "Hello".to_owned(),
-        }
-    }
-}
-
-pub struct GreeterSpec;
-
-impl ServiceSpec for GreeterSpec {
-    type Config = GreeterConfig;
-    type Output = Arc<dyn Greeter>;
-}
-
-pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
-    LazyLock::new(ProviderRegistry::default);
-```
-
-### 2. `lib-foo`: Consume the Default Service
-
-`lib-foo` knows the service contract but not its implementation. `foo()` asks
-the shared Registry for its default provider, creates a Greeter with default
-configuration, and prints the result.
-
-```rust
-// lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
-
-pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve_default()?;
-    let greeter = provider.create_default()?;
-    println!("{}", greeter.greet("Rust"));
-    Ok(())
-}
-```
-
-### 3. `lib-friend-greater`: Supply a Third-Party Provider
-
-`lib-friend-greater` depends on the contract from `lib-greater`, implements the
-service, and exports one self-described provider. It does not register itself;
-the final App owns that policy decision.
-
-```rust
-// lib-friend-greater/src/lib.rs
-use std::sync::Arc;
-
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
-use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
-};
-
-struct FriendlyGreeter {
-    prefix: String,
-}
-
-impl Greeter for FriendlyGreeter {
-    fn greet(&self, name: &str) -> String {
-        format!("{}, {}!", self.prefix, name)
-    }
-}
-
-pub struct FriendlyGreeterProvider;
-
-impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
-        Ok(Arc::new(FriendlyGreeter {
-            prefix: config.prefix.clone(),
-        }))
-    }
-}
-
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("friendly").expect("static provider ID is valid"),
-        )
-        .with_priority(100)
-    }
-}
-```
-
-### 4. `app.rs`: Register the Provider and Run `lib-foo`
-
-The App is the composition root. During startup it installs the third-party
-provider into the singleton owned by `lib-greater`, makes that provider the
-default, and then calls `foo()`.
-
-```rust
-// app.rs
-use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ProviderSelection;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
-    GREETER_REGISTRY
-        .set_default_selection(ProviderSelection::named("friendly")?);
-    foo()
-}
-```
-
-The program prints `Hello, Rust!`. `lib-foo` receives the provider selected by
-the App even though those two crates do not depend on each other. Their shared
-coordination point is the singleton defined by `lib-greater`.
-
-The Registry default and service configuration are independent. A caller with
-specific requirements can supply either one without forcing the other:
-
-```rust,ignore
-let selection = ProviderSelection::named("friendly")?;
-let provider = GREETER_REGISTRY.resolve(&selection)?;
-let config = GreeterConfig {
-    prefix: "Welcome".to_owned(),
-};
-let greeter = provider.create(&config)?;
-```
 
 ## Selection and Fallback
 

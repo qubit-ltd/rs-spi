@@ -97,12 +97,15 @@ use std::sync::Arc;
 
 use qubit_spi::ServiceSpec;
 
+/// Business interface implemented by every Greeter service.
 trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
 
+/// Configuration passed to a provider when it creates a Greeter.
 #[derive(Clone)]
 struct GreeterConfig {
+    /// Text placed before the name in each greeting.
     prefix: String,
 }
 
@@ -114,10 +117,13 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Connects the Greeter configuration and output types to Qubit SPI.
 struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
+    // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+    // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
 ```
@@ -144,7 +150,9 @@ use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
 };
 
+/// Concrete Greeter created by the friendly provider.
 struct FriendlyGreeter {
+    /// Greeting prefix copied from the creation configuration.
     prefix: String,
 }
 
@@ -154,6 +162,7 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
+/// Self-described provider exported for Apps to register explicitly.
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
@@ -279,12 +288,15 @@ use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
 
+/// Business interface implemented by every Greeter service.
 pub trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
 
+/// Configuration passed to a provider when it creates a Greeter.
 #[derive(Clone)]
 pub struct GreeterConfig {
+    /// Text placed before the name in each greeting.
     pub prefix: String,
 }
 
@@ -296,13 +308,17 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Connects the Greeter configuration and output types to Qubit SPI.
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
+    // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+    // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
 
+/// Process-wide Greeter provider registry shared by the App and all libraries.
 pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
     LazyLock::new(ProviderRegistry::default);
 ```
@@ -317,6 +333,7 @@ Greeter implementation.
 use lib_greater::GREETER_REGISTRY;
 use qubit_spi::ServiceProvider;
 
+/// Creates the App-selected default Greeter and prints one greeting.
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
     let provider = GREETER_REGISTRY.resolve_default()?;
     let greeter = provider.create_default()?;
@@ -341,7 +358,9 @@ use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
 };
 
+/// Concrete Greeter created by the friendly provider.
 struct FriendlyGreeter {
+    /// Greeting prefix copied from the creation configuration.
     prefix: String,
 }
 
@@ -351,6 +370,7 @@ impl Greeter for FriendlyGreeter {
     }
 }
 
+/// Self-described provider exported for Apps to register explicitly.
 pub struct FriendlyGreeterProvider;
 
 impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
@@ -387,6 +407,7 @@ use lib_friend_greater::FriendlyGreeterProvider;
 use lib_greater::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
+// Application composition root: install a provider before calling lib-foo.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
     GREETER_REGISTRY
