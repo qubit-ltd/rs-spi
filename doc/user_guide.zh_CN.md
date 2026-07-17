@@ -1,527 +1,199 @@
 # Qubit SPI 用户手册
 
-本手册完整介绍 `qubit-spi` 0.8 的公共使用模型。
+本手册先给出能直接运行的程序，再把它扩展为真实示例，最后详细解释公共 API 中的每个
+使用决策。
 
-## 概述
+## 从这里开始：五分钟上手
 
-Qubit SPI 为同一服务支持多种实现的应用提供类型安全的基础设施。应用定义服务族，
-在启动阶段注册 Provider 工厂，构建不可变 Registry，然后通过明确的选择规则解析
-服务。
+```rust
+use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    FallbackPolicy, ProviderDescriptor, ProviderId, ProviderRegistry, ProviderResolver,
+    ServiceProvider, ServiceSpec,
+};
 
-本 crate 不提供全局 Registry，也不会产生自动发现的副作用。应用自行决定链接哪些
-Provider、何时注册，以及向各子系统共享哪个 Registry 或 Resolver。这使启动失败
-保持可见，也让测试免受进程级全局状态干扰。
+struct GreetingSpec;
 
-## 安装
+impl ServiceSpec for GreetingSpec {
+    type Config = ();
+    type Output = &'static str;
+}
 
-在 `Cargo.toml` 中添加：
+struct EnglishProvider;
+
+impl ServiceProvider<GreetingSpec> for EnglishProvider {
+    fn create(&self, _config: &()) -> Result<&'static str, ProviderError> {
+        Ok("hello")
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+    builder.register(
+        ProviderDescriptor::new(ProviderId::new("english")?),
+        EnglishProvider,
+    )?;
+
+    let resolver = ProviderResolver::new(builder.build(), FallbackPolicy::OnAbsence);
+    let created = resolver.create_named("english", &())?;
+
+    assert_eq!("english", created.provider_id().as_str());
+    assert_eq!("hello", *created.service());
+    Ok(())
+}
+```
+
+本手册适用于 `qubit-spi` 0.8，该版本要求 Rust 1.94 或更高版本。上面的示例构建了
+一个只包含单个 Provider 的 Registry，选择 `english`，并同时得到服务值 `"hello"`
+与实际胜出的 Provider ID。
+
+运行示例前，在应用中添加依赖：
 
 ```toml
 [dependencies]
 qubit-spi = "0.8"
 ```
 
-0.8 版本要求 Rust 1.94 或更高版本。本 crate 没有 feature flag，唯一的运行时依赖是
-`thiserror`。
+## 理解核心流程
 
-大多数应用从 `qubit_spi` 导入核心类型，从 `qubit_spi::error` 导入错误类型：
+### 1. 定义输入和输出
+
+`impl ServiceSpec for GreetingSpec` 表示这个服务族中的所有 Provider 都接收 `&()`，
+并且必须返回 `&'static str`。`GreetingSpec` 只是将这两个类型绑定在一起的标记类型。
+
+### 2. 实现工厂
+
+`EnglishProvider::create` 是工厂操作。它接收 `GreetingSpec` 指定的配置，创建完整的
+输出；无法创建时则返回经过分类的 `ProviderError`。
+
+### 3. 指定 Provider 身份
+
+`ProviderDescriptor::new(ProviderId::new("english")?)` 为工厂指定稳定的 canonical
+ID。身份属于注册信息，因此 Provider 类型本身不需要知道配置给它的名称、alias 或
+priority。
+
+### 4. 装配 Registry
+
+`ProviderRegistry::builder()` 开始可变的启动装配阶段。每次 `register` 都会检查
+身份冲突。`build()` 消费 `ProviderRegistryBuilder`，得到用于运行时查询和共享的
+不可变 `ProviderRegistry`。
+
+### 5. 解析并创建
+
+`ProviderResolver::new` 将 Registry 与 `FallbackPolicy` 组合起来。
+`create_named("english", &())` 会规范化 selector，找到唯一的 Provider，调用它的
+工厂并返回结果。
+
+### 6. 使用结果
+
+返回的 `CreatedService` 通过 `service()` 提供输出，通过 `provider_id()` 提供实际
+成功的 canonical ID。保留胜出者身份便于记录日志、指标和支持诊断。
+
+完整流程如下：
+
+```text
+ServiceSpec -> ServiceProvider -> ProviderDescriptor -> Registry Builder
+            -> immutable Registry -> Resolver -> CreatedService
+```
+
+## 带详细注释的完整示例
+
+下面的程序加入真实的服务 trait、两个 Provider、alias、priority、三种选择方式、回退
+和结构化诊断。请按顺序阅读代码注释；每条注释都说明对应设计存在的原因以及运行时
+结果。
 
 ```rust
-use qubit_spi::error::{ProviderError, ResolutionError};
+use std::sync::Arc;
+
+use qubit_spi::error::{AttemptFailure, ProviderError, ResolutionError};
 use qubit_spi::{
-    FallbackPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderResolver,
-    ProviderSelection,
-    ServiceProvider,
-    ServiceSpec,
-};
-```
-
-## 核心模型
-
-主要类型构成一条从启动到运行时的处理链：
-
-| 阶段 | 类型 | 职责 |
-| --- | --- | --- |
-| 服务定义 | `ServiceSpec` | 将配置类型绑定到同一服务族中所有 Provider 返回的完整输出类型。 |
-| Provider 实现 | `ServiceProvider<S>` | 根据 `&S::Config` 创建 `S::Output`，并对创建失败分类。 |
-| 注册元数据 | `ProviderDescriptor` | 保存 canonical ID、alias 和自动选择 priority。 |
-| 启动装配 | `ProviderRegistryBuilder<S>` | 注册工厂，并在构建 Registry 前拒绝 selector 冲突。 |
-| 运行时目录 | `ProviderRegistry<S>` | 提供不可变查询和确定性的自动选择顺序。 |
-| 选择 | `ProviderSelection` | 表示经过校验的自动、具名或链式请求。 |
-| 创建 | `ProviderResolver<S>` | 应用选择与 fallback policy 来创建服务。 |
-| 成功结果 | `CreatedService<S::Output>` | 返回输出和胜出 Provider 的 canonical ID。 |
-
-Provider 身份属于注册过程，而不是工厂对象。同一个工厂类型可以在不同 Registry 中
-以不同方式注册。SPI 核心会原样返回 `ServiceSpec` 选定的输出类型，不会添加或移除
-`Box`、`Arc` 或 `Rc` 包装。
-
-## 定义服务
-
-为每个独立服务族定义一个实现 `ServiceSpec` 的标记类型：
-
-```rust
-use std::sync::Arc;
-
-use qubit_spi::ServiceSpec;
-
-trait Greeter: Send + Sync {
-    fn greet(&self, name: &str) -> String;
-}
-
-struct GreeterConfig {
-    prefix: String,
-}
-
-struct GreeterSpec;
-
-impl ServiceSpec for GreeterSpec {
-    type Config = GreeterConfig;
-    type Output = Arc<dyn Greeter>;
-}
-```
-
-`Config` 可以是 unsized 类型，因此 Provider 可以接收 `str` 或 trait object 等视图。
-`Output` 是返回给调用方的完整值。应根据服务真实的所有权与并发需求选择拥有值、
-`Box<dyn Trait>`、`Arc<dyn Trait>` 或其他句柄。
-
-## 实现 Provider
-
-每个 Provider 都实现 `ServiceProvider<S>`。Provider 实现必须满足
-`Send + Sync + 'static`，因为 Registry 会保留并可能共享它。配置以借用方式传入，
-每次调用都创建一个输出。
-
-```rust
-use std::sync::Arc;
-
-use qubit_spi::error::ProviderError;
-use qubit_spi::ServiceProvider;
-
-# trait Greeter: Send + Sync {
-#     fn greet(&self, name: &str) -> String;
-# }
-# struct GreeterConfig { prefix: String }
-# struct GreeterSpec;
-# impl qubit_spi::ServiceSpec for GreeterSpec {
-#     type Config = GreeterConfig;
-#     type Output = Arc<dyn Greeter>;
-# }
-struct LocalGreeter {
-    prefix: String,
-}
-
-impl Greeter for LocalGreeter {
-    fn greet(&self, name: &str) -> String {
-        format!("{} {name}", self.prefix)
-    }
-}
-
-struct LocalProvider;
-
-impl ServiceProvider<GreeterSpec> for LocalProvider {
-    fn create(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
-        if config.prefix.trim().is_empty() {
-            return Err(ProviderError::invalid_configuration(
-                "the greeting prefix must not be empty",
-            ));
-        }
-        Ok(Arc::new(LocalGreeter {
-            prefix: config.prefix.clone(),
-        }))
-    }
-}
-```
-
-应选用语义最准确的 `ProviderError` 构造函数；错误分类会直接决定 Resolver 是否可以
-继续尝试下一个 Provider。
-
-## Provider 身份与元数据
-
-`ProviderId` 是严格的 canonical identity。它必须是小写 ASCII，以 ASCII 字母或
-数字开头和结尾，中间只能包含字母、数字、`-`、`_`、`.` 和 `+`。输入不会被裁剪或
-归一化：
-
-```rust
-use qubit_spi::ProviderId;
-
-let id = ProviderId::new("local-v2")?;
-assert_eq!("local-v2", id.as_str());
-# Ok::<(), qubit_spi::error::ProviderIdError>(())
-```
-
-`ProviderSelector` 面向配置和用户输入。解析过程会裁剪首尾空白并把 ASCII 字母转为
-小写，然后应用相同的 token 语法。因此 `" LOCAL-V2 "` 可以选择 canonical ID
-`local-v2`。
-
-`ProviderDescriptor` 把 canonical ID、alias 和 priority 组合在一起：
-
-```rust
-use qubit_spi::{ProviderDescriptor, ProviderId};
-
-let descriptor = ProviderDescriptor::new(ProviderId::new("local")?)
-    .with_aliases(["builtin", "default"])?
-    .with_priority(50);
-
-assert_eq!("local", descriptor.id().as_str());
-assert_eq!(50, descriptor.priority());
-# Ok::<(), Box<dyn std::error::Error>>(())
-```
-
-Alias 按 selector 规则解析。Descriptor 会拒绝非法 alias、与 canonical ID 相同的
-alias，以及归一化后重复的 alias。Priority 只影响自动选择；具名和链式选择仍使用
-调用方指定的目标或顺序。
-
-## 构建 Registry
-
-应在应用启动阶段构建 Registry：
-
-```rust
-# use std::sync::Arc;
-# use qubit_spi::error::ProviderError;
-use qubit_spi::{ProviderDescriptor, ProviderId, ProviderRegistry};
-# trait Greeter: Send + Sync { fn greet(&self, name: &str) -> String; }
-# struct GreeterConfig { prefix: String }
-# struct GreeterSpec;
-# impl qubit_spi::ServiceSpec for GreeterSpec {
-#     type Config = GreeterConfig;
-#     type Output = Arc<dyn Greeter>;
-# }
-# struct LocalProvider;
-# impl qubit_spi::ServiceProvider<GreeterSpec> for LocalProvider {
-#     fn create(&self, _: &GreeterConfig) -> Result<Arc<dyn Greeter>, ProviderError> {
-#         Err(ProviderError::unavailable("example provider"))
-#     }
-# }
-
-let mut builder = ProviderRegistry::<GreeterSpec>::builder();
-builder.register(
-    ProviderDescriptor::new(ProviderId::new("local")?)
-        .with_aliases(["builtin"])?
-        .with_priority(50),
-    LocalProvider,
-)?;
-let registry = builder.build();
-
-assert_eq!(1, registry.len());
-assert!(!registry.is_empty());
-# Ok::<(), Box<dyn std::error::Error>>(())
-```
-
-`register` 接收拥有所有权的具体 Provider，并将其存入共享的 Registry 存储；如果
-工厂已经保存在 `Arc<dyn ServiceProvider<S>>` 中，则使用 `register_shared`。
-
-Registry 中每个 canonical ID 和 alias 都必须唯一。注册操作会先检查所有 selector
-声明，再修改 Builder，因此被拒绝的注册不会占用部分 alias。`RegistrationError`
-会报告冲突 selector、现有所有者以及试图声明它的 Provider。
-
-调用 `build` 后 Registry 不可变。`clone` 只克隆内部 `Arc`，因此 Registry 句柄的
-共享成本很低。`descriptors()` 和 `provider_ids()` 按注册顺序迭代。`find` 对非法和
-未知输入都返回 `None`；如果调用方需要通过结构化 `ResolutionError` 区分两者，应
-使用 `resolve`。
-
-## 选择 Provider
-
-Qubit SPI 支持三种选择模式：
-
-- `ProviderSelection::auto()` 使用 Registry 的确定性自动顺序：priority 降序，
-  canonical Provider ID 升序。
-- `ProviderSelection::named(value)` 校验一个 selector，并且只尝试该 Provider。
-- `ProviderSelection::chain(values)` 校验一个非空有序 selector 列表，并按输入顺序
-  尝试候选项。
-
-```rust
-use qubit_spi::ProviderSelection;
-
-let automatic = ProviderSelection::auto();
-let named = ProviderSelection::named(" local ")?;
-let chain = ProviderSelection::chain(["cloud", "local"])?;
-
-assert!(named.selector().is_some());
-assert_eq!(2, chain.selectors().len());
-# Ok::<(), qubit_spi::error::ProviderSelectionError>(())
-```
-
-链式解析会把未知 selector 记录为失败尝试并继续。如果同一个 ID 及其 alias 同时出现
-在一条 chain 中，底层 Provider 只会被调用一次。具名选择从不回退，即使 Resolver
-使用 `OnAnyError` 也是如此。
-
-## 回退策略
-
-在自动或链式选择中，Provider 工厂返回 `ProviderError` 后会应用
-`FallbackPolicy`：
-
-| 策略 | `Unsupported` | `Unavailable` | `InvalidConfiguration` | `InitializationFailed` |
-| --- | --- | --- | --- | --- |
-| `OnAbsence` | 继续 | 继续 | 停止 | 停止 |
-| `OnAnyError` | 继续 | 继续 | 继续 | 继续 |
-
-`OnAbsence` 是默认策略，适用于“当这个实现无法支持请求或当前环境时换用另一个实现”
-的语义。它会在配置无效和意外初始化失败时停止，避免隐藏真实问题。
-
-`OnAnyError` 明确表示尽力而为。只有在配置无效或意外初始化失败后尝试其他 Provider
-仍然正确时才应使用。
-
-Chain 中的未知 selector 不是 Provider error；它们会被记录并跳过，不受 fallback
-policy 影响。具名选择没有下一个候选项，因此仍会立即报告未知 Provider。
-
-## 解析并创建服务
-
-通过 Registry 和策略构造 Resolver：
-
-```rust
-# use std::sync::Arc;
-use qubit_spi::{FallbackPolicy, ProviderRegistry, ProviderResolver};
-# struct GreeterConfig { prefix: String }
-# trait Greeter: Send + Sync { fn greet(&self, name: &str) -> String; }
-# struct GreeterSpec;
-# impl qubit_spi::ServiceSpec for GreeterSpec {
-#     type Config = GreeterConfig;
-#     type Output = Arc<dyn Greeter>;
-# }
-
-let registry = ProviderRegistry::<GreeterSpec>::default();
-let resolver = ProviderResolver::new(registry, FallbackPolicy::OnAbsence);
-
-assert!(resolver.registry().is_empty());
-assert_eq!(FallbackPolicy::OnAbsence, resolver.fallback_policy());
-```
-
-在运行时输入边界使用 `create_auto`、`create_named` 或 `create_chain`。这些方法解析
-原始 selector，并把校验失败转换为 `ResolutionError`：
-
-```rust,ignore
-let service = resolver.create_auto(&config)?;
-let service = resolver.create_named(configured_name, &config)?;
-let service = resolver.create_chain(configured_chain, &config)?;
-```
-
-如果同一配置选择会重复使用，应只校验一次，然后重复调用 `create`：
-
-```rust,ignore
-let selection = ProviderSelection::chain(["cloud", "local"])?;
-let first = resolver.create(&selection, &config)?;
-let second = resolver.create(&selection, &config)?;
-```
-
-这样可以避免重复分配和归一化 selector。Resolver 与 Registry 的克隆仍指向同一份
-不可变目录。
-
-## 检查成功结果
-
-Resolver 方法返回 `CreatedService<S::Output>`。即使使用 alias 选择，它也会保留
-胜出 Provider 的 canonical ID：
-
-```rust,ignore
-let created = resolver.create_named("builtin", &config)?;
-tracing::info!(provider = %created.provider_id(), "created greeter");
-let greeting = created.service().greet("Ada");
-```
-
-使用 `service()` 借用输出；使用 `into_service()` 丢弃 Provider 身份并取得输出；
-使用 `into_parts()` 同时取得两个拥有所有权的值。
-
-如果需要不带回退的直接查询，`ProviderRegistry::resolve` 会返回借用的
-`ResolvedProvider`。其 `descriptor()` 暴露注册元数据，`create()` 调用该单一
-Provider。当代码需要在创建前检查元数据时可使用此方式；普通创建流程应使用
-Resolver，以保持诊断和策略处理一致。
-
-## 错误处理与诊断
-
-错误按生命周期拆分：
-
-| 错误 | 含义 |
-| --- | --- |
-| `ProviderIdError` | Canonical Provider ID 为空或不符合 canonical 语法。 |
-| `ProviderSelectorError` | 原始 selector 归一化后为空或不符合 token 语法。 |
-| `ProviderDescriptorError` | Alias 非法、重复或与 canonical ID 相同。 |
-| `ProviderSelectionError` | Named/chain selector 非法或 chain 为空。 |
-| `RegistrationError` | Builder 中的 canonical ID 或 alias 已被声明。 |
-| `ProviderError` | 单个 Provider 对服务创建失败进行了分类。 |
-| `ResolutionError` | 选择解析、查询、遍历或创建未能产生服务。 |
-
-`ProviderErrorKind` 有四种分类：`Unsupported`、`Unavailable`、
-`InvalidConfiguration` 和 `InitializationFailed`。名称以 `_with_source` 结尾的
-构造函数会保留底层 `Error + Send + Sync + 'static`，供标准 error source chain
-使用。
-
-`ResolutionError` 区分非法原始 selector、空原始 chain、未知具名 Provider、
-在空 Registry 上自动选择，以及聚合的 `NoProviderSucceeded` 结果。对于聚合错误：
-
-- `attempts()` 按遇到顺序返回失败。
-- `terminal_attempt()` 返回最后一次已记录的尝试。
-- `termination()` 返回 `Exhausted` 或 `StoppedByPolicy`。
-- `decisive_attempt()` 返回导致策略停止的尝试，或只有一次尝试时的 exhausted 结果；
-  对含多个尝试且原因不唯一的 exhausted 结果返回 `None`。
-- `is_absence()` 对未知具名 Provider，或只包含未知、不支持和不可用尝试的聚合结果
-  返回 `true`。
-
-每个 `AttemptFailure` 会区分未知 selector 和已调用 Provider 返回的错误。Provider
-尝试会保留显式请求的 selector（如有）、canonical Provider ID、原始
-`ProviderError` 及其 source。`ResolutionError` 的显示文本包含按顺序排列的尝试
-诊断。
-
-公共错误枚举标记为 `#[non_exhaustive]`。匹配已知 variant 时必须保留通配分支：
-
-```rust
-use qubit_spi::error::ResolutionError;
-use qubit_spi::ResolutionTermination;
-
-fn describe(error: &ResolutionError) -> &'static str {
-    match error {
-        ResolutionError::InvalidSelector { .. } => "invalid selector",
-        ResolutionError::EmptySelection => "empty chain",
-        ResolutionError::UnknownProvider { .. } => "unknown provider",
-        ResolutionError::EmptyRegistry => "empty registry",
-        ResolutionError::NoProviderSucceeded {
-            termination: ResolutionTermination::StoppedByPolicy,
-            ..
-        } => "fallback stopped",
-        ResolutionError::NoProviderSucceeded { .. } => "candidates exhausted",
-        _ => "future resolution error",
-    }
-}
-```
-
-## 共享与性能
-
-Registry 只构建一次，并由共享不可变存储支持。克隆 Registry 或 Resolver 只会增加
-`Arc` 引用计数，不会复制 Provider 或索引。查询使用 selector 索引，自动候选顺序
-在 `build` 阶段计算，而不是每次解析时重新计算。
-
-成功解析 `ProviderSelector` 会分配并持有归一化文本。如果同一配置会重复使用，应缓存
-`ProviderSelector` 或 `ProviderSelection`。在请求或配置边界，原始 Resolver 方法
-更合适，因为它们会在 `ResolutionError` 中保留非法输入及其解析 source。
-
-Provider 工厂满足 `Send + Sync`，不可变 Registry/Resolver 可以共享用于并发查询和
-创建。已创建服务输出的线程安全性、生命周期和分配行为仍由 `ServiceSpec::Output`
-及 Provider 实现决定。
-
-## 推荐实践
-
-- 在启动阶段显式装配 Registry，并让 descriptor 或 registration error 导致启动失败。
-- 在持久化配置中使用稳定的小写 canonical ID，将 alias 保留给兼容性或运维便利性。
-- 有意识地分配 priority，并记住 canonical ID 是稳定的同 priority 排序规则。
-- 除非产品明确要求在配置或初始化错误后继续，否则使用 `OnAbsence`。
-- 准确分类 `ProviderError`；回退行为是否正确依赖该分类。
-- 在不可信输入边界使用原始 Resolver 方法，为重复内部调用缓存已校验的
-  `ProviderSelection`。
-- 在日志或指标中记录 `CreatedService::provider_id()`，以便识别实际选择的实现。
-- 检查有序 attempts 和 termination，不要解析 display 文本。
-- 匹配公共错误枚举时保留通配分支。
-
-## 常见问题
-
-**ID 被拒绝，但类似 selector 可以使用。** `ProviderId` 要求输入本身已经 canonical，
-不会裁剪或转小写；`ProviderSelector` 则会归一化配置输入。应把 canonical 形式保存为
-ID。
-
-**添加 alias 后注册失败。** Canonical ID 和 alias 共享同一个 selector 命名空间。
-检查 `RegistrationError::DuplicateSelector` 的字段以找到现有所有者和冲突注册。
-
-**自动解析返回 `EmptyRegistry`。** 在调用 `build` 前没有注册 Provider，或者向
-Resolver 传入了错误类型的 Registry。
-
-**Chain 在解析前就拒绝所有候选项。** `ProviderSelection::chain` 和 `create_chain`
-会拒绝空 chain，并在第一个非法 selector 处停止解析。语法有效但未知的 selector
-不同：它们会在解析期间成为有序 attempt failure。
-
-**回退比预期更早停止。** 在 `OnAbsence` 下，`InvalidConfiguration` 和
-`InitializationFailed` 会停止遍历。检查 `termination()` 和
-`decisive_attempt()` 以识别导致策略停止的 Provider error。
-
-**`decisive_attempt()` 返回 `None`。** 多个候选项已经耗尽，没有一次失败能够单独
-解释聚合结果。应检查 `attempts()` 返回的每一项。
-
-## 完整示例
-
-以下示例注册一个优先的 Cloud Provider 和一个本地回退 Provider。Cloud Provider
-报告不可用，因此使用 `OnAbsence` 的自动解析会继续尝试本地 Provider。
-
-```rust
-use std::sync::Arc;
-
-use qubit_spi::error::{ProviderError, ResolutionError};
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderResolver,
-    ResolutionTermination,
-    ServiceProvider,
-    ServiceSpec,
+    FallbackPolicy, ProviderDescriptor, ProviderId, ProviderRegistry, ProviderResolver,
+    ResolutionTermination, ServiceProvider, ServiceSpec,
 };
 
+/*
+ * 面向应用的 trait 才是真正有用的服务。SPI 返回 Arc 后，调用方无需知道具体是哪个
+ * Provider 创建了实现，就能以较低成本克隆并在线程间共享同一个句柄。
+ */
 trait Greeter: Send + Sync {
-    fn greet(&self, name: &str) -> String;
+    fn greet(&self) -> String;
 }
 
-struct GreeterConfig {
+struct TextGreeter {
+    message: String,
+}
+
+impl Greeter for TextGreeter {
+    fn greet(&self) -> String {
+        self.message.clone()
+    }
+}
+
+/*
+ * ServiceSpec 是所有 Provider 共同遵守的编译期契约：每个工厂接收相同配置，并返回
+ * 相同且完整的、由调用方持有的服务句柄。
+ */
+struct GreetingConfig {
     prefix: String,
     cloud_available: bool,
 }
 
-struct GreeterSpec;
+struct GreetingSpec;
 
-impl ServiceSpec for GreeterSpec {
-    type Config = GreeterConfig;
+impl ServiceSpec for GreetingSpec {
+    type Config = GreetingConfig;
     type Output = Arc<dyn Greeter>;
 }
 
-struct TextGreeter {
-    prefix: String,
-}
-
-impl Greeter for TextGreeter {
-    fn greet(&self, name: &str) -> String {
-        format!("{} {name}", self.prefix)
-    }
-}
-
+/*
+ * Provider 只负责创建服务，不拥有注册身份。名称和排序信息独立于类型后，启动代码便可
+ * 复用同一种工厂实现，并按部署环境分别设置元数据。
+ */
 struct CloudProvider;
 
-impl ServiceProvider<GreeterSpec> for CloudProvider {
-    fn create(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+impl ServiceProvider<GreetingSpec> for CloudProvider {
+    fn create(&self, config: &GreetingConfig) -> Result<Arc<dyn Greeter>, ProviderError> {
+        /*
+         * Unavailable 表示该 Provider 能处理请求，但现在暂时无法提供服务。因此
+         * OnAbsence 可以继续尝试其他 Provider。
+         */
         if !config.cloud_available {
             return Err(ProviderError::unavailable(
                 "the cloud greeting service is offline",
             ));
         }
         Ok(Arc::new(TextGreeter {
-            prefix: format!("{} from the cloud,", config.prefix),
+            message: format!("{} from cloud", config.prefix),
         }))
     }
 }
 
 struct LocalProvider;
 
-impl ServiceProvider<GreeterSpec> for LocalProvider {
-    fn create(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+impl ServiceProvider<GreetingSpec> for LocalProvider {
+    fn create(&self, config: &GreetingConfig) -> Result<Arc<dyn Greeter>, ProviderError> {
+        /*
+         * InvalidConfiguration 表示调用方输入有误。OnAbsence 会在这里停止，避免继续
+         * 尝试其他 Provider 而掩盖错误配置。
+         */
         if config.prefix.trim().is_empty() {
             return Err(ProviderError::invalid_configuration(
-                "the greeting prefix must not be empty",
+                "prefix must not be empty",
             ));
         }
         Ok(Arc::new(TextGreeter {
-            prefix: config.prefix.clone(),
+            message: format!("{} from local", config.prefix),
         }))
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let mut builder = ProviderRegistry::<GreeterSpec>::builder();
+fn build_resolver() -> Result<ProviderResolver<GreetingSpec>, Box<dyn std::error::Error>> {
+    let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+
+    /*
+     * canonical ID 是稳定身份，alias 是可接受的输入名称。priority 100 让 cloud 成为
+     * 自动选择时的首选；具名选择和链式选择仍然遵循调用方明确给出的顺序。
+     */
     builder.register(
         ProviderDescriptor::new(ProviderId::new("cloud")?)
             .with_aliases(["remote"])?
@@ -535,57 +207,476 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         LocalProvider,
     )?;
 
-    let resolver = ProviderResolver::new(
+    /*
+     * build() 结束可变的启动装配阶段。Resolver 共享构建出的不可变 Registry，并在
+     * 运行时应用一个明确的回退策略。OnAbsence 会保护调用方错误；OnAnyError 则会在
+     * InvalidConfiguration 以及其他非缺失类错误后继续。
+     */
+    Ok(ProviderResolver::new(
         builder.build(),
         FallbackPolicy::OnAbsence,
-    );
-    let config = GreeterConfig {
-        prefix: "Hello,".to_owned(),
+    ))
+}
+
+/*
+ * ResolutionError 提供结构化诊断。依据这些值分支既稳定又可测试；解析 Display 文本
+ * 会让程序依赖原本只面向读者的措辞。
+ */
+fn report_resolution_error(error: &ResolutionError) {
+    match error.termination() {
+        Some(ResolutionTermination::Exhausted) => {
+            eprintln!("all admitted candidates were exhausted");
+        }
+        Some(ResolutionTermination::StoppedByPolicy) => {
+            eprintln!("fallback policy stopped candidate traversal");
+        }
+        Some(_) => eprintln!("resolution ended for a newer reason"),
+        None => eprintln!("resolution failed before candidate traversal"),
+    }
+
+    for (index, attempt) in error.attempts().iter().enumerate() {
+        match attempt {
+            AttemptFailure::UnknownProvider {
+                requested_selector, ..
+            } => eprintln!("attempt {index}: unknown selector {requested_selector}"),
+            AttemptFailure::ProviderError {
+                requested_selector,
+                provider_id,
+                error,
+                ..
+            } => eprintln!(
+                "attempt {index}: selector {requested_selector:?} reached {provider_id}, \
+                 which failed with {:?}: {}",
+                error.kind(),
+                error.reason(),
+            ),
+            _ => eprintln!("attempt {index}: newer failure kind"),
+        }
+    }
+
+    match error.decisive_attempt() {
+        Some(attempt) => eprintln!("decisive attempt: {attempt}"),
+        None => eprintln!("no single attempt explains the whole outcome"),
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let resolver = build_resolver()?;
+    let config = GreetingConfig {
+        prefix: "hello".to_owned(),
         cloud_available: false,
     };
 
-    match resolver.create_auto(&config) {
-        Ok(created) => {
-            assert_eq!("local", created.provider_id().as_str());
-            assert_eq!("Hello, Ada", created.service().greet("Ada"));
-        }
-        Err(error) => report_resolution_error(&error),
-    }
+    /*
+     * 自动选择按 priority 顺序尝试。cloud 排在前面，但它返回的 Unavailable 允许
+     * OnAbsence 继续到 local。结果保留 local 的 canonical ID，因此日志不依赖 alias。
+     */
+    let automatic = resolver.create_auto(&config)?;
+    assert_eq!("local", automatic.provider_id().as_str());
+    assert_eq!("hello from local", automatic.service().greet());
 
+    /*
+     * 具名选择只解析一个 canonical ID 或 alias。"builtin" 映射到 local，而且具名
+     * 选择不会回退到 cloud。
+     */
     let named = resolver.create_named("builtin", &config)?;
     assert_eq!("local", named.provider_id().as_str());
-    Ok(())
-}
+    assert_eq!("hello from local", named.service().greet());
 
-fn report_resolution_error(error: &ResolutionError) {
-    match error.termination() {
-        Some(ResolutionTermination::StoppedByPolicy) => {
-            eprintln!("resolution stopped: {error}");
-        }
-        Some(ResolutionTermination::Exhausted) => {
-            eprintln!("all candidates failed: {error}");
-        }
-        None => eprintln!("selection failed: {error}"),
-        _ => eprintln!("resolution failed: {error}"),
-    }
+    /*
+     * 链式选择保留调用方顺序。未知名称会进入诊断，remote 到达暂时不可用的 cloud，
+     * 最后 builtin 通过 local 成功。
+     */
+    let chained = resolver.create_chain(["missing", "remote", "builtin"], &config)?;
+    assert_eq!("local", chained.provider_id().as_str());
+    assert_eq!("hello from local", chained.service().greet());
+
+    /*
+     * 第二个请求故意失败以展示诊断：cloud 不可用，local 随后拒绝空 prefix；因为无效
+     * 配置不属于“缺失”，OnAbsence 会停止遍历。
+     */
+    let invalid_config = GreetingConfig {
+        prefix: "  ".to_owned(),
+        cloud_available: false,
+    };
+    let failure = resolver
+        .create_auto(&invalid_config)
+        .err()
+        .expect("the invalid configuration must fail");
+    assert_eq!(
+        Some(ResolutionTermination::StoppedByPolicy),
+        failure.termination(),
+    );
+    report_resolution_error(&failure);
+
+    Ok(())
 }
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("startup failed: {error}");
+        eprintln!("fatal error: {error}");
+        std::process::exit(1);
     }
 }
 ```
 
+当 `cloud_available: false` 时，自动选择先到达 `cloud`，在收到 `Unavailable` 后
+继续，并返回 `local`。具名选择与链式选择也会返回 `local`。最后一个故意构造的无效
+请求在 `LocalProvider` 处被策略终止，并运行诊断函数。
+
+## 定义服务
+
+当需要引入一组可独立配置的 Provider 实现时，定义一个服务族。
+
+以下片段使用完整示例中已经定义的类型：
+
+```rust,ignore
+struct GreetingConfig {
+    prefix: String,
+    cloud_available: bool,
+}
+
+struct GreetingSpec;
+
+impl ServiceSpec for GreetingSpec {
+    type Config = GreetingConfig;
+    type Output = Arc<dyn Greeter>;
+}
+```
+
+可观察到的结果是一条编译期契约：每个 `ServiceProvider<GreetingSpec>` 都接收
+`&GreetingConfig` 并返回 `Arc<dyn Greeter>`。
+
+`Config` 可以是 unsized 类型，因此服务可以使用 `str` 或 trait object 等视图。
+`Output` 是调用方最终持有的完整值；应根据应用的所有权和并发要求选择普通值、
+`Box<dyn Trait>`、`Arc<dyn Trait>` 或其他句柄。SPI 不会自动添加或移除包装。
+
+**常见误区：**为互不相关的服务定义一个过于宽泛的 specification。当配置、输出、
+Provider 集合或选择策略需要独立演进时，应使用不同的标记类型。
+
+## 实现 Provider
+
+当需要加入一个能够创建 `ServiceSpec` 所指定输出的工厂时，实现 Provider。
+
+以下片段来自完整示例：
+
+```rust,ignore
+impl ServiceProvider<GreetingSpec> for LocalProvider {
+    fn create(&self, config: &GreetingConfig) -> Result<Arc<dyn Greeter>, ProviderError> {
+        if config.prefix.trim().is_empty() {
+            return Err(ProviderError::invalid_configuration(
+                "prefix must not be empty",
+            ));
+        }
+        Ok(Arc::new(TextGreeter {
+            message: format!("{} from local", config.prefix),
+        }))
+    }
+}
+```
+
+结果是一个在 Resolver 到达该 Provider 时被调用的工厂。Provider 实现必须满足
+`Send + Sync + 'static`，因为 Registry 会保留它，并且可能在线程间共享它。配置以
+借用方式传入，每次调用成功时都会返回一个新的完整输出。
+
+错误分类会直接控制回退，因此应按真实含义选择：
+
+| `ProviderError` 构造器 | 含义 | `OnAbsence` |
+| --- | --- | --- |
+| `unsupported` | 该 Provider 无法处理此请求。 | 继续 |
+| `unavailable` | 它能够处理，但现在暂时不可用。 | 继续 |
+| `invalid_configuration` | 调用方提供了无效配置。 | 停止 |
+| `initialization_failed` | 创建该实现时发生意外失败。 | 停止 |
+
+每种分类还有对应的 `_with_source` 构造器，可保留底层的
+`Error + Send + Sync + 'static`。
+
+**常见误区：**把无效配置报告成 `Unavailable`。这会允许 `OnAbsence` 静默选择其他
+Provider，从而掩盖调用方错误。
+
+## 命名并排序 Provider
+
+当需要为一次工厂注册指定稳定身份、可接受的配置名称以及自动选择顺序时，使用
+descriptor。
+
+以下片段来自完整示例：
+
+```rust,ignore
+let cloud = ProviderDescriptor::new(ProviderId::new("cloud")?)
+    .with_aliases(["remote"])?
+    .with_priority(100);
+```
+
+该 descriptor 将 `cloud` 设为 canonical ID，接受 `remote` 作为 alias，并为自动
+选择设置 priority 100。
+
+canonical `ProviderId` 是严格的小写 ASCII token：首尾必须是 ASCII 字母或数字，
+中间还可以包含 `-`、`_`、`.` 和 `+`。`ProviderId::new` 不会修剪或规范化输入。
+运行时 `ProviderSelector` 则不同：它会先修剪空白并把 ASCII 字母转为小写，再执行
+校验，因此 `" REMOTE "` 可以解析 alias `remote`。
+
+alias 与 canonical ID 共享同一个 selector 命名空间。descriptor 会拒绝无效 alias、
+与自身 ID 相同的 alias 以及重复 alias；Builder 会拒绝已被其他注册占用的 selector。
+priority 只影响 `create_auto`，具名选择和链式选择遵循调用方给出的 selector 或顺序。
+
+无效 canonical ID 返回 `ProviderIdError`；无效或重复 alias 返回
+`ProviderDescriptorError`。
+
+**常见误区：**把 alias 当作 Provider 身份。即使请求使用 alias，结果和诊断仍然报告
+canonical ID。
+
+## 构建并检查 Registry
+
+当需要在应用启动阶段装配所有可用工厂，或在之后检查不可变目录时，构建 Registry。
+
+以下片段使用完整示例中的类型：
+
+```rust,ignore
+let shared_cloud: Arc<dyn ServiceProvider<GreetingSpec>> = Arc::new(CloudProvider);
+let mut builder = ProviderRegistry::<GreetingSpec>::builder();
+builder.register(
+    ProviderDescriptor::new(ProviderId::new("local")?),
+    LocalProvider,
+)?;
+builder.register_shared(
+    ProviderDescriptor::new(ProviderId::new("cloud")?),
+    shared_cloud,
+)?;
+
+let registry = builder.build();
+assert_eq!(2, registry.len());
+assert!(!registry.is_empty());
+for descriptor in registry.descriptors() {
+    println!("{}", descriptor.id());
+}
+```
+
+`register` 将拥有所有权的具体 Provider 移入 Registry 存储；`register_shared` 接收
+已有的 `Arc<dyn ServiceProvider<S>>`。注册具有事务性：只有在所有 canonical ID 与
+alias 冲突检查通过后才会修改 Builder，因此被拒绝的注册不会占用部分 selector。
+冲突会报告为 `RegistrationError`。
+
+`build()` 消费可变 Builder，并准备不可变的查询索引与自动排序索引。运行时检查均为
+只读操作：
+
+- `len()` 和 `is_empty()` 返回目录大小；
+- `descriptors()` 和 `provider_ids()` 按注册顺序迭代；
+- `find(raw)` 对无效输入和未知输入都返回 `None`；
+- `resolve(raw)` 返回 `ResolvedProvider`，或者通过 `ResolutionError` 区分无效输入与
+  未知输入。
+
+`ResolvedProvider` 借用 Registry 中的一条 entry。`descriptor()` 暴露注册元数据，
+`create(config)` 直接调用该工厂。直接创建返回 `ProviderError`，并且有意绕过 Resolver
+回退和 `CreatedService` 的胜出者记录。crate 不提供全局 Registry 或隐式发现。
+
+**常见误区：**把 Builder 保留为可变的运行时状态。应在启动阶段完成注册，只构建
+一次，然后共享 Registry 或 Resolver。
+
+## 选择 Provider
+
+当需要决定由配置指定一个 Provider、选取当前最佳 Provider，或按偏好列表尝试时，
+选择对应模式。
+
+以下片段来自完整示例：
+
+```rust,ignore
+let automatic = resolver.create_auto(&config)?;
+let named = resolver.create_named("builtin", &config)?;
+let chained = resolver.create_chain(["missing", "remote", "builtin"], &config)?;
+```
+
+| 需求 | Resolver 原始输入方法 | 候选顺序 |
+| --- | --- | --- |
+| 当前最佳实现 | `create_auto` | priority 降序，然后 canonical ID 升序 |
+| 配置指定的唯一实现 | `create_named` | 该 canonical ID 或 alias 对应的一个 Provider |
+| 有序偏好列表 | `create_chain` | 调用方给出的 selector 顺序 |
+
+具名选择不会尝试第二个 Provider。对空 Registry 自动选择会返回
+`ResolutionError::EmptyRegistry`。chain 不能为空，而且所有 selector 都会在调用
+任何 Provider 之前完成校验。未知但有效的 selector 会按顺序记录为 attempt。如果
+chain 中两个 selector 是同一 Provider 的 alias，该 Provider 只会被调用一次。
+
+实际胜出者始终可以通过 `CreatedService::provider_id()` 获取。
+
+**常见误区：**期望 priority 对 chain 重新排序。priority 只用于自动选择；chain
+始终保留调用方顺序。
+
+## 选择回退策略
+
+当需要决定哪些 Provider 失败可以通过尝试后续候选项来隐藏时，选择回退策略。
+
+以下片段使用完整示例中的类型：
+
+```rust,ignore
+let safe_resolver = ProviderResolver::new(registry.clone(), FallbackPolicy::OnAbsence);
+let best_effort_resolver = ProviderResolver::new(registry, FallbackPolicy::OnAnyError);
+```
+
+| 策略 | 在哪些错误后继续 | 在哪些错误后停止 |
+| --- | --- | --- |
+| `OnAbsence` | `Unsupported`、`Unavailable` | `InvalidConfiguration`、`InitializationFailed` |
+| `OnAnyError` | 所有 `ProviderError` | 不会因 Provider 错误分类而停止 |
+
+`OnAbsence` 同时也是 `FallbackPolicy::default()` 的值。
+
+chain 中的未知 selector 会被记录后继续，因为此时没有调用任何 Provider。只有存在后续
+候选项时回退策略才有实际作用；具名选择仍然只有一个候选项。策略提前停止会产生
+`ResolutionTermination::StoppedByPolicy`；访问完所有允许的候选项会产生
+`ResolutionTermination::Exhausted`。
+
+**常见误区：**仅仅为了让请求成功而选择 `OnAnyError`。该策略可能掩盖配置和初始化
+缺陷，只应在明确的尽力而为流程中使用。
+
+## 复用已校验的选择
+
+当同一个配置选择会用于多次创建调用时，预先构造 `ProviderSelection`。
+
+以下片段使用完整示例中的类型：
+
+```rust,ignore
+use qubit_spi::ProviderSelection;
+
+let selection = ProviderSelection::chain(["remote", "builtin"])?;
+
+let first = resolver.create(&selection, &config)?;
+let second = resolver.create(&selection, &config)?;
+```
+
+`ProviderSelection::auto()` 不会失败。`named(...)` 会规范化并校验一个 selector；
+`chain(...)` 会校验所有 selector、保留顺序并拒绝空 chain。之后可通过
+`ProviderResolver::create` 反复使用该已校验值。`Default` 是自动选择；`kind()` 返回
+模式，`selector()` 在具名选择中借用 selector，`selectors()` 返回 chain，并在其他
+模式下返回空 slice。
+
+在运行时输入边界，更适合直接使用 `create_named` 和 `create_chain`：它们会把解析
+失败转换为 `ResolutionError`，同时保留无效输入和 chain 索引。但这些方法每次调用
+都会解析并分配拥有所有权的 selector 数据。复用 `ProviderSelection` 可以把这项工作
+移到配置加载阶段，并以 `ProviderSelectionError` 报告校验失败。
+
+**常见误区：**在热路径上反复解析固定配置字符串。应只校验一次并保留 selection。
+
+## 检查成功结果
+
+当需要消费输出或记录实际胜出的 Provider 时，检查 `CreatedService`。
+
+以下片段来自完整示例：
+
+```rust,ignore
+let created = resolver.create_named("builtin", &config)?;
+println!("winner: {}", created.provider_id());
+created.service().greet();
+
+let (provider_id, service) = created.into_parts();
+```
+
+`provider_id()` 和 `service()` 分别借用两个值。`into_service()` 消费包装并只返回输出；
+`into_parts()` 消费包装并返回 `(ProviderId, Output)`。返回的 ID 始终是 canonical ID，
+因此可观察性不会依赖调用方使用了哪个 alias。
+
+**常见误区：**在记录日志或指标之前丢弃胜出者 ID。它是确认生产环境回退行为最直接
+的信息。
+
+## 诊断失败
+
+当解析无法创建服务，并且调用方需要稳定、结构化的解释时，检查
+`ResolutionError`。
+
+以下片段来自完整示例：
+
+```rust,ignore
+match error.termination() {
+    Some(ResolutionTermination::Exhausted) => println!("all candidates failed"),
+    Some(ResolutionTermination::StoppedByPolicy) => println!("policy stopped"),
+    Some(_) => println!("newer termination reason"),
+    None => println!("failure occurred before traversal"),
+}
+
+for attempt in error.attempts() {
+    println!("{attempt}");
+}
+```
+
+直接返回的 `ResolutionError` variant 区分以下边界：
+
+| Variant | 含义 |
+| --- | --- |
+| `InvalidSelector` | 原始输入未通过规范化或语法校验；适用时包含 chain 索引。 |
+| `EmptySelection` | 原始或已校验的 chain 不包含 selector。 |
+| `UnknownProvider` | 有效的直接具名 selector 没有匹配任何注册。 |
+| `EmptyRegistry` | 对空 Registry 发起了自动选择。 |
+| `NoProviderSucceeded` | 候选尝试失败，或策略终止了遍历。 |
+
+对于聚合失败，`attempts()` 按顺序返回 `AttemptFailure`。每条 attempt 要么是未知
+selector，要么是 Provider 错误；后者保留请求 selector、canonical Provider ID、
+错误分类、原因和可选 source。`termination()` 区分候选耗尽与策略停止，
+`terminal_attempt()` 返回最后一条记录。
+
+`decisive_attempt()` 在策略停止后返回最后一条 attempt，在只有一次尝试的耗尽结果中
+返回唯一 attempt。对于多次尝试共同导致的耗尽，它返回 `None`，因为不存在能够单独
+解释整体结果的失败。只有未知、不支持和不可用结果才会让 `is_absence()` 返回 true。
+
+标准 `Error::source()` 链会暴露 selector 解析错误或无歧义的 decisive attempt；
+Provider attempt 继续暴露其 `ProviderError`，而 `_with_source` 构造器会保留更底层
+原因。所有公开错误枚举都是 non-exhaustive，因此下游 match 必须保留通配分支。控制
+流程应使用字段和访问器；`Display` 文本只面向读者，不应被解析。
+
+**常见误区：**把最后一条 attempt 当作所有耗尽 chain 的根因。多次尝试耗尽时，应
+检查完整的有序 attempt 列表。
+
+## 共享 Registry 和 Resolver
+
+`ProviderRegistry` 和 `ProviderResolver` 都可以低成本克隆。Registry 将不可变 entry
+和索引存放在内部 `Arc` 后面，克隆 Registry 不会复制 Provider。克隆 Resolver 会共享
+同一 Registry，并复制很小的回退策略值。`registry()` 和 `fallback_policy()` 提供对
+Resolver 配置的只读访问。
+
+Provider 满足 `Send + Sync + 'static`，因此目录可以共享。SPI 没有为
+`ServiceSpec::Output` 添加 `Send` 或 `Sync` 约束；如果创建出的服务本身需要跨线程，
+应选择 `Arc<dyn Trait + Send + Sync>` 等线程安全输出。
+
+原始 selector 解析会规范化并持有 selector 文本，使错误和 selection 能安全地保留
+它。该分配成本重要时应复用 `ProviderSelection`。Registry 查询和自动顺序使用
+`build()` 时一次性准备的索引。
+
+## 推荐实践
+
+- 在启动阶段只装配一次 Provider，并让注册错误直接导致启动失败。
+- 保持 canonical ID 稳定；使用 alias 接受旧名称或更友好的名称。
+- 只有自动选择偏好具有实际产品含义时才设置明确 priority。
+- 优先使用 `OnAbsence`；仅为已有文档说明的尽力而为行为采用 `OnAnyError`。
+- 在热路径之前把可复用配置校验为 `ProviderSelection`。
+- 成功时记录实际胜出的 canonical Provider ID。
+- 匹配结构化错误并保留 source chain，不要解析错误消息。
+- 使用小型、目的明确的 Registry 测试具名、自动、链式、策略停止和候选耗尽行为。
+
+## 故障排查
+
+| 现象 | 原因 | 处理方式 |
+| --- | --- | --- |
+| `ProviderId::new` 拒绝名称 | canonical ID 不会被修剪或转为小写，并且必须符合小写 ASCII token 语法。 | 在决定稳定 canonical ID 前规范化配置，再传入有效 token。 |
+| 注册报告 selector 冲突 | canonical ID 或 alias 已由其他 Provider 占用。 | 检查两个 descriptor，重命名或移除重叠 selector；失败注册没有改变 Builder。 |
+| `create_auto` 返回 `EmptyRegistry` | `build()` 前没有注册任何 Provider。 | 至少注册一个 Provider，或在解析前把该服务族作为可选项处理。 |
+| chain 为空或包含无效项 | 空 chain 会被拒绝，且遍历前会校验所有 selector。 | 在启动阶段校验配置，并使用错误中的 selector 索引和原始输入定位问题。 |
+| 遍历比预期更早停止 | `OnAbsence` 遇到了 `InvalidConfiguration` 或 `InitializationFailed`。 | 修复输入或初始化问题；只有明确需要掩盖它时才使用 `OnAnyError`。 |
+| `decisive_attempt()` 返回 `None` | 错误不是聚合错误，或多条已耗尽 attempt 共同解释结果。 | 检查 `attempts()`、`termination()` 和 `terminal_attempt()`，不要假定只有一个原因。 |
+| `find` 返回 `None`，但原因不明确 | `find` 有意合并无效输入和未知输入。 | 需要结构化区分时使用 `resolve`。 |
+| 请求使用 alias，但结果报告了另一个 ID | 成功结果和 Provider 失败都报告 canonical 身份。 | 日志使用 canonical ID，把 alias 只当作可接受输入。 |
+
 ## API 参考
 
-完整生成的 API 文档位于 [docs.rs](https://docs.rs/qubit-spi)。主要入口如下：
-
-| 领域 | 类型 |
+| 职责 | API |
 | --- | --- |
-| 服务契约 | `ServiceSpec`、`ServiceProvider` |
-| 身份与元数据 | `ProviderId`、`ProviderSelector`、`ProviderDescriptor` |
-| Registry | `ProviderRegistryBuilder`、`ProviderRegistry`、`ResolvedProvider` |
-| 选择与解析 | `ProviderSelection`、`ProviderSelectionKind`、`FallbackPolicy`、`ProviderResolver` |
-| 结果 | `CreatedService`、`ResolutionTermination` |
-| 错误 | `ProviderIdError`、`ProviderSelectorError`、`ProviderDescriptorError`、`ProviderSelectionError`、`RegistrationError`、`ProviderError`、`ProviderErrorKind`、`AttemptFailure`、`ResolutionError` |
+| 绑定配置和输出类型 | [`ServiceSpec`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/trait.ServiceSpec.html) |
+| 实现工厂 | [`ServiceProvider`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/trait.ServiceProvider.html) |
+| 表示 canonical 名称和运行时查询名称 | [`ProviderId`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderId.html)、[`ProviderSelector`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderSelector.html) |
+| 定义身份、alias 和 priority | [`ProviderDescriptor`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderDescriptor.html) |
+| 装配注册信息 | [`ProviderRegistryBuilder`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderRegistryBuilder.html) |
+| 检查并解析不可变目录 | [`ProviderRegistry`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderRegistry.html) |
+| 直接使用一个已解析工厂 | [`ResolvedProvider`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ResolvedProvider.html) |
+| 保存可复用的已校验选择 | [`ProviderSelection`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderSelection.html) |
+| 应用选择与回退 | [`ProviderResolver`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.ProviderResolver.html) |
+| 消费输出和胜出者 ID | [`CreatedService`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/struct.CreatedService.html) |
+| 选择回退行为 | [`FallbackPolicy`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/enum.FallbackPolicy.html) |
+| 解释聚合终止原因 | [`ResolutionTermination`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/enum.ResolutionTermination.html) |
+| 分类工厂失败并诊断解析 | [`ProviderError`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/error/struct.ProviderError.html)、[`ResolutionError`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/error/enum.ResolutionError.html) |
+| 处理校验、注册、Provider 和解析错误 | [`qubit_spi::error`](https://docs.rs/qubit-spi/0.8.0/qubit_spi/error/index.html) |
