@@ -69,3 +69,16 @@ fn test_provider_id_reports_empty_and_noncanonical_input() {
         assert_eq!(input, actual.as_ref());
     }
 }
+
+/// Verifies that noncanonical IDs preserve invisible input boundaries in
+/// diagnostics.
+#[test]
+fn test_provider_id_display_quotes_noncanonical_input() {
+    let error =
+        ProviderId::new("file\nname").expect_err("noncanonical ID should fail");
+
+    assert_eq!(
+        "provider ID is not canonical: \"file\\nname\"",
+        error.to_string(),
+    );
+}

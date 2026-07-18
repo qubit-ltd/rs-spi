@@ -22,7 +22,7 @@ pub enum ProviderIdError {
     },
     /// The supplied provider ID violated canonical syntax.
     #[non_exhaustive]
-    #[error("provider ID is not canonical: {input}")]
+    #[error("provider ID is not canonical: {input:?}")]
     NonCanonical {
         /// Verbatim noncanonical input retained for diagnostics.
         input: Box<str>,
