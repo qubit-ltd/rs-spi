@@ -308,16 +308,16 @@ tests or scoped components. The Registry remains open to runtime registration.
 ## Testing
 
 ```bash
-# Test the core API
-cargo test --no-default-features
+# Run tests with the default feature set
+cargo test
 
-# Test every feature and documentation example
+# Run tests with all declared features
 cargo test --all-features
 
-# Run the complete project CI checks
+# Project CI checks
 ./ci-check.sh
 
-# Generate the coverage report
+# Check code coverage
 ./coverage.sh
 ```
 
@@ -331,8 +331,8 @@ full license text.
 ## Contributing
 
 Contributions are welcome. Please follow the Rust API guidelines, keep public
-API documentation and tests current, and run `./align-ci.sh` followed by
-`./ci-check.sh` before submitting a pull request.
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
 
 ## Author
 
