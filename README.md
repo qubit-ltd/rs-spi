@@ -242,7 +242,7 @@ ServiceSpec::Output
 | Stage | Main API | Success | Failure |
 | --- | --- | --- | --- |
 | Registration | `register(provider)` | Provider becomes visible through every Registry clone | `RegistrationError` |
-| Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderSelectionError` |
+| Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderResolutionError` |
 | Creation | `create_configured(&config)` or `create()` | `ServiceSpec::Output` directly | `ProviderCreationError` |
 
 ## Selection and Fallback
@@ -269,9 +269,10 @@ and does not hold the Registry lock while providers run.
 | --- | --- | --- |
 | `ProviderIdError` | Provider definition | Canonical ID is invalid |
 | `ProviderSelectorError` | Input parsing | Selector cannot be normalized and validated |
+| `ProviderSelectionBuildError` | Selection construction | Named or chained selection input is invalid |
 | `ProviderDescriptorError` | Provider definition | Alias is invalid or internally duplicated |
 | `RegistrationError` | Registration | ID or alias is already owned |
-| `ProviderSelectionError` | Selection | No candidate can be resolved |
+| `ProviderResolutionError` | Selection resolution | No candidate can be resolved |
 | `ProviderError` | Leaf creation | One concrete provider reports a classified failure |
 | `ProviderCreationError` | Creation | Direct or aggregate creation failure with actual attempts |
 

@@ -8,7 +8,7 @@
 
 use std::error::Error;
 
-use qubit_spi::error::ProviderSelectionError;
+use qubit_spi::error::ProviderSelectionBuildError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderSelection,
@@ -84,7 +84,7 @@ fn test_selection_construction_enforces_invariants() {
         "provider selection chain must not be empty",
         empty.to_string(),
     );
-    assert!(matches!(empty, ProviderSelectionError::EmptyChain));
+    assert!(matches!(empty, ProviderSelectionBuildError::EmptyChain));
 
     let invalid = ProviderSelection::chain(["valid", "bad selector"])
         .expect_err("invalid chain selector should fail");
@@ -93,7 +93,7 @@ fn test_selection_construction_enforces_invariants() {
         "invalid provider selector at selection index 1: \"bad selector\"",
         invalid.to_string(),
     );
-    let ProviderSelectionError::InvalidSelector {
+    let ProviderSelectionBuildError::InvalidSelector {
         selector_index,
         source,
         ..
@@ -116,7 +116,7 @@ fn test_invalid_named_selection_preserves_input_and_source() {
         "invalid provider selector \"bad selector\"",
         error.to_string(),
     );
-    let ProviderSelectionError::InvalidSelector {
+    let ProviderSelectionBuildError::InvalidSelector {
         selector_index,
         source,
         ..

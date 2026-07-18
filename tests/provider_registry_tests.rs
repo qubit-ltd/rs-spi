@@ -9,7 +9,7 @@
 use std::thread;
 
 use qubit_spi::error::{
-    ProviderSelectionError,
+    ProviderResolutionError,
     RegistrationError,
 };
 use qubit_spi::{
@@ -85,7 +85,7 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
         ProviderSelection::named("es").expect("test selector should be valid");
     assert!(matches!(
         registry.resolve_selected(&selection),
-        Err(ProviderSelectionError::UnknownProvider { .. }),
+        Err(ProviderResolutionError::UnknownProvider { .. }),
     ));
 }
 

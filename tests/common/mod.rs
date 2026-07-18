@@ -8,6 +8,7 @@
 //! Shared support code for integration tests.
 
 pub(crate) mod configurable_provider;
+pub(crate) mod failing_writer;
 pub(crate) mod self_described_provider;
 pub(crate) mod string_spec;
 pub(crate) mod test_provider_definition;

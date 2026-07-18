@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::error::{
-    ProviderSelectionError,
+    ProviderResolutionError,
     RegistrationError,
 };
 use crate::internal::{
@@ -172,20 +172,20 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderSelectionError`] before creation when a named selector
-    /// is unknown, a chain matches no candidates, or automatic selection sees
-    /// an empty registry.
+    /// Returns [`ProviderResolutionError`] before creation when a named
+    /// selector is unknown, a chain matches no candidates, or automatic
+    /// selection sees an empty Registry.
     pub fn resolve_selected(
         &self,
         selection: &ProviderSelection,
-    ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
+    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let inner = self.read_inner();
         let candidates = match selection.repr() {
             ProviderSelectionRepr::Named(selector) => {
                 let index =
                     inner.selector_indices.get(selector).copied().ok_or_else(
                         || {
-                            ProviderSelectionError::unknown_provider(
+                            ProviderResolutionError::unknown_provider(
                                 selector.clone(),
                             )
                         },
@@ -206,7 +206,7 @@ where
                     }
                 }
                 if candidates.is_empty() {
-                    return Err(ProviderSelectionError::no_candidates(
+                    return Err(ProviderResolutionError::no_candidates(
                         selectors.to_vec(),
                     ));
                 }
@@ -214,7 +214,7 @@ where
             }
             ProviderSelectionRepr::Auto => {
                 if inner.automatic_indices.is_empty() {
-                    return Err(ProviderSelectionError::empty_registry());
+                    return Err(ProviderResolutionError::empty_registry());
                 }
                 inner
                     .automatic_indices
@@ -238,12 +238,12 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderSelectionError`] under the same conditions as
+    /// Returns [`ProviderResolutionError`] under the same conditions as
     /// [`Self::resolve_selected`].
     #[inline]
     pub fn resolve(
         &self,
-    ) -> Result<ResolvingServiceProvider<S>, ProviderSelectionError> {
+    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let selection = self.default_selection();
         self.resolve_selected(&selection)
     }

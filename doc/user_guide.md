@@ -40,9 +40,10 @@ does not parse a request selection and does not create a service.
 ### Selection: What May Be Tried?
 
 A `ProviderSelection` identifies a named provider, a caller-ordered chain, or
-the Registry's automatic order. `ProviderRegistry::resolve` translates that
-selection into a point-in-time candidate snapshot represented by
-`ResolvingServiceProvider<S>`.
+the Registry's automatic order. `ProviderRegistry::resolve_selected`
+translates an explicit selection into a point-in-time candidate snapshot;
+`ProviderRegistry::resolve` does the same for the Registry default. Both
+return `ResolvingServiceProvider<S>`.
 
 Selection does not require `S::Config` and does not invoke provider code. It
 can fail because the requested provider or candidate set does not exist.
@@ -442,7 +443,7 @@ let provider = registry.resolve_selected(&selection)?;
 ```
 
 Named selection resolves exactly one canonical ID or alias. An unknown selector
-returns `ProviderSelectionError::UnknownProvider`. Because it contains one
+returns `ProviderResolutionError::UnknownProvider`. Because it contains one
 candidate, its fallback policy never causes another Provider to run.
 
 ### Ordered Chain
@@ -472,7 +473,7 @@ Automatic selection includes every registered Provider in deterministic order:
 1. priority descending;
 2. canonical ID ascending for equal priority.
 
-An empty Registry returns `ProviderSelectionError::EmptyRegistry`.
+An empty Registry returns `ProviderResolutionError::EmptyRegistry`.
 
 ### Registry Default Selection
 
@@ -516,9 +517,10 @@ callers that have no config object.
 
 ## Creating the Service
 
-`ProviderRegistry::resolve` returns `ResolvingServiceProvider<S>`. This type is
-a composing `ServiceProvider<S>`: it owns candidate handles and applies the
-selection's fallback policy when `create` is called.
+`ProviderRegistry::resolve` and `ProviderRegistry::resolve_selected` return
+`ResolvingServiceProvider<S>`. This type is a composing
+`ServiceProvider<S>`: it owns candidate handles and applies the selection's
+fallback policy when `create` is called.
 
 ```rust,ignore
 use qubit_spi::ServiceProvider;
@@ -529,10 +531,11 @@ let service = provider.create_configured(&config)?;
 
 Import the `ServiceProvider` trait so its methods are in scope.
 
-Successful creation returns `S::Output` directly. If consumers need the chosen
-Provider ID on success, that is an observation concern for the domain layer,
-not part of the generic service value. Failure diagnostics already retain every
-actual attempt needed for error handling.
+Successful creation returns `S::Output` directly. Successful-fallback
+observation is an internal library concern, not part of the public service
+value. The current implementation does not expose successful attempt data;
+internal collection will be added separately through IoC-injected collector
+and processor components.
 
 Qubit SPI creates a new output for every `create` call. Cache or clone the
 returned handle in App or library code when construction is expensive.
@@ -568,12 +571,18 @@ Errors follow the three lifecycle stages plus input validation.
 - `ProviderDescriptorError`: an alias is invalid, duplicated, or matches ID.
 - `RegistrationError`: an ID or alias conflicts with Registry state.
 
-### Selection Errors
+### Selection Construction Errors
 
-`ProviderSelectionError` is returned before any Provider is invoked:
+`ProviderSelectionBuildError` is returned while constructing a validated
+selection:
 
 - `InvalidSelector`: raw selection input is invalid;
-- `EmptyChain`: caller supplied no chain entries;
+- `EmptyChain`: caller supplied no chain entries.
+
+### Provider Resolution Errors
+
+`ProviderResolutionError` is returned before any Provider is invoked:
+
 - `UnknownProvider`: named selection matched nothing;
 - `NoCandidates`: no entry in a nonempty chain matched;
 - `EmptyRegistry`: automatic selection has no Provider.
@@ -704,13 +713,13 @@ an isolated process.
 | API | Purpose |
 | --- | --- |
 | `ServiceSpec` | Bind config and output types |
-| `ServiceProvider::create` | Create with explicit config |
+| `ServiceProvider::create_configured` | Create with explicit config |
 | `ServiceProvider::create` | Create with `Config::default()` |
 | `ProviderDefinition::descriptor` | Self-describe a registrable Provider |
 | `ProviderRegistry::register` | Register an owned Provider at runtime |
 | `ProviderRegistry::register_shared` | Register an existing shared Provider |
 | `ProviderRegistry::set_default_selection` | Replace the process/component default policy |
-| `ProviderRegistry::resolve` | Resolve an explicit selection |
+| `ProviderRegistry::resolve_selected` | Resolve an explicit selection |
 | `ProviderRegistry::resolve` | Resolve the current Registry default |
 | `ProviderRegistry::descriptors` | Snapshot registration metadata |
 | `ProviderRegistry::provider_ids` | Snapshot canonical IDs |

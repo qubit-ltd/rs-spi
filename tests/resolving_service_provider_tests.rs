@@ -22,7 +22,7 @@ use std::{
 use qubit_spi::error::{
     ProviderError,
     ProviderErrorKind,
-    ProviderSelectionError,
+    ProviderResolutionError,
 };
 use qubit_spi::{
     FallbackPolicy,
@@ -220,7 +220,8 @@ fn test_registry_reports_named_unknown_before_creation() {
         .expect_err("unknown selection should fail");
     let message = error.to_string();
 
-    let ProviderSelectionError::UnknownProvider { selector, .. } = error else {
+    let ProviderResolutionError::UnknownProvider { selector, .. } = error
+    else {
         panic!("named selection should retain its unknown selector");
     };
     assert_eq!("missing", selector.as_str());
@@ -248,7 +249,7 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
         .expect_err("unmatched chain should fail");
     let message = error.to_string();
 
-    let ProviderSelectionError::NoCandidates { selectors, .. } = error else {
+    let ProviderResolutionError::NoCandidates { selectors, .. } = error else {
         panic!("unmatched chain should retain all requested selectors");
     };
     assert_eq!(
@@ -271,7 +272,7 @@ fn test_registry_reports_empty_auto_selection_before_creation() {
         .resolve_selected(&ProviderSelection::auto())
         .expect_err("empty automatic selection should fail");
 
-    assert!(matches!(&error, ProviderSelectionError::EmptyRegistry));
+    assert!(matches!(&error, ProviderResolutionError::EmptyRegistry));
     assert_eq!(
         "cannot select a provider from an empty registry",
         error.to_string(),

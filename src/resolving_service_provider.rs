@@ -121,7 +121,13 @@ where
         let mut failures = Vec::new();
         for candidate in &self.candidates {
             match candidate.provider.create_configured(config) {
-                Ok(service) => return Ok(service),
+                Ok(service) => {
+                    // TODO: When `failures` is non-empty, publish an internal
+                    // fallback observation through IoC-injected collector and
+                    // processor components before returning. Observability
+                    // remains an internal library concern.
+                    return Ok(service);
+                }
                 Err(ProviderCreationError::Provider(error)) => {
                     let kind = error.kind();
                     failures.push(ProviderAttemptFailure::new(

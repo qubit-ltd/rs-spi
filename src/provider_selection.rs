@@ -7,7 +7,7 @@
 // =============================================================================
 //! Validated provider selection inputs.
 
-use crate::error::ProviderSelectionError;
+use crate::error::ProviderSelectionBuildError;
 use crate::internal::ProviderSelectionRepr;
 use crate::{
     FallbackPolicy,
@@ -35,7 +35,7 @@ use crate::{
 ///
 /// assert_eq!(2, selection.selectors().len());
 /// assert_eq!(FallbackPolicy::OnAbsence, selection.fallback_policy());
-/// # Ok::<(), qubit_spi::error::ProviderSelectionError>(())
+/// # Ok::<(), qubit_spi::error::ProviderSelectionBuildError>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderSelection {
@@ -72,12 +72,12 @@ impl ProviderSelection {
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderSelectionError`] when `value` cannot form a valid
-    /// selector.
+    /// Returns [`ProviderSelectionBuildError`] when `value` cannot form a
+    /// valid selector.
     #[inline]
-    pub fn named(value: &str) -> Result<Self, ProviderSelectionError> {
+    pub fn named(value: &str) -> Result<Self, ProviderSelectionBuildError> {
         let selector = ProviderSelector::parse(value).map_err(|source| {
-            ProviderSelectionError::invalid_selector(None, source)
+            ProviderSelectionBuildError::invalid_selector(None, source)
         })?;
         Ok(Self {
             target: ProviderSelectionRepr::Named(selector),
@@ -97,9 +97,9 @@ impl ProviderSelection {
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderSelectionError`] when any selector is invalid or when
-    /// `values` contains no selectors.
-    pub fn chain<I, T>(values: I) -> Result<Self, ProviderSelectionError>
+    /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
+    /// or when `values` contains no selectors.
+    pub fn chain<I, T>(values: I) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -109,7 +109,7 @@ impl ProviderSelection {
             let input = value.as_ref();
             let selector =
                 ProviderSelector::parse(input).map_err(|source| {
-                    ProviderSelectionError::invalid_selector(
+                    ProviderSelectionBuildError::invalid_selector(
                         Some(selector_index),
                         source,
                     )
@@ -117,7 +117,7 @@ impl ProviderSelection {
             selectors.push(selector);
         }
         if selectors.is_empty() {
-            return Err(ProviderSelectionError::empty_chain());
+            return Err(ProviderSelectionBuildError::empty_chain());
         }
         Ok(Self {
             target: ProviderSelectionRepr::Chain(selectors.into_boxed_slice()),

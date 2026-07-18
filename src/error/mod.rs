@@ -45,7 +45,8 @@ mod provider_descriptor_error;
 mod provider_error;
 mod provider_error_kind;
 mod provider_id_error;
-mod provider_selection_error;
+mod provider_resolution_error;
+mod provider_selection_build_error;
 mod provider_selector_error;
 mod registration_error;
 
@@ -55,6 +56,7 @@ pub use provider_descriptor_error::ProviderDescriptorError;
 pub use provider_error::ProviderError;
 pub use provider_error_kind::ProviderErrorKind;
 pub use provider_id_error::ProviderIdError;
-pub use provider_selection_error::ProviderSelectionError;
+pub use provider_resolution_error::ProviderResolutionError;
+pub use provider_selection_build_error::ProviderSelectionBuildError;
 pub use provider_selector_error::ProviderSelectorError;
 pub use registration_error::RegistrationError;

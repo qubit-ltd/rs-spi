@@ -227,7 +227,7 @@ ServiceSpec::Output
 | 阶段 | 主要 API | 成功结果 | 失败类型 |
 | --- | --- | --- | --- |
 | 注册 | `register(provider)` | Provider 对所有 Registry clone 可见 | `RegistrationError` |
-| 选择 | `resolve_selected(&selection)` 或 `resolve()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderSelectionError` |
+| 选择 | `resolve_selected(&selection)` 或 `resolve()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderResolutionError` |
 | 创建 | `create_configured(&config)` 或 `create()` | 直接返回 `ServiceSpec::Output` | `ProviderCreationError` |
 
 ## 选择与回退
@@ -253,9 +253,10 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 | --- | --- | --- |
 | `ProviderIdError` | Provider 定义 | canonical ID 非法 |
 | `ProviderSelectorError` | 输入解析 | selector 无法规范化或校验失败 |
+| `ProviderSelectionBuildError` | selection 构造 | named 或 chain selection 输入非法 |
 | `ProviderDescriptorError` | Provider 定义 | alias 非法或 descriptor 内部重复 |
 | `RegistrationError` | 注册 | ID 或 alias 已被占用 |
-| `ProviderSelectionError` | 选择 | 无法解析出候选 Provider |
+| `ProviderResolutionError` | selection 解析 | 无法解析出候选 Provider |
 | `ProviderError` | 叶子创建 | 某个具体 Provider 返回分类后的失败 |
 | `ProviderCreationError` | 创建 | 直接或聚合创建失败，并保留实际尝试记录 |
 

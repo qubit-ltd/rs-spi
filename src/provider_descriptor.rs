@@ -22,7 +22,7 @@ use crate::{
 /// automatic selection order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderDescriptor {
-    /// Canonical, globally unique identifier of the provider.
+    /// Canonical identifier unique within one Registry and service family.
     id: ProviderId,
     /// Normalized alternative selectors that resolve to `id`.
     aliases: Box<[ProviderSelector]>,

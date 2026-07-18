@@ -35,8 +35,9 @@ canonical ID 或 alias 已被占用时，注册会失败。注册不会解析某
 ### 选择：本次允许尝试什么
 
 `ProviderSelection` 描述 named Provider、调用方指定顺序的 chain，或者 Registry 自动
-顺序。`ProviderRegistry::resolve` 把这个 selection 解析为一个时间点上的候选快照，
-用 `ResolvingServiceProvider<S>` 表示。
+顺序。`ProviderRegistry::resolve_selected` 把显式 selection 解析为一个时间点上的
+候选快照；`ProviderRegistry::resolve` 对 Registry 默认值执行同样操作。两者都返回
+`ResolvingServiceProvider<S>`。
 
 选择阶段不需要 `S::Config`，也不会调用 Provider 代码。请求的 Provider 或候选集合
 不存在时，选择失败。
@@ -416,7 +417,7 @@ let provider = registry.resolve_selected(&selection)?;
 ```
 
 named selection 只解析一个 canonical ID 或 alias。selector 不存在时返回
-`ProviderSelectionError::UnknownProvider`。它只有一个候选，因此 fallback policy
+`ProviderResolutionError::UnknownProvider`。它只有一个候选，因此 fallback policy
 不会让其他 Provider 运行。
 
 ### 有序 chain
@@ -445,7 +446,7 @@ let provider = registry.resolve_selected(&ProviderSelection::auto())?;
 1. priority 降序；
 2. priority 相同时 canonical ID 升序。
 
-Registry 为空时返回 `ProviderSelectionError::EmptyRegistry`。
+Registry 为空时返回 `ProviderResolutionError::EmptyRegistry`。
 
 ### Registry 默认 selection
 
@@ -488,9 +489,9 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 
 ## 创建 Service
 
-`ProviderRegistry::resolve` 返回 `ResolvingServiceProvider<S>`。它是一个组合型
-`ServiceProvider<S>`：持有候选 Provider handle，并在调用 `create` 时执行 selection
-中的 fallback policy。
+`ProviderRegistry::resolve` 和 `ProviderRegistry::resolve_selected` 返回
+`ResolvingServiceProvider<S>`。它是一个组合型 `ServiceProvider<S>`：持有候选
+Provider handle，并在调用 `create` 时执行 selection 中的 fallback policy。
 
 ```rust,ignore
 use qubit_spi::ServiceProvider;
@@ -501,9 +502,9 @@ let service = provider.create_configured(&config)?;
 
 必须导入 `ServiceProvider` trait，才能调用它的方法。
 
-创建成功直接返回 `S::Output`。如果消费者希望在成功路径知道实际 Provider ID，那属于
-领域层观测需求，不是通用 Service 值的职责。创建失败时的诊断已经保留错误处理需要的
-实际 attempt。
+创建成功直接返回 `S::Output`。成功 fallback 的观测属于库内部职责，不属于公共
+Service 值。当前实现不对外暴露成功 attempt 数据；内部收集能力将通过 IoC 注入的
+collector 和 processor 另行实现。
 
 Qubit SPI 每次调用 `create` 都会创建一个新输出。构造成本较高时，应由 App 或库缓存
 返回值，或者 clone 返回的 handle。
@@ -537,12 +538,17 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。普通注册 Pr
 - `ProviderDescriptorError`：alias 非法、重复或与 ID 相同。
 - `RegistrationError`：ID 或 alias 与 Registry 状态冲突。
 
-### 选择错误
+### Selection 构造错误
 
-`ProviderSelectionError` 在调用任何 Provider 之前返回：
+`ProviderSelectionBuildError` 在构造已校验 selection 时返回：
 
 - `InvalidSelector`：原始 selection 输入非法；
-- `EmptyChain`：调用方没有提供 chain 项；
+- `EmptyChain`：调用方没有提供 chain 项。
+
+### Provider 解析错误
+
+`ProviderResolutionError` 在调用任何 Provider 之前返回：
+
 - `UnknownProvider`：named selection 没有匹配项；
 - `NoCandidates`：非空 chain 中没有任何项匹配；
 - `EmptyRegistry`：自动选择时没有 Provider。
@@ -665,13 +671,13 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | API | 用途 |
 | --- | --- |
 | `ServiceSpec` | 绑定 config 与 output 类型 |
-| `ServiceProvider::create` | 使用显式 config 创建 |
+| `ServiceProvider::create_configured` | 使用显式 config 创建 |
 | `ServiceProvider::create` | 使用 `Config::default()` 创建 |
 | `ProviderDefinition::descriptor` | 让可注册 Provider 自描述 |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |
 | `ProviderRegistry::register_shared` | 注册已有 shared Provider |
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
-| `ProviderRegistry::resolve` | 解析显式 selection |
+| `ProviderRegistry::resolve_selected` | 解析显式 selection |
 | `ProviderRegistry::resolve` | 解析 Registry 当前默认值 |
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
