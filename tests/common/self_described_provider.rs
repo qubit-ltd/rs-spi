@@ -24,7 +24,7 @@ pub(crate) struct SelfDescribedProvider {
 impl SelfDescribedProvider {
     /// Creates a self-described provider fixture.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `descriptor` - Registration metadata returned to the Registry.
     /// * `output` - Stable service output returned during creation.
@@ -46,7 +46,7 @@ impl SelfDescribedProvider {
 impl ServiceProvider<StringSpec> for SelfDescribedProvider {
     /// Creates the provider's stable string service.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `_config` - Unused string configuration.
     ///

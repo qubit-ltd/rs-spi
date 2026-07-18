@@ -36,7 +36,7 @@ pub enum ProviderSelectorError {
 impl ProviderSelectorError {
     /// Creates an error for selector input that becomes empty after trimming.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `input` - Verbatim selector input.
     ///
@@ -53,7 +53,7 @@ impl ProviderSelectorError {
 
     /// Creates an error for invalid normalized selector input.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `input` - Verbatim selector input.
     /// * `normalized` - Trimmed and ASCII-lowercased invalid value.

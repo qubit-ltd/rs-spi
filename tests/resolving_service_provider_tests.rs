@@ -39,6 +39,45 @@ use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
 
+mod inherent_api_tests {
+    use qubit_spi::{
+        ProviderRegistry,
+        ProviderSelection,
+    };
+
+    use crate::common::configurable_provider::ConfigurableProvider;
+    use crate::common::string_spec::StringSpec;
+
+    use super::register_provider;
+
+    /// Verifies creation methods remain callable without importing the trait.
+    #[test]
+    fn test_resolving_provider_exposes_inherent_creation_methods() {
+        let registry = ProviderRegistry::<StringSpec>::default();
+        register_provider(
+            &registry,
+            "echo",
+            &[],
+            0,
+            ConfigurableProvider::echo(),
+        );
+        let provider = registry
+            .resolve_selected(&ProviderSelection::auto())
+            .expect("automatic selection should resolve");
+
+        assert_eq!(
+            "explicit",
+            provider
+                .create_configured(&"explicit".to_owned())
+                .expect("explicit creation should succeed"),
+        );
+        assert_eq!(
+            String::default(),
+            provider.create().expect("default creation should succeed"),
+        );
+    }
+}
+
 /// Verifies that successful creation returns only the requested service value.
 #[test]
 fn test_resolving_provider_returns_service_output_directly() {
@@ -612,7 +651,7 @@ fn test_cloned_resolving_provider_supports_concurrent_creation() {
 
 /// Registers one test provider with descriptor metadata.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `registry` - Runtime registry receiving the provider.
 /// * `id` - Canonical provider identity.

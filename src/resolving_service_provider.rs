@@ -26,7 +26,8 @@ use crate::{
 ///
 /// Registry resolution fixes candidate identity and order. Service creation is
 /// a separate operation that supplies configuration and applies the selection's
-/// fallback policy. Successful creation returns the service output directly.
+/// fallback policy. Successful creation returns the service output directly;
+/// failures from later operations on that output do not re-enter fallback.
 pub struct ResolvingServiceProvider<S>
 where
     S: ServiceSpec,
@@ -43,7 +44,7 @@ where
 {
     /// Creates a composing provider from resolved candidates.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `candidates` - Nonempty provider snapshots in attempt order.
     /// * `fallback_policy` - Policy controlling fallback after leaf failures.
@@ -72,16 +73,57 @@ where
         }
     }
 
+    /// Creates a service output from the supplied configuration.
+    ///
+    /// # Parameters
+    ///
+    /// * `config` - Service configuration forwarded to resolved candidates.
+    ///
+    /// # Returns
+    ///
+    /// The first service output created successfully.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderCreationError`] when every candidate fails or the
+    /// fallback policy stops traversal.
+    #[inline(always)]
+    pub fn create_configured(
+        &self,
+        config: &S::Config,
+    ) -> Result<S::Output, ProviderCreationError> {
+        <Self as ServiceProvider<S>>::create_configured(self, config)
+    }
+
+    /// Creates a service output with the default configuration.
+    ///
+    /// # Returns
+    ///
+    /// The first service output created successfully.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderCreationError`] when every candidate fails or the
+    /// fallback policy stops traversal.
+    #[inline(always)]
+    pub fn create(&self) -> Result<S::Output, ProviderCreationError>
+    where
+        S::Config: Default,
+    {
+        <Self as ServiceProvider<S>>::create(self)
+    }
+
     /// Reports whether fallback may continue after one leaf error kind.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `kind` - Provider-reported leaf failure classification.
     ///
     /// # Returns
     ///
     /// `true` when this provider's fallback policy permits another attempt.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     fn allows_fallback(&self, kind: ProviderErrorKind) -> bool {
         match self.fallback_policy {
             FallbackPolicy::Never => false,
@@ -100,7 +142,7 @@ where
 {
     /// Tries resolved candidates in order with the supplied configuration.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `config` - Service configuration forwarded unchanged to each attempt.
     ///
@@ -173,7 +215,6 @@ where
     /// # Returns
     ///
     /// An independent composing provider with the same candidates and policy.
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             candidates: self.candidates.to_vec().into_boxed_slice(),
@@ -188,7 +229,7 @@ where
 {
     /// Formats candidate descriptors and fallback policy.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///

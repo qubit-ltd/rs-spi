@@ -32,7 +32,7 @@ pub enum ProviderIdError {
 impl ProviderIdError {
     /// Creates an error for an empty canonical provider ID.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `input` - Verbatim empty input retained for diagnostics.
     ///
@@ -49,7 +49,7 @@ impl ProviderIdError {
 
     /// Creates an error for a noncanonical provider ID.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `input` - Verbatim noncanonical input retained for diagnostics.
     ///

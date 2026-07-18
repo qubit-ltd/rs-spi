@@ -18,7 +18,6 @@ use qubit_spi::{
     ProviderId,
     ProviderRegistry,
     ProviderSelection,
-    ServiceProvider,
 };
 
 use crate::common::configurable_provider::ConfigurableProvider;

@@ -32,7 +32,7 @@ impl ProviderSelector {
     /// Surrounding whitespace is removed and ASCII letters are lowercased
     /// before the canonical identifier grammar is validated.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `value` - Raw configuration or user input.
     ///
@@ -90,7 +90,7 @@ impl AsRef<str> for ProviderSelector {
 impl From<&ProviderId> for ProviderSelector {
     /// Converts a validated canonical provider ID into a selector.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `id` - Canonical provider ID whose invariant already satisfies the
     ///   selector grammar.
@@ -107,7 +107,7 @@ impl From<&ProviderId> for ProviderSelector {
 impl fmt::Display for ProviderSelector {
     /// Writes the normalized selector text to `formatter`.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///
@@ -130,7 +130,7 @@ impl FromStr for ProviderSelector {
 
     /// Parses a provider selector from configuration-style input.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `value` - Input trimmed and ASCII-lowercased before validation.
     ///

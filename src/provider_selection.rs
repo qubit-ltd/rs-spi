@@ -62,7 +62,7 @@ impl ProviderSelection {
 
     /// Creates a one-provider selection from configuration input.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `value` - Raw selector normalized and validated at construction.
     ///
@@ -87,7 +87,7 @@ impl ProviderSelection {
 
     /// Creates a nonempty ordered candidate chain from configuration input.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `values` - Raw selectors normalized in encounter order.
     ///
@@ -156,7 +156,7 @@ impl ProviderSelection {
 
     /// Replaces the policy applied after provider creation failures.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `fallback_policy` - Replacement policy for candidate traversal.
     ///
@@ -179,6 +179,7 @@ impl ProviderSelection {
     ///
     /// A shared reference to the invariant-safe private representation.
     #[inline(always)]
+    #[must_use]
     pub(crate) const fn repr(&self) -> &ProviderSelectionRepr {
         &self.target
     }

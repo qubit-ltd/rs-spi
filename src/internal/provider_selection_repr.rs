@@ -15,7 +15,13 @@ pub(crate) enum ProviderSelectionRepr {
     /// Providers are tried in deterministic automatic order.
     Auto,
     /// Exactly one normalized selector is used.
-    Named(ProviderSelector),
+    Named(
+        /// Normalized selector naming the only candidate.
+        ProviderSelector,
+    ),
     /// A nonempty ordered selector chain is used.
-    Chain(Box<[ProviderSelector]>),
+    Chain(
+        /// Normalized selectors retained in caller-supplied order.
+        Box<[ProviderSelector]>,
+    ),
 }

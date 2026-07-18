@@ -35,7 +35,7 @@ pub(crate) struct ConfigurableProvider {
 impl ConfigurableProvider {
     /// Creates a provider returning one stable output.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `output` - String returned by every creation call.
     ///
@@ -69,7 +69,7 @@ impl ConfigurableProvider {
 
     /// Creates a provider returning one classified leaf failure.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `error` - Provider error cloned for every creation call.
     ///
@@ -88,7 +88,7 @@ impl ConfigurableProvider {
 
     /// Adds a shared invocation counter.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `calls` - Counter incremented before each configured outcome.
     ///
@@ -102,7 +102,7 @@ impl ConfigurableProvider {
 
     /// Adds shared configuration recording.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `seen_config` - Slot replaced with each received configuration.
     ///
@@ -121,7 +121,7 @@ impl ConfigurableProvider {
 impl ServiceProvider<StringSpec> for ConfigurableProvider {
     /// Produces the configured output while recording invocation state.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `config` - String configuration optionally echoed and recorded.
     ///

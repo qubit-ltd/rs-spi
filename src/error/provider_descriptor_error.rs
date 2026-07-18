@@ -43,7 +43,7 @@ pub enum ProviderDescriptorError {
 impl ProviderDescriptorError {
     /// Creates an error for an alias that cannot be parsed.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `alias_index` - Zero-based alias position.
     /// * `source` - Selector parsing error that rejected the alias.
@@ -65,7 +65,7 @@ impl ProviderDescriptorError {
 
     /// Creates an error for aliases that normalize to the same selector.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `alias` - Normalized duplicate alias.
     ///
@@ -82,7 +82,7 @@ impl ProviderDescriptorError {
 
     /// Creates an error for an alias matching the canonical provider ID.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `alias` - Normalized alias matching the canonical ID.
     ///
@@ -117,7 +117,7 @@ impl ProviderDescriptorError {
 impl fmt::Display for ProviderDescriptorError {
     /// Formats the descriptor construction failure.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///

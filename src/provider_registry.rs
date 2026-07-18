@@ -10,12 +10,13 @@
 use std::{
     collections::HashSet,
     fmt,
-    sync::{
-        Arc,
-        RwLock,
-        RwLockReadGuard,
-        RwLockWriteGuard,
-    },
+    sync::Arc,
+};
+
+use parking_lot::{
+    RwLock,
+    RwLockReadGuard,
+    RwLockWriteGuard,
 };
 
 use crate::error::{
@@ -57,7 +58,7 @@ where
 {
     /// Registers an owned self-described provider.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `provider` - Provider definition moved into shared registry storage.
     ///
@@ -83,7 +84,7 @@ where
     /// so provider-controlled code never runs while shared registry state is
     /// locked.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `provider` - Shared provider definition retained by the registry.
     ///
@@ -144,7 +145,7 @@ where
     /// # Returns
     ///
     /// An owned snapshot of the current default selection.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn default_selection(&self) -> ProviderSelection {
         self.read_inner().default_selection.clone()
@@ -152,17 +153,17 @@ where
 
     /// Replaces the selection used for future default resolutions.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `selection` - Validated selection and fallback policy to store.
-    #[inline]
+    #[inline(always)]
     pub fn set_default_selection(&self, selection: ProviderSelection) {
         self.write_inner().default_selection = selection;
     }
 
     /// Resolves a validated selection into a composing provider snapshot.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `selection` - Candidate target and fallback policy to resolve.
     ///
@@ -175,11 +176,103 @@ where
     /// Returns [`ProviderResolutionError`] before creation when a named
     /// selector is unknown, a chain matches no candidates, or automatic
     /// selection sees an empty Registry.
+    #[inline]
     pub fn resolve_selected(
         &self,
         selection: &ProviderSelection,
     ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let inner = self.read_inner();
+        Self::resolve_from_inner(&inner, selection)
+    }
+
+    /// Resolves the registry's current default selection.
+    ///
+    /// # Returns
+    ///
+    /// A composing provider owning candidates selected from one current
+    /// registry snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderResolutionError`] under the same conditions as
+    /// [`Self::resolve_selected`].
+    #[inline]
+    pub fn resolve(
+        &self,
+    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
+        let inner = self.read_inner();
+        Self::resolve_from_inner(&inner, &inner.default_selection)
+    }
+
+    /// Returns descriptors in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// An owned descriptor snapshot. Later registrations do not alter it.
+    #[must_use]
+    pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
+        self.read_inner()
+            .entries
+            .iter()
+            .map(|entry| entry.descriptor.clone())
+            .collect()
+    }
+
+    /// Returns canonical provider IDs in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// An owned provider-ID snapshot. Later registrations do not alter it.
+    #[must_use]
+    pub fn provider_ids(&self) -> Vec<ProviderId> {
+        self.read_inner()
+            .entries
+            .iter()
+            .map(|entry| entry.descriptor.id().clone())
+            .collect()
+    }
+
+    /// Returns the number of registered providers.
+    ///
+    /// # Returns
+    ///
+    /// The number of entries visible when the read lock is acquired.
+    #[inline(always)]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.read_inner().entries.len()
+    }
+
+    /// Returns whether this registry contains no registered providers.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the synchronized catalog is empty; otherwise, `false`.
+    #[inline(always)]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Resolves one selection against already locked registry state.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Registry snapshot containing selectors and providers.
+    /// * `selection` - Selection interpreted against that same snapshot.
+    ///
+    /// # Returns
+    ///
+    /// A composing provider owning the selected candidates in attempt order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderResolutionError`] when the selection has no matching
+    /// candidates in `inner`.
+    fn resolve_from_inner(
+        inner: &RegistryInner<S>,
+        selection: &ProviderSelection,
+    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let candidates = match selection.repr() {
             ProviderSelectionRepr::Named(selector) => {
                 let index =
@@ -229,80 +322,9 @@ where
         ))
     }
 
-    /// Resolves the registry's current default selection.
-    ///
-    /// # Returns
-    ///
-    /// A composing provider owning candidates selected from one current
-    /// registry snapshot.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProviderResolutionError`] under the same conditions as
-    /// [`Self::resolve_selected`].
-    #[inline]
-    pub fn resolve(
-        &self,
-    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
-        let selection = self.default_selection();
-        self.resolve_selected(&selection)
-    }
-
-    /// Returns descriptors in successful registration order.
-    ///
-    /// # Returns
-    ///
-    /// An owned descriptor snapshot. Later registrations do not alter it.
-    #[inline]
-    #[must_use]
-    pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
-        self.read_inner()
-            .entries
-            .iter()
-            .map(|entry| entry.descriptor.clone())
-            .collect()
-    }
-
-    /// Returns canonical provider IDs in successful registration order.
-    ///
-    /// # Returns
-    ///
-    /// An owned provider-ID snapshot. Later registrations do not alter it.
-    #[inline]
-    #[must_use]
-    pub fn provider_ids(&self) -> Vec<ProviderId> {
-        self.read_inner()
-            .entries
-            .iter()
-            .map(|entry| entry.descriptor.id().clone())
-            .collect()
-    }
-
-    /// Returns the number of registered providers.
-    ///
-    /// # Returns
-    ///
-    /// The number of entries visible when the read lock is acquired.
-    #[inline(always)]
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.read_inner().entries.len()
-    }
-
-    /// Returns whether this registry contains no registered providers.
-    ///
-    /// # Returns
-    ///
-    /// `true` when the synchronized catalog is empty; otherwise, `false`.
-    #[inline(always)]
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     /// Ensures a normalized selector is not already claimed.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `inner` - Locked registry state inspected without mutation.
     /// * `selector` - Candidate canonical ID or alias.
@@ -335,30 +357,24 @@ where
         ))
     }
 
-    /// Acquires shared registry state and recovers from lock poisoning.
+    /// Acquires shared registry state.
     ///
     /// # Returns
     ///
-    /// A read guard, including the state retained after an earlier panic.
-    #[inline]
+    /// A read guard protecting the current registry state.
+    #[inline(always)]
     fn read_inner(&self) -> RwLockReadGuard<'_, RegistryInner<S>> {
-        match self.inner.read() {
-            Ok(inner) => inner,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.inner.read()
     }
 
-    /// Acquires exclusive registry state and recovers from lock poisoning.
+    /// Acquires exclusive registry state.
     ///
     /// # Returns
     ///
-    /// A write guard, including the state retained after an earlier panic.
-    #[inline]
+    /// A write guard protecting the current registry state.
+    #[inline(always)]
     fn write_inner(&self) -> RwLockWriteGuard<'_, RegistryInner<S>> {
-        match self.inner.write() {
-            Ok(inner) => inner,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.inner.write()
     }
 }
 
@@ -402,7 +418,7 @@ where
 {
     /// Formats owned snapshots of registry metadata.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///

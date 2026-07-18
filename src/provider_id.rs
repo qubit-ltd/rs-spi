@@ -32,7 +32,7 @@ impl ProviderId {
     /// characters plus hyphen, underscore, period, and plus between
     /// alphanumeric endpoints.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `value` - Candidate canonical identifier text.
     ///
@@ -81,7 +81,7 @@ impl AsRef<str> for ProviderId {
 impl fmt::Display for ProviderId {
     /// Writes the canonical identifier text to `formatter`.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///
@@ -104,7 +104,7 @@ impl FromStr for ProviderId {
 
     /// Parses an already canonical provider identifier.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `value` - Input validated without trimming or case normalization.
     ///
@@ -123,7 +123,7 @@ impl FromStr for ProviderId {
 
 /// Tests the shared canonical-token grammar for IDs and selectors.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `value` - Candidate token to validate without normalization.
 ///
@@ -131,6 +131,7 @@ impl FromStr for ProviderId {
 ///
 /// `true` when the input is nonempty lowercase ASCII, has alphanumeric
 /// endpoints, and contains only permitted separators; otherwise, `false`.
+#[must_use]
 pub(crate) fn is_canonical_token(value: &str) -> bool {
     !value.is_empty()
         && value.is_ascii()

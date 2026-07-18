@@ -28,7 +28,7 @@ pub struct ProviderAttemptFailure {
 impl ProviderAttemptFailure {
     /// Creates a diagnostic from an actual provider invocation failure.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `provider_id` - Canonical ID of the provider that was invoked.
     /// * `error` - Original provider error transferred into the diagnostic.
@@ -68,7 +68,7 @@ impl ProviderAttemptFailure {
 impl fmt::Display for ProviderAttemptFailure {
     /// Formats the failure with canonical provider context.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///

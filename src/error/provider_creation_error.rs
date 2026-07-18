@@ -25,7 +25,10 @@ use super::{
 #[non_exhaustive]
 pub enum ProviderCreationError {
     /// One directly invoked provider reported a classified failure.
-    Provider(ProviderError),
+    Provider(
+        /// Classified leaf error returned by the provider.
+        ProviderError,
+    ),
     /// Every considered provider failed or traversal stopped by policy.
     #[non_exhaustive]
     NoProviderSucceeded {
@@ -39,7 +42,7 @@ pub enum ProviderCreationError {
 impl ProviderCreationError {
     /// Creates an aggregate after all admitted candidates fail.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `attempts` - Non-empty provider failures in encounter order.
     ///
@@ -50,7 +53,7 @@ impl ProviderCreationError {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure>) -> Self {
         Self::no_provider_succeeded(
@@ -61,7 +64,7 @@ impl ProviderCreationError {
 
     /// Creates an aggregate after fallback policy stops traversal.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `attempts` - Non-empty provider failures recorded before the stop.
     ///
@@ -72,7 +75,7 @@ impl ProviderCreationError {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub(crate) fn stopped_by_policy(
         attempts: Vec<ProviderAttemptFailure>,
@@ -85,7 +88,7 @@ impl ProviderCreationError {
 
     /// Creates an aggregate with an explicit traversal termination.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `attempts` - Non-empty provider failures in encounter order.
     /// * `termination` - Reason traversal ended without a service.
@@ -97,6 +100,7 @@ impl ProviderCreationError {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
+    #[must_use]
     fn no_provider_succeeded(
         attempts: Vec<ProviderAttemptFailure>,
         termination: ProviderCreationTermination,
@@ -171,7 +175,6 @@ impl ProviderCreationError {
     ///
     /// `true` when the direct error, or every aggregate attempt, is classified
     /// as unsupported or unavailable.
-    #[inline]
     #[must_use]
     pub fn is_absence(&self) -> bool {
         match self {
@@ -186,7 +189,7 @@ impl ProviderCreationError {
 impl From<ProviderError> for ProviderCreationError {
     /// Wraps one provider's classified failure for the unified provider API.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `error` - Leaf provider error to preserve.
     ///
@@ -202,7 +205,7 @@ impl From<ProviderError> for ProviderCreationError {
 impl fmt::Display for ProviderCreationError {
     /// Formats direct or aggregate provider creation diagnostics.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `formatter` - Destination formatter.
     ///
@@ -261,7 +264,7 @@ impl Error for ProviderCreationError {
 
 /// Reports whether a provider failure kind represents absence.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `kind` - Provider-reported failure classification.
 ///

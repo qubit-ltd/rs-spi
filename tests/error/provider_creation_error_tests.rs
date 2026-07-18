@@ -19,7 +19,6 @@ use qubit_spi::{
     ProviderId,
     ProviderRegistry,
     ProviderSelection,
-    ServiceProvider,
 };
 
 use crate::common::configurable_provider::ConfigurableProvider;
@@ -173,7 +172,7 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
 
 /// Registers one failing test provider.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `registry` - Runtime registry receiving the provider.
 /// * `id` - Canonical provider identity.

@@ -16,14 +16,17 @@ use crate::error::ProviderCreationError;
 /// [`crate::ProviderDefinition`] when the provider also needs to be registered
 /// with identity and selection metadata. Implement this trait when an
 /// application needs to provide one selectable backend for a [`ServiceSpec`]
-/// family.
+/// family. Registry fallback applies only to errors returned while these
+/// creation methods run. Once a service output is returned successfully,
+/// errors from later operations on that output do not trigger another
+/// provider attempt.
 pub trait ServiceProvider<S>: Send + Sync + 'static
 where
     S: ServiceSpec,
 {
     /// Creates one service output from the supplied configuration.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `config` - Service-family configuration declared by `S`.
     ///
@@ -52,7 +55,7 @@ where
     ///
     /// Returns [`ProviderCreationError`] when the provider cannot create the
     /// service from the default configuration.
-    #[inline]
+    #[inline(always)]
     fn create(&self) -> Result<S::Output, ProviderCreationError>
     where
         S::Config: Default,

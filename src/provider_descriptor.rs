@@ -33,7 +33,7 @@ pub struct ProviderDescriptor {
 impl ProviderDescriptor {
     /// Creates metadata for a canonical provider ID.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `id` - Stable canonical identity of the provider.
     ///
@@ -52,7 +52,7 @@ impl ProviderDescriptor {
 
     /// Replaces the descriptor's aliases with normalized lookup selectors.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `aliases` - Raw aliases trimmed, lowercased, and validated in order.
     ///
@@ -82,7 +82,7 @@ impl ProviderDescriptor {
 
     /// Sets the priority used by automatic selection.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `priority` - Descending automatic-selection sort key.
     ///
@@ -135,7 +135,7 @@ impl ProviderDescriptor {
 /// Keeping validation outside the generic public method avoids duplicating the
 /// complete validation state machine for every caller iterator type.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `id` - Canonical provider ID that aliases must not duplicate.
 /// * `inputs` - Owned raw aliases in caller-supplied order.

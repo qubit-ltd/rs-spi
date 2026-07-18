@@ -36,7 +36,7 @@ pub struct ProviderError {
 impl ProviderError {
     /// Creates an error indicating that the request is unsupported.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Unsupported capability or configuration explanation.
     ///
@@ -51,7 +51,7 @@ impl ProviderError {
 
     /// Creates an unsupported-request error with an underlying cause.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Human-readable unsupported condition.
     /// * `source` - Causal error retained for diagnostics.
@@ -70,7 +70,7 @@ impl ProviderError {
 
     /// Creates an error indicating that the provider is unavailable.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Unavailable dependency or environment explanation.
     ///
@@ -85,7 +85,7 @@ impl ProviderError {
 
     /// Creates an unavailable-provider error with an underlying cause.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Human-readable unavailable condition.
     /// * `source` - Causal error retained for diagnostics.
@@ -104,7 +104,7 @@ impl ProviderError {
 
     /// Creates an error for provider-specific invalid configuration.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Explanation identifying the invalid setting.
     ///
@@ -119,7 +119,7 @@ impl ProviderError {
 
     /// Creates an invalid-configuration error with an underlying cause.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Human-readable invalid configuration condition.
     /// * `source` - Causal error retained for diagnostics.
@@ -142,7 +142,7 @@ impl ProviderError {
 
     /// Creates an unexpected provider-initialization failure.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Explanation of the initialization failure.
     ///
@@ -157,7 +157,7 @@ impl ProviderError {
 
     /// Creates an initialization failure with an underlying cause.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `reason` - Human-readable initialization failure.
     /// * `source` - Causal error retained for diagnostics.
@@ -180,7 +180,7 @@ impl ProviderError {
 
     /// Creates a classified error without an underlying source.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `kind` - Classification controlling resolver fallback behavior.
     /// * `reason` - Human-readable diagnostic message.
@@ -189,6 +189,7 @@ impl ProviderError {
     ///
     /// The classified provider error.
     #[inline]
+    #[must_use]
     fn new(kind: ProviderErrorKind, reason: impl Into<Box<str>>) -> Self {
         Self {
             kind,
@@ -199,7 +200,7 @@ impl ProviderError {
 
     /// Creates a classified error retaining an underlying source.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `kind` - Classification controlling resolver fallback behavior.
     /// * `reason` - Human-readable diagnostic message.
@@ -209,6 +210,7 @@ impl ProviderError {
     ///
     /// The classified provider error with its source.
     #[inline]
+    #[must_use]
     fn with_source(
         kind: ProviderErrorKind,
         reason: impl Into<Box<str>>,

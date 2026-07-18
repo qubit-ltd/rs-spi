@@ -31,7 +31,7 @@ pub enum RegistrationError {
 impl RegistrationError {
     /// Creates an error for a selector claimed by another provider.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
     /// * `selector` - Conflicting canonical ID or alias.
     /// * `existing_provider` - Canonical provider currently owning the
