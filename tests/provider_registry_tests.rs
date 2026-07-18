@@ -88,6 +88,41 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
     ));
 }
 
+/// Verifies that a duplicate canonical ID leaves the registry unchanged.
+#[test]
+fn test_registry_rejects_duplicate_canonical_id_without_partial_mutation() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("english")
+                    .expect("test provider ID should be valid"),
+            ),
+            ConfigurableProvider::success("hello"),
+        ))
+        .expect("first provider should register");
+
+    let error = registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("english")
+                    .expect("test provider ID should be valid"),
+            ),
+            ConfigurableProvider::success("bonjour"),
+        ))
+        .expect_err("duplicate canonical ID should be rejected");
+
+    assert!(matches!(error, RegistrationError::DuplicateSelector { .. }));
+    assert_eq!(
+        vec!["english"],
+        registry
+            .provider_ids()
+            .iter()
+            .map(ProviderId::as_str)
+            .collect::<Vec<_>>(),
+    );
+}
+
 /// Verifies that cloned handles observe providers registered later.
 #[test]
 fn test_registry_clones_share_later_registrations() {

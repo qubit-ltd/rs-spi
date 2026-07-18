@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt::Write,
+};
 
 use qubit_spi::error::{
     ProviderCreationError,
@@ -22,6 +25,7 @@ use qubit_spi::{
 };
 
 use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::failing_writer::FailingWriter;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
 
@@ -168,6 +172,38 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
     );
     assert!(error.decisive_attempt().is_some());
     assert!(Error::source(&error).is_some());
+}
+
+/// Verifies that aggregate diagnostics propagate formatter failures.
+#[test]
+fn test_aggregate_creation_error_propagates_formatter_failures() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    register_failure(
+        &registry,
+        "first",
+        10,
+        ProviderError::unavailable("first unavailable"),
+    );
+    register_failure(
+        &registry,
+        "second",
+        0,
+        ProviderError::unavailable("second unavailable"),
+    );
+    let error = registry
+        .resolve_selected(&ProviderSelection::auto())
+        .expect("automatic selection should resolve")
+        .create()
+        .expect_err("both providers should fail");
+
+    assert!(
+        write!(&mut FailingWriter::new(0), "{error}").is_err(),
+        "header write failure should propagate",
+    );
+    assert!(
+        write!(&mut FailingWriter::new(1), "{error}").is_err(),
+        "attempt write failure should propagate",
+    );
 }
 
 /// Registers one failing test provider.
