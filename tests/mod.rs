@@ -9,6 +9,8 @@
 
 mod common;
 mod error;
+mod fallback_policy_tests;
+mod lib_tests;
 mod provider_creation_termination_tests;
 mod provider_definition_tests;
 mod provider_descriptor_tests;
