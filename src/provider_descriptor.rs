@@ -50,6 +50,28 @@ impl ProviderDescriptor {
         }
     }
 
+    /// Returns the canonical provider ID.
+    ///
+    /// # Returns
+    ///
+    /// The descriptor's stable provider identity.
+    #[inline(always)]
+    #[must_use]
+    pub fn id(&self) -> &ProviderId {
+        &self.id
+    }
+
+    /// Returns the normalized aliases that resolve to the canonical ID.
+    ///
+    /// # Returns
+    ///
+    /// The immutable alias slice in descriptor order.
+    #[inline(always)]
+    #[must_use]
+    pub fn aliases(&self) -> &[ProviderSelector] {
+        &self.aliases
+    }
+
     /// Replaces the descriptor's aliases with normalized lookup selectors.
     ///
     /// # Parameters
@@ -80,6 +102,17 @@ impl ProviderDescriptor {
         Ok(self)
     }
 
+    /// Returns the priority used to order automatic selection candidates.
+    ///
+    /// # Returns
+    ///
+    /// The descending automatic-selection sort key.
+    #[inline(always)]
+    #[must_use]
+    pub const fn priority(&self) -> i32 {
+        self.priority
+    }
+
     /// Sets the priority used by automatic selection.
     ///
     /// # Parameters
@@ -94,39 +127,6 @@ impl ProviderDescriptor {
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self
-    }
-
-    /// Returns the canonical provider ID.
-    ///
-    /// # Returns
-    ///
-    /// The descriptor's stable provider identity.
-    #[inline(always)]
-    #[must_use]
-    pub fn id(&self) -> &ProviderId {
-        &self.id
-    }
-
-    /// Returns the normalized aliases that resolve to the canonical ID.
-    ///
-    /// # Returns
-    ///
-    /// The immutable alias slice in descriptor order.
-    #[inline(always)]
-    #[must_use]
-    pub fn aliases(&self) -> &[ProviderSelector] {
-        &self.aliases
-    }
-
-    /// Returns the priority used to order automatic selection candidates.
-    ///
-    /// # Returns
-    ///
-    /// The descending automatic-selection sort key.
-    #[inline(always)]
-    #[must_use]
-    pub const fn priority(&self) -> i32 {
-        self.priority
     }
 }
 
