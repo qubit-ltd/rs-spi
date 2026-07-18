@@ -7,18 +7,11 @@
 // =============================================================================
 //! Errors raised while providers create service instances.
 
-use std::{
-    error::Error,
-    fmt,
-};
+use std::{error::Error, fmt};
 
 use crate::ProviderCreationTermination;
 
-use super::{
-    ProviderAttemptFailure,
-    ProviderError,
-    ProviderErrorKind,
-};
+use super::{ProviderAttemptFailure, ProviderError, ProviderErrorKind};
 
 /// Error returned when a provider cannot create a requested service.
 #[derive(Clone, Debug)]
@@ -56,10 +49,7 @@ impl ProviderCreationError {
     #[inline(always)]
     #[must_use]
     pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure>) -> Self {
-        Self::no_provider_succeeded(
-            attempts,
-            ProviderCreationTermination::Exhausted,
-        )
+        Self::no_provider_succeeded(attempts, ProviderCreationTermination::Exhausted)
     }
 
     /// Creates an aggregate after fallback policy stops traversal.
@@ -77,13 +67,8 @@ impl ProviderCreationError {
     /// Panics when `attempts` is empty.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn stopped_by_policy(
-        attempts: Vec<ProviderAttemptFailure>,
-    ) -> Self {
-        Self::no_provider_succeeded(
-            attempts,
-            ProviderCreationTermination::StoppedByPolicy,
-        )
+    pub(crate) fn stopped_by_policy(attempts: Vec<ProviderAttemptFailure>) -> Self {
+        Self::no_provider_succeeded(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
 
     /// Creates an aggregate with an explicit traversal termination.
@@ -100,6 +85,7 @@ impl ProviderCreationError {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
+    #[inline]
     #[must_use]
     fn no_provider_succeeded(
         attempts: Vec<ProviderAttemptFailure>,

@@ -7,35 +7,15 @@
 // =============================================================================
 //! Runtime-mutable provider catalog and typed provider lookup.
 
-use std::{
-    collections::HashSet,
-    fmt,
-    sync::Arc,
-};
+use std::{collections::HashSet, fmt, sync::Arc};
 
-use parking_lot::{
-    RwLock,
-    RwLockReadGuard,
-    RwLockWriteGuard,
-};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::error::{
-    ProviderResolutionError,
-    RegistrationError,
-};
-use crate::internal::{
-    ProviderSelectionRepr,
-    RegistryEntry,
-    RegistryInner,
-};
+use crate::error::{ProviderResolutionError, RegistrationError};
+use crate::internal::{ProviderSelectionRepr, RegistryEntry, RegistryInner};
 use crate::{
-    ProviderDefinition,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderSelection,
-    ProviderSelector,
-    ResolvingServiceProvider,
-    ServiceSpec,
+    ProviderDefinition, ProviderDescriptor, ProviderId, ProviderSelection, ProviderSelector,
+    ResolvingServiceProvider, ServiceSpec,
 };
 
 /// Shared catalog of providers for one service family.
@@ -104,11 +84,7 @@ where
         let canonical_selector = ProviderSelector::from(descriptor.id());
         let mut inner = self.write_inner();
 
-        Self::validate_selector(
-            &inner,
-            &canonical_selector,
-            descriptor.id().as_str(),
-        )?;
+        Self::validate_selector(&inner, &canonical_selector, descriptor.id().as_str())?;
         for alias in descriptor.aliases() {
             Self::validate_selector(&inner, alias, descriptor.id().as_str())?;
         }
@@ -126,8 +102,7 @@ where
             descriptor,
             provider,
         });
-        let mut automatic_indices =
-            (0..inner.entries.len()).collect::<Vec<_>>();
+        let mut automatic_indices = (0..inner.entries.len()).collect::<Vec<_>>();
         automatic_indices.sort_unstable_by(|left, right| {
             let left = &inner.entries[*left].descriptor;
             let right = &inner.entries[*right].descriptor;
@@ -197,9 +172,7 @@ where
     /// Returns [`ProviderResolutionError`] under the same conditions as
     /// [`Self::resolve_selected`].
     #[inline]
-    pub fn resolve(
-        &self,
-    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
+    pub fn resolve(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let inner = self.read_inner();
         Self::resolve_from_inner(&inner, &inner.default_selection)
     }
@@ -275,23 +248,18 @@ where
     ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let candidates = match selection.repr() {
             ProviderSelectionRepr::Named(selector) => {
-                let index =
-                    inner.selector_indices.get(selector).copied().ok_or_else(
-                        || {
-                            ProviderResolutionError::unknown_provider(
-                                selector.clone(),
-                            )
-                        },
-                    )?;
+                let index = inner
+                    .selector_indices
+                    .get(selector)
+                    .copied()
+                    .ok_or_else(|| ProviderResolutionError::unknown_provider(selector.clone()))?;
                 vec![inner.entries[index].clone()]
             }
             ProviderSelectionRepr::Chain(selectors) => {
-                let mut seen = HashSet::new();
-                let mut candidates = Vec::new();
+                let mut seen = HashSet::with_capacity(selectors.len());
+                let mut candidates = Vec::with_capacity(selectors.len());
                 for selector in selectors {
-                    let Some(index) =
-                        inner.selector_indices.get(selector).copied()
-                    else {
+                    let Some(index) = inner.selector_indices.get(selector).copied() else {
                         continue;
                     };
                     if seen.insert(index) {
@@ -299,9 +267,7 @@ where
                     }
                 }
                 if candidates.is_empty() {
-                    return Err(ProviderResolutionError::no_candidates(
-                        selectors.to_vec(),
-                    ));
+                    return Err(ProviderResolutionError::no_candidates(selectors.to_vec()));
                 }
                 candidates
             }
