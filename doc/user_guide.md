@@ -276,13 +276,13 @@ one App.
 Cargo package names use hyphens below; Rust refers to those crates with
 underscores. The `Cargo.toml` files are omitted for brevity.
 
-### 1. `lib-greater`: Define the Service and Global Registry
+### 1. `lib-greeter`: Define the Service and Global Registry
 
-`lib-greater` owns the service contract and the one Registry instance shared
+`lib-greeter` owns the service contract and the one Registry instance shared
 by consumers, providers, and the final App.
 
 ```rust
-// lib-greater/src/lib.rs
+// lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
@@ -324,13 +324,12 @@ pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
 
 ### 2. `lib-foo`: Consume the Default Service
 
-`lib-foo` depends on `lib-greater` and `qubit-spi`, but not on any concrete
+`lib-foo` depends on `lib-greeter` and `qubit-spi`, but not on any concrete
 Greeter implementation.
 
 ```rust
 // lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
+use lib_greeter::GREETER_REGISTRY;
 
 /// Creates the App-selected default Greeter and prints one greeting.
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -341,17 +340,17 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 3. `lib-friend-greater`: Supply a Third-Party Provider
+### 3. `lib-friendly-greeter`: Supply a Third-Party Provider
 
-`lib-friend-greater` depends on `lib-greater` and `qubit-spi`. It implements
+`lib-friendly-greeter` depends on `lib-greeter` and `qubit-spi`. It implements
 the Greeter contract and publishes a self-described provider, but it does not
 modify global state by registering itself.
 
 ```rust
-// lib-friend-greater/src/lib.rs
+// lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
 use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
@@ -402,8 +401,8 @@ Greeter, sets the process default, and then calls `foo()`.
 ```rust
 // app.rs
 use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
 // Application composition root: install a provider before calling lib-foo.
@@ -416,17 +415,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The program prints `Hello, Rust!`. The App and `lib-foo` coordinate through the
-same `GREETER_REGISTRY` from `lib-greater`; neither `lib-foo` nor
-`lib-greater` depends on `lib-friend-greater`.
+same `GREETER_REGISTRY` from `lib-greeter`; neither `lib-foo` nor
+`lib-greeter` depends on `lib-friendly-greeter`.
 
 Startup ordering matters: configure the global Registry before downstream code
 first requests the service. A `ResolvingServiceProvider` already obtained by a
 consumer remains a point-in-time snapshot; later registrations affect future
 resolutions, not that existing snapshot.
 
-Cargo normally unifies compatible versions of `lib-greater`. If incompatible
+Cargo normally unifies compatible versions of `lib-greeter`. If incompatible
 versions are linked simultaneously, each crate version owns a separate static
-Registry. The App and `lib-foo` must use the same linked `lib-greater` instance
+Registry. The App and `lib-foo` must use the same linked `lib-greeter` instance
 to share the singleton.
 
 ## Selecting Providers
@@ -523,13 +522,9 @@ callers that have no config object.
 fallback policy when `create` is called.
 
 ```rust,ignore
-use qubit_spi::ServiceProvider;
-
 let provider = registry.resolve_selected(&selection)?;
 let service = provider.create_configured(&config)?;
 ```
-
-Import the `ServiceProvider` trait so its methods are in scope.
 
 Successful creation returns `S::Output` directly. Successful-fallback
 observation is an internal library concern, not part of the public service
@@ -651,7 +646,7 @@ which the Provider traits require. Its shared state uses an `RwLock`.
 - Default-selection replacement obtains a short write lock.
 - Resolution obtains a read lock while copying candidate handles.
 - Provider creation occurs after the lock is released.
-- Poisoned locks recover the retained state instead of panicking again.
+- `parking_lot::RwLock` does not poison; a panic releases the lock normally.
 
 A resolved provider owns `Arc` handles to its candidates, so it remains usable
 after the Registry is cloned, changed, or dropped. It does not see later
@@ -699,8 +694,8 @@ also confirm App and library link the same domain-crate version.
 
 ### `create()` is unavailable
 
-`S::Config` must implement `Default`, and `ServiceProvider` must be imported.
-Otherwise construct a config and call `create_configured(&config)`.
+`S::Config` must implement `Default`. Otherwise construct a config and call
+`create_configured(&config)`.
 
 ### Duplicate registration fails during repeated tests
 

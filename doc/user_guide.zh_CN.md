@@ -256,13 +256,13 @@ Service trait 的领域 crate 应暴露适合自己的单体。下面的完整�
 下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
 为简洁起见，示例省略各个 `Cargo.toml` 文件。
 
-### 1. `lib-greater`：定义 Service 和全局 Registry
+### 1. `lib-greeter`：定义 Service 和全局 Registry
 
-`lib-greater` 持有 Service 契约，以及供消费者、Provider 和最终 App 共享的唯一
+`lib-greeter` 持有 Service 契约，以及供消费者、Provider 和最终 App 共享的唯一
 Registry 实例。
 
 ```rust
-// lib-greater/src/lib.rs
+// lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
@@ -304,12 +304,11 @@ pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
 
 ### 2. `lib-foo`：使用默认 Service
 
-`lib-foo` 依赖 `lib-greater` 和 `qubit-spi`，但不依赖任何具体 Greeter 实现。
+`lib-foo` 依赖 `lib-greeter` 和 `qubit-spi`，但不依赖任何具体 Greeter 实现。
 
 ```rust
 // lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
+use lib_greeter::GREETER_REGISTRY;
 
 /// 创建 App 选定的默认 Greeter，并打印一条问候语。
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -320,16 +319,16 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 3. `lib-friend-greater`：提供第三方 Provider
+### 3. `lib-friendly-greeter`：提供第三方 Provider
 
-`lib-friend-greater` 依赖 `lib-greater` 和 `qubit-spi`。它实现 Greeter 契约并发布一个
+`lib-friendly-greeter` 依赖 `lib-greeter` 和 `qubit-spi`。它实现 Greeter 契约并发布一个
 自描述 Provider，但不会通过自行注册来修改全局状态。
 
 ```rust
-// lib-friend-greater/src/lib.rs
+// lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
 use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
@@ -379,8 +378,8 @@ App 依赖这三个库并负责装配策略。它在任何下游代码请求 Gre
 ```rust
 // app.rs
 use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
 // 应用装配入口：先安装 Provider，再调用 lib-foo。
@@ -392,16 +391,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-程序会打印 `Hello, Rust!`。App 与 `lib-foo` 通过 `lib-greater` 中同一个
-`GREETER_REGISTRY` 协作；`lib-foo` 和 `lib-greater` 都不依赖
-`lib-friend-greater`。
+程序会打印 `Hello, Rust!`。App 与 `lib-foo` 通过 `lib-greeter` 中同一个
+`GREETER_REGISTRY` 协作；`lib-foo` 和 `lib-greeter` 都不依赖
+`lib-friendly-greeter`。
 
 启动顺序很重要：必须在下游代码首次请求 Service 前配置全局 Registry。消费者已经拿到
 的 `ResolvingServiceProvider` 是时间点快照；后续注册只影响未来的解析，不会修改现有
 快照。
 
-Cargo 通常会统一兼容版本的 `lib-greater`。如果同时链接不兼容版本，每个 crate 版本
-会拥有独立的静态 Registry。App 和 `lib-foo` 必须使用同一个 `lib-greater` 实例才能
+Cargo 通常会统一兼容版本的 `lib-greeter`。如果同时链接不兼容版本，每个 crate 版本
+会拥有独立的静态 Registry。App 和 `lib-foo` 必须使用同一个 `lib-greeter` 实例才能
 共享单体。
 
 ## 选择 Provider
@@ -494,13 +493,9 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 Provider handle，并在调用 `create` 时执行 selection 中的 fallback policy。
 
 ```rust,ignore
-use qubit_spi::ServiceProvider;
-
 let provider = registry.resolve_selected(&selection)?;
 let service = provider.create_configured(&config)?;
 ```
-
-必须导入 `ServiceProvider` trait，才能调用它的方法。
 
 创建成功直接返回 `S::Output`。成功 fallback 的观测属于库内部职责，不属于公共
 Service 值。当前实现不对外暴露成功 attempt 数据；内部收集能力将通过 IoC 注入的
@@ -613,7 +608,7 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 - 替换默认 selection 只短暂持有写锁。
 - 解析在复制候选 handle 时持有读锁。
 - 释放锁之后才调用 Provider 创建 Service。
-- 锁中毒时恢复其中保留的状态，而不是再次 panic。
+- `parking_lot::RwLock` 不会发生锁中毒；panic 后锁会正常释放。
 
 解析出的 Provider 持有候选的 `Arc` handle，因此 Registry 被 clone、修改或 drop 后仍
 可使用，但不会看到后续注册。需要新候选时重新解析。
@@ -658,8 +653,8 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 
 ### 无法调用 `create()`
 
-`S::Config` 必须实现 `Default`，并且必须导入 `ServiceProvider` trait。否则构造 config
-并调用 `create_configured(&config)`。
+`S::Config` 必须实现 `Default`。否则构造 config 并调用
+`create_configured(&config)`。
 
 ### 重复执行测试时全局注册冲突
 

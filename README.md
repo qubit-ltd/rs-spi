@@ -29,13 +29,13 @@ application composition root so the runtime ownership is explicit.
 Cargo package names use hyphens below; Rust refers to those crates with
 underscores. The `Cargo.toml` files are omitted for brevity.
 
-### 1. `lib-greater`: Define the Service and Global Registry
+### 1. `lib-greeter`: Define the Service and Global Registry
 
-`lib-greater` owns the service contract. Every consumer and provider uses the
+`lib-greeter` owns the service contract. Every consumer and provider uses the
 same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
 
 ```rust
-// lib-greater/src/lib.rs
+// lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
@@ -83,8 +83,7 @@ configuration, and prints the result.
 
 ```rust
 // lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
+use lib_greeter::GREETER_REGISTRY;
 
 /// Creates the App-selected default Greeter and prints one greeting.
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -95,17 +94,17 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 3. `lib-friend-greater`: Supply a Third-Party Provider
+### 3. `lib-friendly-greeter`: Supply a Third-Party Provider
 
-`lib-friend-greater` depends on the contract from `lib-greater`, implements the
+`lib-friendly-greeter` depends on the contract from `lib-greeter`, implements the
 service, and exports one self-described provider. It does not register itself;
 the final App owns that policy decision.
 
 ```rust
-// lib-friend-greater/src/lib.rs
+// lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
 use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
@@ -150,14 +149,14 @@ impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
 ### 4. `app.rs`: Register the Provider and Run `lib-foo`
 
 The App is the composition root. During startup it installs the third-party
-provider into the singleton owned by `lib-greater`, makes that provider the
+provider into the singleton owned by `lib-greeter`, makes that provider the
 default, and then calls `foo()`.
 
 ```rust
 // app.rs
 use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
 // Application composition root: install a provider before calling lib-foo.
@@ -171,7 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The program prints `Hello, Rust!`. `lib-foo` receives the provider selected by
 the App even though those two crates do not depend on each other. Their shared
-coordination point is the singleton defined by `lib-greater`.
+coordination point is the singleton defined by `lib-greeter`.
 
 The Registry default and service configuration are independent. A caller with
 specific requirements can supply either one without forcing the other:

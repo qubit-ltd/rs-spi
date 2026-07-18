@@ -27,13 +27,13 @@ Qubit SPI 要求 Rust 1.94 或更高版本。
 下面的 Cargo package 名使用连字符；Rust 在 `use` 路径中会把连字符转换成下划线。
 为简洁起见，示例省略各个 `Cargo.toml` 文件。
 
-### 1. `lib-greater`：定义 Service 和全局 Registry
+### 1. `lib-greeter`：定义 Service 和全局 Registry
 
-`lib-greater` 持有 Service 契约。所有消费者和 Provider 都使用这个 crate 中同一个
+`lib-greeter` 持有 Service 契约。所有消费者和 Provider 都使用这个 crate 中同一个
 `GreeterSpec` 和 `GREETER_REGISTRY` 单体。
 
 ```rust
-// lib-greater/src/lib.rs
+// lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec};
@@ -80,8 +80,7 @@ Provider，用默认配置创建 Greeter，然后把结果打印到控制台。
 
 ```rust
 // lib-foo/src/lib.rs
-use lib_greater::GREETER_REGISTRY;
-use qubit_spi::ServiceProvider;
+use lib_greeter::GREETER_REGISTRY;
 
 /// 创建 App 选定的默认 Greeter，并打印一条问候语。
 pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
@@ -92,16 +91,16 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 3. `lib-friend-greater`：提供第三方 Provider
+### 3. `lib-friendly-greeter`：提供第三方 Provider
 
-`lib-friend-greater` 依赖 `lib-greater` 中的契约，实现 Service，并导出一个自描述
+`lib-friendly-greeter` 依赖 `lib-greeter` 中的契约，实现 Service，并导出一个自描述
 Provider。它不会自行注册；最终 App 负责决定是否安装这个实现。
 
 ```rust
-// lib-friend-greater/src/lib.rs
+// lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greater::{Greeter, GreeterConfig, GreeterSpec};
+use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
 use qubit_spi::error::ProviderCreationError;
 use qubit_spi::{
     ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
@@ -145,14 +144,14 @@ impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
 
 ### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
 
-App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greater` 持有的单体中，
+App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greeter` 持有的单体中，
 将其设为默认 Provider，然后调用 `foo()`。
 
 ```rust
 // app.rs
 use lib_foo::foo;
-use lib_friend_greater::FriendlyGreeterProvider;
-use lib_greater::GREETER_REGISTRY;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
 use qubit_spi::ProviderSelection;
 
 // 应用装配入口：先安装 Provider，再调用 lib-foo。
@@ -165,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 程序会打印 `Hello, Rust!`。虽然 `lib-foo` 与第三方 Provider 互不依赖，`lib-foo` 仍会
-获得 App 选定的实现；它们的共享协调点是 `lib-greater` 定义的单体。
+获得 App 选定的实现；它们的共享协调点是 `lib-greeter` 定义的单体。
 
 Registry 默认 selection 与 Service 配置相互独立。有明确需求的调用方可以只显式提供
 其中一个，也可以同时提供：
