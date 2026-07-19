@@ -35,7 +35,7 @@ impl FallbackPolicy {
     /// # Returns
     ///
     /// `true` when a resolver may continue to its next candidate.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn allows(self, kind: crate::error::ProviderErrorKind) -> bool {
         match self {

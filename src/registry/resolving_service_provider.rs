@@ -85,7 +85,6 @@ where
     ///
     /// Returns [`ProviderCreationError`] when every candidate fails or the
     /// fallback policy stops traversal.
-    #[inline(always)]
     pub fn create_configured(
         &self,
         config: &S::Config,

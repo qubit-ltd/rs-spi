@@ -35,7 +35,7 @@ impl FallbackState {
     /// # Returns
     ///
     /// Empty state ready to record the first attempt.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn new(policy: FallbackPolicy) -> Self {
         Self {
