@@ -175,10 +175,12 @@ where
 {
     /// Formats owned snapshots of registry metadata.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (descriptors, default_selection) =
+            self.providers.metadata_snapshot();
         formatter
             .debug_struct("ProviderRegistry")
-            .field("descriptors", &self.descriptors())
-            .field("default_selection", &self.default_selection())
+            .field("descriptors", &descriptors)
+            .field("default_selection", &default_selection)
             .finish()
     }
 }

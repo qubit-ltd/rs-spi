@@ -6,7 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::Arc;
+use std::{
+    fmt::Write,
+    sync::{
+        Arc,
+        mpsc,
+    },
+    thread,
+};
 
 use futures::executor::block_on;
 use qubit_spi::error::{
@@ -23,6 +30,7 @@ use qubit_spi::{
 };
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
+use crate::common::blocking_writer::BlockingWriter;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
 
@@ -160,6 +168,41 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
         .expect("shared provider should create"),
     );
     assert!(format!("{registry:?}").contains("shared"));
+}
+
+/// Verifies asynchronous Registry Debug retains one metadata snapshot.
+#[test]
+fn test_async_registry_debug_uses_one_metadata_snapshot() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    registry.set_default_selection(
+        ProviderSelection::named("before")
+            .expect("static selection should be valid"),
+    );
+    let formatting_registry = registry.clone();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let formatter = thread::spawn(move || {
+        let mut writer =
+            BlockingWriter::new("descriptors", entered_tx, release_rx);
+        write!(&mut writer, "{formatting_registry:?}")
+            .expect("coordinated formatting should succeed");
+        writer.into_output()
+    });
+
+    entered_rx
+        .recv()
+        .expect("formatter should reach the descriptors field");
+    registry.set_default_selection(
+        ProviderSelection::named("after")
+            .expect("static selection should be valid"),
+    );
+    release_tx
+        .send(())
+        .expect("formatter should remain blocked until released");
+    let debug = formatter.join().expect("formatter thread should not panic");
+
+    assert!(debug.contains("before"), "unexpected Debug output: {debug}");
+    assert!(!debug.contains("after"), "mixed Debug snapshot: {debug}");
 }
 
 /// Registers one metadata-bearing asynchronous test provider.

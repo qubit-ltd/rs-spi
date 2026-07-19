@@ -7,7 +7,11 @@
 // =============================================================================
 
 use std::{
-    sync::Arc,
+    fmt::Write,
+    sync::{
+        Arc,
+        mpsc,
+    },
     thread,
 };
 
@@ -24,6 +28,7 @@ use qubit_spi::{
     ProviderSelection,
 };
 
+use crate::common::blocking_writer::BlockingWriter;
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
@@ -216,6 +221,41 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
     assert!(debug.contains("ProviderRegistry"));
     assert!(debug.contains("english"));
     assert!(debug.contains("default_selection"));
+}
+
+/// Verifies Registry Debug formatting retains one metadata snapshot.
+#[test]
+fn test_registry_debug_uses_one_metadata_snapshot() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry.set_default_selection(
+        ProviderSelection::named("before")
+            .expect("static selection should be valid"),
+    );
+    let formatting_registry = registry.clone();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let formatter = thread::spawn(move || {
+        let mut writer =
+            BlockingWriter::new("descriptors", entered_tx, release_rx);
+        write!(&mut writer, "{formatting_registry:?}")
+            .expect("coordinated formatting should succeed");
+        writer.into_output()
+    });
+
+    entered_rx
+        .recv()
+        .expect("formatter should reach the descriptors field");
+    registry.set_default_selection(
+        ProviderSelection::named("after")
+            .expect("static selection should be valid"),
+    );
+    release_tx
+        .send(())
+        .expect("formatter should remain blocked until released");
+    let debug = formatter.join().expect("formatter thread should not panic");
+
+    assert!(debug.contains("before"), "unexpected Debug output: {debug}");
+    assert!(!debug.contains("after"), "mixed Debug snapshot: {debug}");
 }
 
 /// Verifies that descriptor snapshots retain successful registration order.

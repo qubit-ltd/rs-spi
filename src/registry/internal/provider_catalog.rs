@@ -101,6 +101,26 @@ where
         Ok(())
     }
 
+    /// Returns descriptors and the default selection from one catalog snapshot.
+    ///
+    /// # Returns
+    ///
+    /// Owned provider descriptors and default selection cloned while one read
+    /// lock represents the catalog state.
+    #[must_use]
+    pub(crate) fn metadata_snapshot(
+        &self,
+    ) -> (Vec<ProviderDescriptor>, ProviderSelection) {
+        let inner = self.read_inner();
+        let descriptors = inner
+            .entries
+            .iter()
+            .map(|entry| entry.descriptor.clone())
+            .collect();
+        let default_selection = inner.default_selection.clone();
+        (descriptors, default_selection)
+    }
+
     /// Returns the current default selection snapshot.
     #[inline(always)]
     #[must_use]
