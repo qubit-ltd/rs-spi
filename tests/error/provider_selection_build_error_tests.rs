@@ -9,18 +9,29 @@
 use std::error::Error;
 
 use qubit_spi::error::ProviderSelectionBuildError;
-use qubit_spi::ProviderSelection;
+use qubit_spi::{
+    ProviderSelection,
+    ProviderSelectionTargetRef,
+};
 
 /// Verifies automatic defaults and invalid chain construction boundaries.
 #[test]
 fn test_selection_construction_enforces_invariants() {
     let automatic = ProviderSelection::auto();
-    assert!(automatic.selectors().is_empty());
+    assert!(matches!(
+        automatic.target(),
+        ProviderSelectionTargetRef::Auto,
+    ));
     assert_eq!(automatic, ProviderSelection::default());
     let empty = ProviderSelection::chain(Vec::<&str>::new()).unwrap_err();
     assert!(Error::source(&empty).is_none());
+    assert_eq!(
+        "provider selection chain must not be empty",
+        empty.to_string(),
+    );
     assert!(matches!(empty, ProviderSelectionBuildError::EmptyChain));
-    let invalid = ProviderSelection::chain(["valid", "bad selector"]).unwrap_err();
+    let invalid =
+        ProviderSelection::chain(["valid", "bad selector"]).unwrap_err();
     assert!(Error::source(&invalid).is_some());
     assert!(matches!(
         invalid,
@@ -29,6 +40,10 @@ fn test_selection_construction_enforces_invariants() {
             ..
         }
     ));
+    assert_eq!(
+        "invalid provider selector at selection index 1: \"bad selector\"",
+        invalid.to_string(),
+    );
 }
 
 /// Verifies invalid named selections omit a position and retain their source.
@@ -36,6 +51,10 @@ fn test_selection_construction_enforces_invariants() {
 fn test_invalid_named_selection_preserves_input_and_source() {
     let error = ProviderSelection::named("bad selector").unwrap_err();
     assert!(Error::source(&error).is_some());
+    assert_eq!(
+        "invalid provider selector \"bad selector\"",
+        error.to_string(),
+    );
     assert!(matches!(
         error,
         ProviderSelectionBuildError::InvalidSelector {

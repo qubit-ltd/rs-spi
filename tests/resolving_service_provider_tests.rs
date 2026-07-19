@@ -21,7 +21,6 @@ use std::{
 
 use qubit_spi::error::{
     ProviderError,
-    ProviderErrorKind,
     ProviderResolutionError,
 };
 use qubit_spi::{
@@ -181,9 +180,40 @@ fn test_registry_resolves_named_alias_to_one_candidate() {
     assert_eq!(0, unrelated_calls.load(Ordering::SeqCst));
 }
 
-/// Verifies chain order, unknown skipping, and alias-based deduplication.
+/// Verifies that strict chains reject every unknown selector before creation.
 #[test]
-fn test_registry_resolves_chain_in_input_order_and_deduplicates_aliases() {
+fn test_registry_rejects_partially_unknown_strict_chain() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let registry = ProviderRegistry::<StringSpec>::default();
+    register_provider(
+        &registry,
+        "known",
+        &[],
+        0,
+        ConfigurableProvider::success("known").with_calls(Arc::clone(&calls)),
+    );
+    let selection = ProviderSelection::chain(["missing", "known"])
+        .expect("strict chain should parse");
+
+    let error = registry
+        .resolve_selected(&selection)
+        .expect_err("strict chain should reject every unknown selector");
+
+    assert!(matches!(
+        error,
+        ProviderResolutionError::UnknownProviders { ref selectors, .. }
+            if selectors
+                .iter()
+                .map(|selector| selector.as_str())
+                .eq(["missing"])
+    ));
+    assert_eq!(0, calls.load(Ordering::SeqCst));
+}
+
+/// Verifies explicit missing-selector tolerance, chain order, and
+/// deduplication.
+#[test]
+fn test_registry_allows_explicitly_missing_chain_entries_and_deduplicates() {
     let first_calls = Arc::new(AtomicUsize::new(0));
     let registry = ProviderRegistry::<StringSpec>::default();
     register_provider(
@@ -201,10 +231,11 @@ fn test_registry_resolves_chain_in_input_order_and_deduplicates_aliases() {
         0,
         ConfigurableProvider::success("second"),
     );
-    let selection =
-        ProviderSelection::chain(["missing", "one", "first", "second"])
-            .expect("test chain should be valid")
-            .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let selection = ProviderSelection::chain_allowing_missing([
+        "missing", "one", "first", "second",
+    ])
+    .expect("optional chain should parse")
+    .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let output = registry
         .resolve_selected(&selection)
@@ -259,16 +290,17 @@ fn test_registry_reports_named_unknown_before_creation() {
         .expect_err("unknown selection should fail");
     let message = error.to_string();
 
-    let ProviderResolutionError::UnknownProvider { selector, .. } = error
+    let ProviderResolutionError::UnknownProviders { selectors, .. } = error
     else {
         panic!("named selection should retain its unknown selector");
     };
-    assert_eq!("missing", selector.as_str());
-    assert_eq!("unknown provider: missing", message);
+    assert_eq!(1, selectors.len());
+    assert_eq!("missing", selectors[0].as_str());
+    assert_eq!("unknown provider selector; missing", message);
     assert_eq!(0, calls.load(Ordering::SeqCst));
 }
 
-/// Verifies that a chain without matches fails before provider creation.
+/// Verifies that an explicitly lenient chain without matches has no candidates.
 #[test]
 fn test_registry_reports_chain_without_candidates_before_creation() {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -280,8 +312,9 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
         0,
         ConfigurableProvider::success("known").with_calls(Arc::clone(&calls)),
     );
-    let selection = ProviderSelection::chain(["first", "second"])
-        .expect("test chain should be valid");
+    let selection =
+        ProviderSelection::chain_allowing_missing(["first", "second"])
+            .expect("test chain should be valid");
 
     let error = registry
         .resolve_selected(&selection)
@@ -300,6 +333,38 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
     );
     assert_eq!("no provider candidates matched; first; second", message,);
     assert_eq!(0, calls.load(Ordering::SeqCst));
+}
+
+/// Verifies that strict-chain diagnostics retain every unknown occurrence.
+#[test]
+fn test_registry_preserves_ordered_duplicate_unknown_selectors() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    register_provider(
+        &registry,
+        "known",
+        &[],
+        0,
+        ConfigurableProvider::success("known"),
+    );
+    let selection = ProviderSelection::chain(["missing", "known", "missing"])
+        .expect("strict chain should parse");
+
+    let error = registry
+        .resolve_selected(&selection)
+        .expect_err("strict chain should reject unknown selectors");
+
+    let ProviderResolutionError::UnknownProviders { selectors, .. } = error
+    else {
+        panic!("strict chain should report unknown selectors");
+    };
+    assert_eq!(
+        ["missing", "missing"],
+        selectors
+            .iter()
+            .map(|selector| selector.as_str())
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
 }
 
 /// Verifies that automatic selection rejects an empty registry.
@@ -348,7 +413,7 @@ fn test_never_stops_after_first_failure() {
         .expect_err("never policy should stop after one failure");
 
     assert_eq!(
-        Some(ProviderCreationTermination::StoppedByPolicy),
+        ProviderCreationTermination::StoppedByPolicy,
         error.termination(),
     );
     assert_eq!(1, error.attempts().len());
@@ -420,7 +485,7 @@ fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
             .expect_err("absence policy should stop");
 
         assert_eq!(
-            Some(ProviderCreationTermination::StoppedByPolicy),
+            ProviderCreationTermination::StoppedByPolicy,
             error.termination(),
         );
         assert_eq!(1, error.attempts().len());
@@ -491,10 +556,7 @@ fn test_creation_error_preserves_ordered_provider_ids_and_sources() {
         .create()
         .expect_err("both providers should fail");
 
-    assert_eq!(
-        Some(ProviderCreationTermination::Exhausted),
-        error.termination(),
-    );
+    assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
     assert_eq!(
         vec!["first", "second"],
         error
@@ -531,56 +593,6 @@ fn test_named_selection_failure_contains_exact_provider_id() {
 
     assert_eq!(1, error.attempts().len());
     assert_eq!("remote", error.attempts()[0].provider_id().as_str());
-}
-
-/// Verifies that a nested aggregate becomes a terminal initialization failure.
-#[test]
-fn test_nested_aggregate_candidate_error_stops_as_initialization_failure() {
-    let inner_registry = ProviderRegistry::<StringSpec>::default();
-    for (id, priority) in [("inner-first", 20), ("inner-second", 10)] {
-        register_provider(
-            &inner_registry,
-            id,
-            &[],
-            priority,
-            ConfigurableProvider::failure(ProviderError::unavailable(
-                "offline",
-            )),
-        );
-    }
-    let inner_selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
-    let inner_provider = inner_registry
-        .resolve_selected(&inner_selection)
-        .expect("inner selection should resolve");
-
-    let fallback_calls = Arc::new(AtomicUsize::new(0));
-    let outer_registry = ProviderRegistry::<StringSpec>::default();
-    register_provider(&outer_registry, "composed", &[], 20, inner_provider);
-    register_provider(
-        &outer_registry,
-        "fallback",
-        &[],
-        10,
-        ConfigurableProvider::success("fallback")
-            .with_calls(Arc::clone(&fallback_calls)),
-    );
-    let outer_selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
-
-    let error = outer_registry
-        .resolve_selected(&outer_selection)
-        .expect("outer selection should resolve")
-        .create()
-        .expect_err("nested aggregate must stop outer fallback");
-
-    assert_eq!(1, error.attempts().len());
-    assert_eq!(
-        ProviderErrorKind::InitializationFailed,
-        error.attempts()[0].error().kind(),
-    );
-    assert!(Error::source(error.attempts()[0].error()).is_some());
-    assert_eq!(0, fallback_calls.load(Ordering::SeqCst));
 }
 
 /// Verifies that resolved candidates form a stable point-in-time snapshot.

@@ -6,13 +6,17 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{ProviderDescriptor, ProviderId};
+use qubit_spi::{
+    ProviderDescriptor,
+    ProviderId,
+};
 
 /// Verifies that a descriptor retains typed ID, alias, and priority metadata.
 #[test]
 fn test_descriptor_keeps_typed_metadata() {
     let descriptor = ProviderDescriptor::new(
-        ProviderId::new("file-command").expect("test provider ID should be valid"),
+        ProviderId::new("file-command")
+            .expect("test provider ID should be valid"),
     )
     .with_aliases(["file", "command"])
     .expect("test aliases should be valid")

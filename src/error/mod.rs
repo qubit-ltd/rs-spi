@@ -33,7 +33,7 @@
 //! use qubit_spi::error::ProviderCreationError;
 //! use qubit_spi::ProviderCreationTermination;
 //!
-//! let _ = ProviderCreationError::NoProviderSucceeded {
+//! let _ = ProviderCreationError {
 //!     attempts: Box::new([]),
 //!     termination: ProviderCreationTermination::Exhausted,
 //! };

@@ -7,22 +7,23 @@
 // =============================================================================
 //! Provider contract for pluggable service implementations.
 
-use crate::ServiceSpec;
-use crate::error::ProviderCreationError;
+use crate::SyncServiceSpec;
+use crate::error::ProviderError;
 
 /// Factory contract for one pluggable service implementation.
 ///
 /// This trait contains only service-creation behavior. Implement
 /// [`crate::ProviderDefinition`] when the provider also needs to be registered
 /// with identity and selection metadata. Implement this trait when an
-/// application needs to provide one selectable backend for a [`ServiceSpec`]
+/// application needs to provide one selectable backend for a
+/// [`SyncServiceSpec`]
 /// family. Registry fallback applies only to errors returned while these
 /// creation methods run. Once a service output is returned successfully,
 /// errors from later operations on that output do not trigger another
 /// provider attempt.
 pub trait ServiceProvider<S>: Send + Sync + 'static
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
     /// Creates one service output from the supplied configuration.
     ///
@@ -36,14 +37,13 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderCreationError`] when the provider cannot create the
-    /// requested service. A leaf provider should convert its classified
-    /// [`crate::error::ProviderError`] with [`Into::into`]. A composing
-    /// provider may instead return an aggregate creation error.
+    /// Returns [`ProviderError`] when this provider cannot create the requested
+    /// service. Registry resolvers aggregate this leaf failure with provider
+    /// identity and fallback termination diagnostics.
     fn create_configured(
         &self,
         config: &S::Config,
-    ) -> Result<S::Output, ProviderCreationError>;
+    ) -> Result<S::Output, ProviderError>;
 
     /// Creates one service output with the configuration default.
     ///
@@ -53,10 +53,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderCreationError`] when the provider cannot create the
-    /// service from the default configuration.
+    /// Returns [`ProviderError`] when the provider cannot create the service
+    /// from the default configuration.
     #[inline(always)]
-    fn create(&self) -> Result<S::Output, ProviderCreationError>
+    fn create(&self) -> Result<S::Output, ProviderError>
     where
         S::Config: Default,
     {

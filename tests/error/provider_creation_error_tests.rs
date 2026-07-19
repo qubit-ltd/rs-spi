@@ -11,10 +11,7 @@ use std::{
     fmt::Write,
 };
 
-use qubit_spi::error::{
-    ProviderCreationError,
-    ProviderError,
-};
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderCreationTermination,
@@ -28,31 +25,6 @@ use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::failing_writer::FailingWriter;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_provider_definition::define_provider;
-
-/// Verifies that a leaf provider failure retains its complete source chain.
-#[test]
-fn test_provider_error_converts_to_creation_error_without_losing_source() {
-    let leaf = ProviderError::unavailable_with_source(
-        "runtime is absent",
-        std::io::Error::other("ENOENT"),
-    );
-    let error = ProviderCreationError::from(leaf);
-
-    assert!(matches!(error, ProviderCreationError::Provider(_)));
-    assert!(Error::source(&error).is_some());
-    assert!(Error::source(&error).and_then(Error::source).is_some());
-    assert!(error.is_absence());
-    assert!(error.attempts().is_empty());
-    assert!(error.termination().is_none());
-    assert!(error.attempts().last().is_none());
-    assert!(error.decisive_attempt().is_none());
-    assert_eq!("provider Unavailable: runtime is absent", error.to_string());
-
-    let invalid = ProviderCreationError::from(
-        ProviderError::invalid_configuration("invalid setting"),
-    );
-    assert!(!invalid.is_absence());
-}
 
 /// Verifies diagnostics for exhaustion after multiple absence failures.
 #[test]
@@ -79,10 +51,7 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         .create()
         .expect_err("both providers should fail");
 
-    assert_eq!(
-        Some(ProviderCreationTermination::Exhausted),
-        error.termination(),
-    );
+    assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
     assert!(error.is_absence());
     assert_eq!(
         "second",
@@ -93,8 +62,14 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
             .provider_id()
             .as_str()
     );
-    assert!(error.decisive_attempt().is_none());
-    assert!(Error::source(&error).is_none());
+    assert!(std::ptr::eq(
+        error
+            .attempts()
+            .last()
+            .expect("aggregate should have a final attempt"),
+        error.decisive_attempt(),
+    ));
+    assert!(Error::source(&error).is_some());
     let display = error.to_string();
     assert!(display.contains("no provider succeeded after 2 attempt(s)"));
     assert!(display.contains("attempt 1: provider first"));
@@ -129,18 +104,11 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         .expect_err("invalid configuration should stop absence fallback");
 
     assert_eq!(
-        Some(ProviderCreationTermination::StoppedByPolicy),
+        ProviderCreationTermination::StoppedByPolicy,
         error.termination(),
     );
     assert!(!error.is_absence());
-    assert_eq!(
-        "invalid",
-        error
-            .decisive_attempt()
-            .expect("policy stop should have one decisive attempt")
-            .provider_id()
-            .as_str()
-    );
+    assert_eq!("invalid", error.decisive_attempt().provider_id().as_str());
     assert!(Error::source(&error).is_some());
     assert!(error.to_string().contains(
         "provider creation stopped by fallback policy after 1 attempt(s)"
@@ -166,11 +134,14 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
         .create()
         .expect_err("selected provider should fail");
 
-    assert_eq!(
-        Some(ProviderCreationTermination::Exhausted),
-        error.termination(),
-    );
-    assert!(error.decisive_attempt().is_some());
+    assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
+    assert!(std::ptr::eq(
+        error
+            .attempts()
+            .last()
+            .expect("aggregate should have a final attempt"),
+        error.decisive_attempt(),
+    ));
     assert!(Error::source(&error).is_some());
 }
 

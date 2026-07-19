@@ -8,27 +8,24 @@
 //! Self-described providers accepted by a provider registry.
 
 use crate::{
-    ProviderDescriptor,
+    ProviderMetadata,
     ServiceProvider,
-    ServiceSpec,
+    SyncServiceSpec,
 };
 
-/// Registration contract for a provider with stable identity and metadata.
+/// Marker combining synchronous creation with registration metadata.
 ///
-/// Implement this trait for providers that may be inserted into a
-/// [`crate::ProviderRegistry`]. Registry registration snapshots the returned
-/// descriptor, so later provider state changes cannot alter registered lookup
-/// metadata.
-pub trait ProviderDefinition<S>: ServiceProvider<S>
+/// Every type implementing both [`ProviderMetadata`] and
+/// [`ServiceProvider<S>`] automatically implements this trait.
+pub trait ProviderDefinition<S>: ProviderMetadata + ServiceProvider<S>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
-    /// Returns this provider's registration metadata.
-    ///
-    /// # Returns
-    ///
-    /// A descriptor snapshot containing the canonical ID, aliases, and
-    /// automatic-selection priority.
-    #[must_use]
-    fn descriptor(&self) -> ProviderDescriptor;
+}
+
+impl<S, T> ProviderDefinition<S> for T
+where
+    S: SyncServiceSpec,
+    T: ProviderMetadata + ServiceProvider<S> + ?Sized,
+{
 }

@@ -16,10 +16,7 @@ use std::sync::{
 };
 
 use qubit_spi::ServiceProvider;
-use qubit_spi::error::{
-    ProviderCreationError,
-    ProviderError,
-};
+use qubit_spi::error::ProviderError;
 
 use super::string_spec::StringSpec;
 
@@ -135,7 +132,7 @@ impl ServiceProvider<StringSpec> for ConfigurableProvider {
     fn create_configured(
         &self,
         config: &String,
-    ) -> Result<String, ProviderCreationError> {
+    ) -> Result<String, ProviderError> {
         if let Some(calls) = &self.calls {
             calls.fetch_add(1, Ordering::SeqCst);
         }
@@ -148,7 +145,7 @@ impl ServiceProvider<StringSpec> for ConfigurableProvider {
             }
         }
         if let Some(error) = &self.error {
-            return Err(error.clone().into());
+            return Err(error.clone());
         }
         if self.echo_config {
             return Ok(config.clone());

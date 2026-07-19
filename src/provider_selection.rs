@@ -11,14 +11,17 @@ use crate::error::ProviderSelectionBuildError;
 use crate::internal::ProviderSelectionRepr;
 use crate::{
     FallbackPolicy,
+    MissingProviderPolicy,
+    ProviderSelectionTargetRef,
     ProviderSelector,
 };
 
 /// Validated request for the providers a resolver may try.
 ///
-/// Construct selections through [`Self::auto`], [`Self::named`], or
-/// [`Self::chain`]. The opaque representation prevents invalid selectors and
-/// empty chains from reaching a resolver.
+/// Construct selections through [`Self::auto`], [`Self::named`],
+/// [`Self::chain`], or [`Self::chain_allowing_missing`]. The opaque
+/// representation prevents invalid selectors and empty chains from reaching a
+/// resolver.
 ///
 /// # Examples
 ///
@@ -33,7 +36,11 @@ use crate::{
 /// let selection = ProviderSelection::chain(["remote", "memory"])?
 ///     .with_fallback_policy(FallbackPolicy::OnAbsence);
 ///
-/// assert_eq!(2, selection.selectors().len());
+/// assert!(matches!(
+///     selection.target(),
+///     qubit_spi::ProviderSelectionTargetRef::Chain { selectors, .. }
+///         if selectors.len() == 2
+/// ));
 /// assert_eq!(FallbackPolicy::OnAbsence, selection.fallback_policy());
 /// # Ok::<(), qubit_spi::error::ProviderSelectionBuildError>(())
 /// ```
@@ -104,6 +111,57 @@ impl ProviderSelection {
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
+        Self::build_chain(values, MissingProviderPolicy::Reject)
+    }
+
+    /// Creates a nonempty ordered chain that ignores unknown selectors.
+    ///
+    /// # Parameters
+    ///
+    /// * `values` - Raw selectors normalized in encounter order.
+    ///
+    /// # Returns
+    ///
+    /// A validated nonempty selector chain that explicitly permits missing
+    /// provider registrations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
+    /// or when `values` contains no selectors.
+    pub fn chain_allowing_missing<I, T>(
+        values: I,
+    ) -> Result<Self, ProviderSelectionBuildError>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<str>,
+    {
+        Self::build_chain(values, MissingProviderPolicy::Ignore)
+    }
+
+    /// Builds a validated chain with the specified missing-provider policy.
+    ///
+    /// # Parameters
+    ///
+    /// * `values` - Raw selectors normalized in encounter order.
+    /// * `missing_policy` - Policy retained with the chain target.
+    ///
+    /// # Returns
+    ///
+    /// A validated nonempty selector chain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
+    /// or when `values` contains no selectors.
+    fn build_chain<I, T>(
+        values: I,
+        missing_policy: MissingProviderPolicy,
+    ) -> Result<Self, ProviderSelectionBuildError>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<str>,
+    {
         let mut selectors = Vec::new();
         for (selector_index, value) in values.into_iter().enumerate() {
             let input = value.as_ref();
@@ -120,26 +178,35 @@ impl ProviderSelection {
             return Err(ProviderSelectionBuildError::empty_chain());
         }
         Ok(Self {
-            target: ProviderSelectionRepr::Chain(selectors.into_boxed_slice()),
+            target: ProviderSelectionRepr::Chain {
+                selectors: selectors.into_boxed_slice(),
+                missing_policy,
+            },
             fallback_policy: FallbackPolicy::OnAbsence,
         })
     }
 
-    /// Returns the explicitly selected provider selectors.
+    /// Returns a lossless borrowed view of the selection target.
     ///
     /// # Returns
     ///
-    /// An empty slice for automatic selection, a one-element slice for named
-    /// selection, or the ordered nonempty slice for chained selection.
+    /// A view distinguishing automatic, named, strict-chain, and lenient-chain
+    /// targets without allocating.
     #[inline(always)]
     #[must_use]
-    pub fn selectors(&self) -> &[ProviderSelector] {
+    pub const fn target(&self) -> ProviderSelectionTargetRef<'_> {
         match &self.target {
+            ProviderSelectionRepr::Auto => ProviderSelectionTargetRef::Auto,
             ProviderSelectionRepr::Named(selector) => {
-                std::slice::from_ref(selector)
+                ProviderSelectionTargetRef::Named(selector)
             }
-            ProviderSelectionRepr::Chain(selectors) => selectors,
-            ProviderSelectionRepr::Auto => &[],
+            ProviderSelectionRepr::Chain {
+                selectors,
+                missing_policy,
+            } => ProviderSelectionTargetRef::Chain {
+                selectors,
+                missing_policy: *missing_policy,
+            },
         }
     }
 

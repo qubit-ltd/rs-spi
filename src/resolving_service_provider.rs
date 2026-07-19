@@ -9,17 +9,15 @@
 
 use std::fmt;
 
-use crate::error::{
-    ProviderAttemptFailure,
-    ProviderCreationError,
-    ProviderError,
-    ProviderErrorKind,
+use crate::error::ProviderCreationError;
+use crate::internal::{
+    FallbackState,
+    RegistryEntry,
 };
-use crate::internal::RegistryEntry;
 use crate::{
     FallbackPolicy,
-    ServiceProvider,
-    ServiceSpec,
+    ProviderDefinition,
+    SyncServiceSpec,
 };
 
 /// Service provider that tries a point-in-time snapshot of registry candidates.
@@ -30,17 +28,17 @@ use crate::{
 /// failures from later operations on that output do not re-enter fallback.
 pub struct ResolvingServiceProvider<S>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
     /// Nonempty provider candidates in deterministic attempt order.
-    candidates: Box<[RegistryEntry<S>]>,
+    candidates: Box<[RegistryEntry<dyn ProviderDefinition<S>>]>,
     /// Policy deciding which leaf failures permit another attempt.
     fallback_policy: FallbackPolicy,
 }
 
 impl<S> ResolvingServiceProvider<S>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
     /// Creates a composing provider from resolved candidates.
     ///
@@ -60,7 +58,7 @@ where
     #[inline]
     #[must_use]
     pub(crate) fn new(
-        candidates: Vec<RegistryEntry<S>>,
+        candidates: Box<[RegistryEntry<dyn ProviderDefinition<S>>]>,
         fallback_policy: FallbackPolicy,
     ) -> Self {
         assert!(
@@ -68,7 +66,7 @@ where
             "resolving service providers require at least one candidate",
         );
         Self {
-            candidates: candidates.into_boxed_slice(),
+            candidates,
             fallback_policy,
         }
     }
@@ -92,7 +90,24 @@ where
         &self,
         config: &S::Config,
     ) -> Result<S::Output, ProviderCreationError> {
-        <Self as ServiceProvider<S>>::create_configured(self, config)
+        let mut fallback = FallbackState::new(self.fallback_policy);
+        let candidate_count = self.candidates.len();
+        for (index, candidate) in self.candidates.iter().enumerate() {
+            match candidate.provider.create_configured(config) {
+                Ok(service) => return Ok(service),
+                Err(error) => {
+                    let has_remaining = index + 1 < candidate_count;
+                    if let Some(error) = fallback.record_failure(
+                        candidate.descriptor.id().clone(),
+                        error,
+                        has_remaining,
+                    ) {
+                        return Err(error);
+                    }
+                }
+            }
+        }
+        unreachable!("resolving providers always contain a candidate")
     }
 
     /// Creates a service output with the default configuration.
@@ -110,105 +125,13 @@ where
     where
         S::Config: Default,
     {
-        <Self as ServiceProvider<S>>::create(self)
-    }
-
-    /// Reports whether fallback may continue after one leaf error kind.
-    ///
-    /// # Parameters
-    ///
-    /// * `kind` - Provider-reported leaf failure classification.
-    ///
-    /// # Returns
-    ///
-    /// `true` when this provider's fallback policy permits another attempt.
-    #[inline]
-    #[must_use]
-    fn allows_fallback(&self, kind: ProviderErrorKind) -> bool {
-        match self.fallback_policy {
-            FallbackPolicy::Never => false,
-            FallbackPolicy::OnAbsence => matches!(
-                kind,
-                ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable
-            ),
-            FallbackPolicy::OnAnyError => true,
-        }
-    }
-}
-
-impl<S> ServiceProvider<S> for ResolvingServiceProvider<S>
-where
-    S: ServiceSpec,
-{
-    /// Tries resolved candidates in order with the supplied configuration.
-    ///
-    /// # Parameters
-    ///
-    /// * `config` - Service configuration forwarded unchanged to each attempt.
-    ///
-    /// # Returns
-    ///
-    /// The first service output created successfully.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProviderCreationError`] containing ordered actual provider
-    /// failures when all candidates fail or fallback policy stops traversal.
-    /// A nested aggregate from a registered provider is classified as an
-    /// initialization failure and always stops traversal.
-    fn create_configured(
-        &self,
-        config: &S::Config,
-    ) -> Result<S::Output, ProviderCreationError> {
-        let mut failures = Vec::new();
-        for candidate in &self.candidates {
-            match candidate.provider.create_configured(config) {
-                Ok(service) => {
-                    // TODO: When `failures` is non-empty, publish an internal
-                    // fallback observation through IoC-injected collector and
-                    // processor components before returning. Observability
-                    // remains an internal library concern.
-                    return Ok(service);
-                }
-                Err(ProviderCreationError::Provider(error)) => {
-                    let kind = error.kind();
-                    failures.push(ProviderAttemptFailure::new(
-                        candidate.descriptor.id().clone(),
-                        error,
-                    ));
-                    if !self.allows_fallback(kind) {
-                        return Err(ProviderCreationError::stopped_by_policy(
-                            failures,
-                        ));
-                    }
-                }
-                Err(
-                    aggregate @ ProviderCreationError::NoProviderSucceeded {
-                        ..
-                    },
-                ) => {
-                    let error =
-                        ProviderError::initialization_failed_with_source(
-                            "registered provider returned an aggregate creation error",
-                            aggregate,
-                        );
-                    failures.push(ProviderAttemptFailure::new(
-                        candidate.descriptor.id().clone(),
-                        error,
-                    ));
-                    return Err(ProviderCreationError::stopped_by_policy(
-                        failures,
-                    ));
-                }
-            }
-        }
-        Err(ProviderCreationError::exhausted(failures))
+        self.create_configured(&S::Config::default())
     }
 }
 
 impl<S> Clone for ResolvingServiceProvider<S>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
     /// Clones the candidate snapshot and shared provider handles.
     ///
@@ -225,7 +148,7 @@ where
 
 impl<S> fmt::Debug for ResolvingServiceProvider<S>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
 {
     /// Formats candidate descriptors and fallback policy.
     ///

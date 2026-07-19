@@ -5,39 +5,36 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Errors raised while providers create service instances.
+//! Aggregate errors raised while a resolver tries provider candidates.
 
-use std::{error::Error, fmt};
+use std::{
+    error::Error,
+    fmt,
+};
 
 use crate::ProviderCreationTermination;
 
-use super::{ProviderAttemptFailure, ProviderError, ProviderErrorKind};
+use super::{
+    ProviderAttemptFailure,
+    ProviderErrorKind,
+};
 
-/// Error returned when a provider cannot create a requested service.
+/// Nonempty aggregate returned when a resolver cannot create a service.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum ProviderCreationError {
-    /// One directly invoked provider reported a classified failure.
-    Provider(
-        /// Classified leaf error returned by the provider.
-        ProviderError,
-    ),
-    /// Every considered provider failed or traversal stopped by policy.
-    #[non_exhaustive]
-    NoProviderSucceeded {
-        /// Actual provider failures in encounter order.
-        attempts: Box<[ProviderAttemptFailure]>,
-        /// Reason candidate traversal ended without a service.
-        termination: ProviderCreationTermination,
-    },
+pub struct ProviderCreationError {
+    /// Actual provider failures in encounter order.
+    attempts: Box<[ProviderAttemptFailure]>,
+    /// Reason candidate traversal ended without a service.
+    termination: ProviderCreationTermination,
 }
 
 impl ProviderCreationError {
-    /// Creates an aggregate after all admitted candidates fail.
+    /// Creates an aggregate after every admitted candidate fails.
     ///
     /// # Parameters
     ///
-    /// * `attempts` - Non-empty provider failures in encounter order.
+    /// * `attempts` - Nonempty provider failures in encounter order.
     ///
     /// # Returns
     ///
@@ -49,14 +46,14 @@ impl ProviderCreationError {
     #[inline(always)]
     #[must_use]
     pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure>) -> Self {
-        Self::no_provider_succeeded(attempts, ProviderCreationTermination::Exhausted)
+        Self::new(attempts, ProviderCreationTermination::Exhausted)
     }
 
     /// Creates an aggregate after fallback policy stops traversal.
     ///
     /// # Parameters
     ///
-    /// * `attempts` - Non-empty provider failures recorded before the stop.
+    /// * `attempts` - Nonempty provider failures recorded before the stop.
     ///
     /// # Returns
     ///
@@ -67,15 +64,17 @@ impl ProviderCreationError {
     /// Panics when `attempts` is empty.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn stopped_by_policy(attempts: Vec<ProviderAttemptFailure>) -> Self {
-        Self::no_provider_succeeded(attempts, ProviderCreationTermination::StoppedByPolicy)
+    pub(crate) fn stopped_by_policy(
+        attempts: Vec<ProviderAttemptFailure>,
+    ) -> Self {
+        Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
 
     /// Creates an aggregate with an explicit traversal termination.
     ///
     /// # Parameters
     ///
-    /// * `attempts` - Non-empty provider failures in encounter order.
+    /// * `attempts` - Nonempty provider failures in encounter order.
     /// * `termination` - Reason traversal ended without a service.
     ///
     /// # Returns
@@ -87,15 +86,15 @@ impl ProviderCreationError {
     /// Panics when `attempts` is empty.
     #[inline]
     #[must_use]
-    fn no_provider_succeeded(
+    fn new(
         attempts: Vec<ProviderAttemptFailure>,
         termination: ProviderCreationTermination,
     ) -> Self {
         assert!(
             !attempts.is_empty(),
-            "no-provider-succeeded errors require at least one attempt",
+            "provider creation errors require at least one attempt",
         );
-        Self::NoProviderSucceeded {
+        Self {
             attempts: attempts.into_boxed_slice(),
             termination,
         }
@@ -105,91 +104,56 @@ impl ProviderCreationError {
     ///
     /// # Returns
     ///
-    /// Aggregate attempts, or an empty slice for a direct provider error.
+    /// The nonempty attempt sequence retained by this aggregate.
     #[inline(always)]
     #[must_use]
-    pub fn attempts(&self) -> &[ProviderAttemptFailure] {
-        match self {
-            Self::Provider(_) => &[],
-            Self::NoProviderSucceeded { attempts, .. } => attempts,
-        }
+    pub const fn attempts(&self) -> &[ProviderAttemptFailure] {
+        &self.attempts
     }
 
-    /// Returns why aggregate candidate traversal ended.
+    /// Returns why candidate traversal ended.
     ///
     /// # Returns
     ///
-    /// The aggregate termination reason, or `None` for a direct provider error.
+    /// The resolver's traversal termination reason.
     #[inline(always)]
     #[must_use]
-    pub const fn termination(&self) -> Option<ProviderCreationTermination> {
-        match self {
-            Self::Provider(_) => None,
-            Self::NoProviderSucceeded { termination, .. } => Some(*termination),
-        }
+    pub const fn termination(&self) -> ProviderCreationTermination {
+        self.termination
     }
 
-    /// Returns the provider failure that directly explains the aggregate.
+    /// Returns the final actual provider failure.
     ///
     /// # Returns
     ///
-    /// The terminal attempt after a policy stop, the only attempt after
-    /// singleton exhaustion, or `None` when no single aggregate attempt is
-    /// decisive.
+    /// The last attempt, which directly terminated or exhausted traversal.
     #[inline]
     #[must_use]
-    pub fn decisive_attempt(&self) -> Option<&ProviderAttemptFailure> {
-        match self {
-            Self::NoProviderSucceeded {
-                attempts,
-                termination: ProviderCreationTermination::StoppedByPolicy,
-            } => attempts.last(),
-            Self::NoProviderSucceeded {
-                attempts,
-                termination: ProviderCreationTermination::Exhausted,
-            } => match attempts.as_ref() {
-                [attempt] => Some(attempt),
-                _ => None,
-            },
-            Self::Provider(_) => None,
-        }
+    pub fn decisive_attempt(&self) -> &ProviderAttemptFailure {
+        self.attempts
+            .last()
+            .expect("provider creation errors contain an attempt")
     }
 
-    /// Reports whether the failure denotes unsupported or unavailable service.
+    /// Reports whether every failure denotes unsupported or unavailable
+    /// service.
     ///
     /// # Returns
     ///
-    /// `true` when the direct error, or every aggregate attempt, is classified
-    /// as unsupported or unavailable.
+    /// `true` when every attempt is classified as unsupported or unavailable.
     #[must_use]
     pub fn is_absence(&self) -> bool {
-        match self {
-            Self::Provider(error) => is_absence_kind(error.kind()),
-            Self::NoProviderSucceeded { attempts, .. } => attempts
-                .iter()
-                .all(|attempt| is_absence_kind(attempt.error().kind())),
-        }
-    }
-}
-
-impl From<ProviderError> for ProviderCreationError {
-    /// Wraps one provider's classified failure for the unified provider API.
-    ///
-    /// # Parameters
-    ///
-    /// * `error` - Leaf provider error to preserve.
-    ///
-    /// # Returns
-    ///
-    /// A direct provider creation error retaining its source chain.
-    #[inline(always)]
-    fn from(error: ProviderError) -> Self {
-        Self::Provider(error)
+        self.attempts.iter().all(|attempt| {
+            matches!(
+                attempt.error().kind(),
+                ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable
+            )
+        })
     }
 }
 
 impl fmt::Display for ProviderCreationError {
-    /// Formats direct or aggregate provider creation diagnostics.
+    /// Formats aggregate provider creation diagnostics.
     ///
     /// # Parameters
     ///
@@ -203,64 +167,33 @@ impl fmt::Display for ProviderCreationError {
     ///
     /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Provider(error) => write!(formatter, "{error}"),
-            Self::NoProviderSucceeded {
-                attempts,
-                termination,
-            } => {
-                match termination {
-                    ProviderCreationTermination::Exhausted => write!(
-                        formatter,
-                        "no provider succeeded after {} attempt(s)",
-                        attempts.len(),
-                    )?,
-                    ProviderCreationTermination::StoppedByPolicy => write!(
-                        formatter,
-                        "provider creation stopped by fallback policy after {} attempt(s)",
-                        attempts.len(),
-                    )?,
-                }
-                for (index, attempt) in attempts.iter().enumerate() {
-                    write!(formatter, "; attempt {}: {attempt}", index + 1)?;
-                }
-                Ok(())
-            }
+        match self.termination {
+            ProviderCreationTermination::Exhausted => write!(
+                formatter,
+                "no provider succeeded after {} attempt(s)",
+                self.attempts.len(),
+            )?,
+            ProviderCreationTermination::StoppedByPolicy => write!(
+                formatter,
+                "provider creation stopped by fallback policy after {} attempt(s)",
+                self.attempts.len(),
+            )?,
         }
+        for (index, attempt) in self.attempts.iter().enumerate() {
+            write!(formatter, "; attempt {}: {attempt}", index + 1)?;
+        }
+        Ok(())
     }
 }
 
 impl Error for ProviderCreationError {
-    /// Returns the direct cause when one source explains the outcome.
+    /// Returns the final provider attempt as the decisive cause.
     ///
     /// # Returns
     ///
-    /// The leaf provider error, the decisive aggregate attempt, or `None` when
-    /// multiple exhausted attempts are equally relevant.
-    #[inline]
+    /// The final actual provider failure.
+    #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Provider(error) => Some(error),
-            Self::NoProviderSucceeded { .. } => self
-                .decisive_attempt()
-                .map(|attempt| attempt as &(dyn Error + 'static)),
-        }
+        Some(self.decisive_attempt())
     }
-}
-
-/// Reports whether a provider failure kind represents absence.
-///
-/// # Parameters
-///
-/// * `kind` - Provider-reported failure classification.
-///
-/// # Returns
-///
-/// `true` for unsupported and unavailable providers.
-#[inline(always)]
-const fn is_absence_kind(kind: ProviderErrorKind) -> bool {
-    matches!(
-        kind,
-        ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable
-    )
 }

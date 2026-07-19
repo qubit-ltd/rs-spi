@@ -10,7 +10,10 @@
 use std::collections::HashSet;
 
 use crate::error::ProviderDescriptorError;
-use crate::{ProviderId, ProviderSelector};
+use crate::{
+    ProviderId,
+    ProviderSelector,
+};
 
 /// Immutable metadata that identifies and ranks a registered provider.
 ///
@@ -83,7 +86,10 @@ impl ProviderDescriptor {
     ///
     /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
     /// another alias, or duplicates the canonical provider ID.
-    pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
+    pub fn with_aliases<I, T>(
+        mut self,
+        aliases: I,
+    ) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -153,14 +159,21 @@ fn normalize_aliases(
         let alias = match ProviderSelector::parse(&input) {
             Ok(alias) => alias,
             Err(source) => {
-                return Err(ProviderDescriptorError::invalid_alias(alias_index, source));
+                return Err(ProviderDescriptorError::invalid_alias(
+                    alias_index,
+                    source,
+                ));
             }
         };
         if alias == canonical_selector {
-            return Err(ProviderDescriptorError::alias_matches_id(alias.as_str()));
+            return Err(ProviderDescriptorError::alias_matches_id(
+                alias.as_str(),
+            ));
         }
         if !seen.insert(alias.clone()) {
-            return Err(ProviderDescriptorError::duplicate_alias(alias.as_str()));
+            return Err(ProviderDescriptorError::duplicate_alias(
+                alias.as_str(),
+            ));
         }
         normalized.push(alias);
     }

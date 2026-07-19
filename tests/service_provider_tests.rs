@@ -7,6 +7,10 @@
 // =============================================================================
 
 use qubit_spi::ServiceProvider;
+use qubit_spi::error::{
+    ProviderError,
+    ProviderErrorKind,
+};
 
 use crate::common::configurable_provider::ConfigurableProvider;
 
@@ -29,4 +33,17 @@ fn test_provider_create_uses_config_default() {
         .expect("default service creation should succeed");
 
     assert_eq!(String::default(), output);
+}
+
+/// Verifies that a leaf provider returns its classified error directly.
+#[test]
+fn test_leaf_provider_returns_provider_error_directly() {
+    let provider =
+        ConfigurableProvider::failure(ProviderError::unavailable("offline"));
+
+    let error: ProviderError = provider
+        .create_configured(&String::new())
+        .expect_err("leaf provider should fail directly");
+
+    assert_eq!(ProviderErrorKind::Unavailable, error.kind());
 }

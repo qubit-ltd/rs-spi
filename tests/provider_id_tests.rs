@@ -21,7 +21,8 @@ fn test_provider_id_accepts_canonical_token_boundaries() {
         "git+ssh",
         "vendor.v2",
     ] {
-        let id = ProviderId::new(input).expect("canonical test input should be valid");
+        let id = ProviderId::new(input)
+            .expect("canonical test input should be valid");
         assert_eq!(input, id.as_str());
     }
 }

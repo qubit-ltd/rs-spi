@@ -18,11 +18,11 @@ use crate::ProviderSelector;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderResolutionError {
-    /// One named selection matched no registered provider.
+    /// One or more required selectors matched no registered provider.
     #[non_exhaustive]
-    UnknownProvider {
-        /// Normalized selector that matched no provider.
-        selector: ProviderSelector,
+    UnknownProviders {
+        /// Unknown normalized selectors retained in input order.
+        selectors: Box<[ProviderSelector]>,
     },
     /// A nonempty selector chain matched no registered provider candidates.
     #[non_exhaustive]
@@ -35,19 +35,29 @@ pub enum ProviderResolutionError {
 }
 
 impl ProviderResolutionError {
-    /// Creates an error for a named selector that matched no provider.
+    /// Creates an error for required selectors that matched no provider.
     ///
     /// # Parameters
     ///
-    /// * `selector` - Valid normalized selector that reached no Registry entry.
+    /// * `selectors` - Nonempty unknown selectors in input order.
     ///
     /// # Returns
     ///
-    /// An unknown-provider resolution error.
+    /// An unknown-providers resolution error.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `selectors` is empty.
     #[inline]
     #[must_use]
-    pub(crate) fn unknown_provider(selector: ProviderSelector) -> Self {
-        Self::UnknownProvider { selector }
+    pub(crate) fn unknown_providers(selectors: Vec<ProviderSelector>) -> Self {
+        assert!(
+            !selectors.is_empty(),
+            "unknown-provider errors require at least one selector",
+        );
+        Self::UnknownProviders {
+            selectors: selectors.into_boxed_slice(),
+        }
     }
 
     /// Creates an error when a selector chain yields no provider candidates.
@@ -103,8 +113,16 @@ impl fmt::Display for ProviderResolutionError {
     /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownProvider { selector } => {
-                write!(formatter, "unknown provider: {selector}")
+            Self::UnknownProviders { selectors } => {
+                if selectors.len() == 1 {
+                    formatter.write_str("unknown provider selector")?;
+                } else {
+                    formatter.write_str("unknown provider selectors")?;
+                }
+                for selector in selectors {
+                    write!(formatter, "; {selector}")?;
+                }
+                Ok(())
             }
             Self::NoCandidates { selectors } => {
                 formatter.write_str("no provider candidates matched")?;

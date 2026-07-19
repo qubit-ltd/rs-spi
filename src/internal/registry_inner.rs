@@ -13,16 +13,12 @@ use crate::internal::RegistryEntry;
 use crate::{
     ProviderSelection,
     ProviderSelector,
-    ServiceSpec,
 };
 
 /// Mutable provider catalog protected by the registry's synchronization lock.
-pub(crate) struct RegistryInner<S>
-where
-    S: ServiceSpec,
-{
+pub(crate) struct RegistryInner<P: ?Sized> {
     /// Registrations retained in their original registration order.
-    pub(crate) entries: Vec<RegistryEntry<S>>,
+    pub(crate) entries: Vec<RegistryEntry<P>>,
     /// Mapping from canonical IDs and aliases to positions in `entries`.
     pub(crate) selector_indices: HashMap<ProviderSelector, usize>,
     /// Positions in the deterministic automatic-selection order.
@@ -31,10 +27,7 @@ where
     pub(crate) default_selection: ProviderSelection,
 }
 
-impl<S> Default for RegistryInner<S>
-where
-    S: ServiceSpec,
-{
+impl<P: ?Sized> Default for RegistryInner<P> {
     /// Creates empty mutable registry state.
     ///
     /// # Returns

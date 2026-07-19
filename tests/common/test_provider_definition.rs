@@ -6,12 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition,
+    AsyncServiceProvider,
+    AsyncServiceSpec,
     ProviderDescriptor,
+    ProviderFuture,
+    ProviderMetadata,
     ServiceProvider,
-    ServiceSpec,
+    SyncServiceSpec,
 };
 
 /// A self-described provider assembled from existing test fixtures.
@@ -20,23 +23,36 @@ pub(crate) struct TestProviderDefinition<P> {
     provider: P,
 }
 
+impl<S, P> AsyncServiceProvider<S> for TestProviderDefinition<P>
+where
+    S: AsyncServiceSpec,
+    S::Config: Sync,
+    P: AsyncServiceProvider<S>,
+{
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a S::Config,
+    ) -> ProviderFuture<'a, Result<S::Output, ProviderError>> {
+        self.provider.create_configured(config)
+    }
+}
+
 impl<S, P> ServiceProvider<S> for TestProviderDefinition<P>
 where
-    S: ServiceSpec,
+    S: SyncServiceSpec,
     P: ServiceProvider<S>,
 {
     fn create_configured(
         &self,
         config: &S::Config,
-    ) -> Result<S::Output, ProviderCreationError> {
+    ) -> Result<S::Output, ProviderError> {
         self.provider.create_configured(config)
     }
 }
 
-impl<S, P> ProviderDefinition<S> for TestProviderDefinition<P>
+impl<P> ProviderMetadata for TestProviderDefinition<P>
 where
-    S: ServiceSpec,
-    P: ServiceProvider<S>,
+    P: Send + Sync + 'static,
 {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()

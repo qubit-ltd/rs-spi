@@ -9,27 +9,17 @@
 
 use std::sync::Arc;
 
-use crate::{
-    ProviderDefinition,
-    ProviderDescriptor,
-    ServiceSpec,
-};
+use crate::ProviderDescriptor;
 
 /// Internal pairing of one descriptor and the factory it represents.
-pub(crate) struct RegistryEntry<S>
-where
-    S: ServiceSpec,
-{
+pub(crate) struct RegistryEntry<P: ?Sized> {
     /// Metadata used to identify and order this provider.
     pub(crate) descriptor: ProviderDescriptor,
     /// Shared factory used to create this provider's service.
-    pub(crate) provider: Arc<dyn ProviderDefinition<S>>,
+    pub(crate) provider: Arc<P>,
 }
 
-impl<S> Clone for RegistryEntry<S>
-where
-    S: ServiceSpec,
-{
+impl<P: ?Sized> Clone for RegistryEntry<P> {
     /// Clones the descriptor snapshot and shared provider handle.
     ///
     /// # Returns

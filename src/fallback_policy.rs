@@ -24,3 +24,28 @@ pub enum FallbackPolicy {
     /// Continues after every leaf provider creation failure.
     OnAnyError,
 }
+
+impl FallbackPolicy {
+    /// Reports whether this policy permits another candidate after a failure.
+    ///
+    /// # Parameters
+    ///
+    /// * `kind` - Provider-reported leaf failure classification.
+    ///
+    /// # Returns
+    ///
+    /// `true` when a resolver may continue to its next candidate.
+    #[inline(always)]
+    #[must_use]
+    pub const fn allows(self, kind: crate::error::ProviderErrorKind) -> bool {
+        match self {
+            Self::Never => false,
+            Self::OnAbsence => matches!(
+                kind,
+                crate::error::ProviderErrorKind::Unsupported
+                    | crate::error::ProviderErrorKind::Unavailable
+            ),
+            Self::OnAnyError => true,
+        }
+    }
+}

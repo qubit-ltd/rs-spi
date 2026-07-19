@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::thread;
+use std::{
+    sync::Arc,
+    thread,
+};
 
 use qubit_spi::error::{
     ProviderResolutionError,
@@ -14,6 +17,7 @@ use qubit_spi::error::{
 };
 use qubit_spi::{
     FallbackPolicy,
+    ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
@@ -41,6 +45,26 @@ fn test_registry_registers_a_self_described_provider_at_runtime() {
 
     assert_eq!(1, registry.len());
     assert_eq!("english", registry.provider_ids()[0].as_str());
+}
+
+/// Verifies registration of an already shared synchronous provider.
+#[test]
+fn test_registry_registers_an_existing_shared_provider() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    let provider: Arc<dyn ProviderDefinition<StringSpec>> =
+        Arc::new(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("shared")
+                    .expect("test provider ID should be valid"),
+            ),
+            ConfigurableProvider::success("shared"),
+        ));
+
+    registry
+        .register_shared(provider)
+        .expect("shared provider should register");
+
+    assert_eq!("shared", registry.provider_ids()[0].as_str());
 }
 
 /// Verifies that a failed registration leaves every selector unclaimed.
@@ -84,7 +108,7 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
         ProviderSelection::named("es").expect("test selector should be valid");
     assert!(matches!(
         registry.resolve_selected(&selection),
-        Err(ProviderResolutionError::UnknownProvider { .. }),
+        Err(ProviderResolutionError::UnknownProviders { .. }),
     ));
 }
 

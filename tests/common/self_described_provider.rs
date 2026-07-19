@@ -6,10 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition,
     ProviderDescriptor,
+    ProviderMetadata,
     ServiceProvider,
 };
 
@@ -56,12 +56,12 @@ impl ServiceProvider<StringSpec> for SelfDescribedProvider {
     fn create_configured(
         &self,
         _config: &String,
-    ) -> Result<String, ProviderCreationError> {
+    ) -> Result<String, ProviderError> {
         Ok(self.output.to_string())
     }
 }
 
-impl ProviderDefinition<StringSpec> for SelfDescribedProvider {
+impl ProviderMetadata for SelfDescribedProvider {
     /// Returns the descriptor carried by this Provider Definition.
     ///
     /// # Returns
