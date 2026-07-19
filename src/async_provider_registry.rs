@@ -51,6 +51,7 @@ where
     ///
     /// Returns [`RegistrationError`] without mutation when the provider's
     /// canonical ID or any alias is already registered.
+    #[inline]
     pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
     where
         P: AsyncProviderDefinition<S>,
