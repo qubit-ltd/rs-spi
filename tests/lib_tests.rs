@@ -11,7 +11,6 @@ use qubit_spi::{
     AsyncProviderRegistry,
     AsyncResolvingServiceProvider,
     AsyncServiceProvider,
-    AsyncServiceSpec,
     FallbackPolicy,
     MissingProviderPolicy,
     ProviderCreationTermination,
@@ -26,24 +25,12 @@ use qubit_spi::{
     ProviderSelector,
     ResolvingServiceProvider,
     ServiceProvider,
-    ServiceSpec,
-    SyncServiceSpec,
 };
 
-/// Minimal service marker used for compile-time API checks.
-struct SurfaceSpec;
-
-impl ServiceSpec for SurfaceSpec {
-    type Config = ();
-}
-
-impl SyncServiceSpec for SurfaceSpec {
-    type Output = ();
-}
-
-impl AsyncServiceSpec for SurfaceSpec {
-    type Output = ();
-}
+use crate::common::async_configurable_provider::AsyncConfigurableProvider;
+use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::string_spec::StringSpec;
+use crate::common::test_provider_definition::TestProviderDefinition;
 
 /// Verifies the crate root re-exports core selection types.
 #[test]
@@ -73,8 +60,8 @@ fn test_crate_root_reexports_selection_policy_types() {
 fn test_crate_root_reexports_async_provider_types() {
     fn assert_async_provider<P>()
     where
-        P: AsyncServiceProvider<SurfaceSpec>
-            + AsyncProviderDefinition<SurfaceSpec>
+        P: AsyncServiceProvider<StringSpec>
+            + AsyncProviderDefinition<StringSpec>
             + ProviderMetadata,
     {
     }
@@ -83,23 +70,29 @@ fn test_crate_root_reexports_async_provider_types() {
         drop(future);
     }
 
-    let registry = AsyncProviderRegistry::<SurfaceSpec>::default();
-    let _: Option<AsyncResolvingServiceProvider<SurfaceSpec>> = None;
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let _: Option<AsyncResolvingServiceProvider<StringSpec>> = None;
     accept_future(Box::pin(async {}));
     assert!(registry.is_empty());
 
-    let _ = assert_async_provider::<NeverProvider>;
+    let _ = assert_async_provider::<
+        TestProviderDefinition<AsyncConfigurableProvider>,
+    >;
 }
 
 /// Verifies every remaining root re-export used by the synchronous SPI API.
 #[test]
 fn test_crate_root_reexports_sync_provider_types() {
-    let provider = SyncNeverProvider;
-    let _: &dyn ServiceProvider<SurfaceSpec> = &provider;
-    let _: &dyn ProviderDefinition<SurfaceSpec> = &provider;
-    let _: Option<ResolvingServiceProvider<SurfaceSpec>> = None;
+    fn assert_sync_provider<P>()
+    where
+        P: ServiceProvider<StringSpec>
+            + ProviderDefinition<StringSpec>
+            + ProviderMetadata,
+    {
+    }
 
-    let registry = ProviderRegistry::<SurfaceSpec>::default();
+    let _: Option<ResolvingServiceProvider<StringSpec>> = None;
+    let registry = ProviderRegistry::<StringSpec>::default();
     let selector = ProviderSelector::parse("sync")
         .expect("static selector should be valid");
     let descriptor = ProviderDescriptor::new(
@@ -113,45 +106,7 @@ fn test_crate_root_reexports_sync_provider_types() {
         ProviderCreationTermination::Exhausted,
         ProviderCreationTermination::Exhausted
     ));
-}
 
-/// Compile-time provider used only to instantiate trait bounds.
-struct NeverProvider;
-
-impl ProviderMetadata for NeverProvider {
-    fn descriptor(&self) -> qubit_spi::ProviderDescriptor {
-        qubit_spi::ProviderDescriptor::new(
-            qubit_spi::ProviderId::new("never")
-                .expect("static provider ID should be valid"),
-        )
-    }
-}
-
-impl AsyncServiceProvider<SurfaceSpec> for NeverProvider {
-    fn create_configured<'a>(
-        &'a self,
-        _config: &'a (),
-    ) -> ProviderFuture<'a, Result<(), qubit_spi::error::ProviderError>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
-/// Compile-time synchronous provider used only to instantiate trait bounds.
-struct SyncNeverProvider;
-
-impl ProviderMetadata for SyncNeverProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("sync-never").expect("static ID should be valid"),
-        )
-    }
-}
-
-impl ServiceProvider<SurfaceSpec> for SyncNeverProvider {
-    fn create_configured(
-        &self,
-        _config: &(),
-    ) -> Result<(), qubit_spi::error::ProviderError> {
-        Ok(())
-    }
+    let _ =
+        assert_sync_provider::<TestProviderDefinition<ConfigurableProvider>>;
 }
