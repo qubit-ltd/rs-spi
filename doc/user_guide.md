@@ -82,6 +82,7 @@ S::Config ------------------------- create
 | `SyncServiceSpec` / `AsyncServiceSpec` | Bind independent sync and async output types |
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | Create the corresponding output from `S::Config` |
 | `ProviderMetadata` | Supplies the provider-owned descriptor |
+| `ProviderId` | Stable canonical identity: nonempty lowercase ASCII, alphanumeric endpoints, separators `-`/`_`/`.`/`+` only; never normalized |
 | `ProviderDescriptor` | Stores canonical ID, aliases, and automatic priority |
 | `ProviderRegistry<S>` | Owns shared runtime registration and default selection state |
 | `ProviderSelection` | Describes candidates and the creation fallback policy |
@@ -148,6 +149,10 @@ A registrable Provider implements two contracts:
 
 1. `ServiceProvider<S>` for creation behavior.
 2. `ProviderMetadata` for stable registration metadata.
+
+The canonical ID passed to `ProviderId::new` must already be a nonempty
+lowercase ASCII token with alphanumeric endpoints and only the separators
+`-`, `_`, `.`, and `+`; it is never trimmed or lowercased.
 
 ```rust
 use std::sync::Arc;
@@ -248,9 +253,11 @@ registered ID, aliases, or priority.
 
 ### Canonical IDs, Aliases, and Priority
 
-`ProviderId` must already be canonical lowercase ASCII. It permits
-alphanumeric characters and the separators `-`, `_`, `.`, and `+`, with
-alphanumeric endpoints.
+`ProviderId` must already be canonical; construction never trims whitespace or
+changes letter case. A legal ID is a nonempty lowercase ASCII token whose first
+and last characters are letters or digits (`a`–`z`, `0`–`9`) and whose remaining
+characters are alphanumeric or one of the separators `-`, `_`, `.`, and `+`.
+Surrounding whitespace, uppercase letters, and other punctuation are rejected.
 
 `ProviderSelector` is an input-boundary type. Parsing trims whitespace,
 ASCII-lowercases the value, and validates the same token grammar. Therefore a
@@ -601,7 +608,8 @@ Errors follow the three lifecycle stages plus input validation.
 
 ### Definition and Registration Errors
 
-- `ProviderIdError`: a canonical ID is empty or noncanonical.
+- `ProviderIdError`: a canonical ID is empty or violates the lowercase ASCII
+  token grammar (alphanumeric endpoints; separators `-`, `_`, `.`, `+` only).
 - `ProviderSelectorError`: normalized user/config input is empty or invalid.
 - `ProviderDescriptorError`: an alias is invalid, duplicated, or matches ID.
 - `RegistrationError`: an ID or alias conflicts with Registry state.
@@ -707,7 +715,8 @@ registrations. Resolve again to obtain a new snapshot.
 
 Check the canonical ID and normalized aliases returned by `descriptor()`. Use
 `registry.provider_ids()` and `registry.descriptors()` to inspect snapshots.
-Remember that `ProviderId` is not normalized, while `ProviderSelector` is.
+Remember that `ProviderId` is never normalized and must already satisfy the
+canonical token rules, while `ProviderSelector` trims and lowercases input.
 
 ### `resolve()` chooses an unexpected provider
 

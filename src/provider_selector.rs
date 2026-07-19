@@ -14,7 +14,6 @@ use std::{
 
 use crate::ProviderId;
 use crate::error::ProviderSelectorError;
-use crate::provider_id::is_canonical_token;
 
 /// Normalized token used to look up a provider by ID or alias.
 ///
@@ -57,7 +56,7 @@ impl ProviderSelector {
         if normalized.is_empty() {
             return Err(ProviderSelectorError::empty(input));
         }
-        if !is_canonical_token(&normalized) {
+        if !ProviderId::is_canonical_token(&normalized) {
             return Err(ProviderSelectorError::invalid(input, &normalized));
         }
         Ok(Self(normalized.into()))

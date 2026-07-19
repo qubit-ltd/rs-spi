@@ -18,7 +18,40 @@ use crate::error::ProviderIdError;
 /// Stable canonical identifier of a provider.
 ///
 /// Use this type to assign a provider its unique registry identity. Unlike a
-/// selector, an ID must already be canonical and is never normalized.
+/// [`crate::ProviderSelector`], an ID must already be canonical and is never
+/// trimmed, lowercased, or otherwise normalized.
+///
+/// # Canonical form
+///
+/// A legal [`ProviderId`] is a nonempty ASCII token that already satisfies all
+/// of the following rules:
+///
+/// * **Nonempty** — the empty string is rejected.
+/// * **ASCII only** — every byte must be an ASCII character; non-ASCII text
+///   such as `"文件"` is rejected.
+/// * **No surrounding whitespace** — leading or trailing spaces or tabs are
+///   rejected; whitespace is not stripped.
+/// * **Lowercase only** — ASCII uppercase letters (`A`–`Z`) are rejected.
+/// * **Alphanumeric endpoints** — the first and last characters must each be
+///   an ASCII letter (`a`–`z`) or digit (`0`–`9`).
+/// * **Allowed body characters** — every other character must be an ASCII
+///   letter, digit, or one of the separators `-`, `_`, `.`, and `+`.
+///
+/// Characters outside that set (for example `/`, spaces inside the token, or
+/// control characters) are rejected. Consecutive separators are allowed, so
+/// values such as `"a--b"`, `"a..b"`, `"git+ssh"`, and `"vendor.v2"` are valid.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_spi::ProviderId;
+///
+/// assert!(ProviderId::new("file-command").is_ok());
+/// assert!(ProviderId::new("vendor.v2").is_ok());
+/// assert!(ProviderId::new("File").is_err());
+/// assert!(ProviderId::new("-file").is_err());
+/// assert!(ProviderId::new("file-").is_err());
+/// ```
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ProviderId(
     /// Shared canonical ASCII identifier text.
@@ -28,9 +61,8 @@ pub struct ProviderId(
 impl ProviderId {
     /// Creates a canonical provider identifier from already canonical text.
     ///
-    /// The value must already be lowercase ASCII and may contain alphanumeric
-    /// characters plus hyphen, underscore, period, and plus between
-    /// alphanumeric endpoints.
+    /// The input must already satisfy the [canonical form](ProviderId#canonical-form)
+    /// rules. This constructor does not trim whitespace or change letter case.
     ///
     /// # Parameters
     ///
@@ -48,7 +80,7 @@ impl ProviderId {
         if value.is_empty() {
             return Err(ProviderIdError::empty(value));
         }
-        if !is_canonical_token(value) {
+        if !Self::is_canonical_token(value) {
             return Err(ProviderIdError::noncanonical(value));
         }
         Ok(Self(Arc::from(value)))
@@ -63,6 +95,41 @@ impl ProviderId {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Tests the shared canonical-token grammar for IDs and selectors.
+    ///
+    /// Returns whether `value` already satisfies the
+    /// [canonical form](ProviderId#canonical-form) rules without normalizing
+    /// the input.
+    ///
+    /// # Parameters
+    ///
+    /// * `value` - Candidate token to validate without normalization.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the input is a nonempty lowercase ASCII token with
+    /// alphanumeric endpoints and only permitted separators; otherwise,
+    /// `false`.
+    #[must_use]
+    pub(crate) fn is_canonical_token(value: &str) -> bool {
+        !value.is_empty()
+            && value.is_ascii()
+            && value == value.trim()
+            && !value.bytes().any(|byte| byte.is_ascii_uppercase())
+            && value
+                .bytes()
+                .next()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric())
+            && value
+                .bytes()
+                .last()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric())
+            && !value.bytes().any(|byte| {
+                !byte.is_ascii_alphanumeric()
+                    && !matches!(byte, b'-' | b'_' | b'.' | b'+')
+            })
     }
 }
 
@@ -104,6 +171,9 @@ impl FromStr for ProviderId {
 
     /// Parses an already canonical provider identifier.
     ///
+    /// Equivalent to [`ProviderId::new`]. The input must already satisfy the
+    /// [canonical form](ProviderId#canonical-form) rules and is not normalized.
+    ///
     /// # Parameters
     ///
     /// * `value` - Input validated without trimming or case normalization.
@@ -119,34 +189,4 @@ impl FromStr for ProviderId {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
     }
-}
-
-/// Tests the shared canonical-token grammar for IDs and selectors.
-///
-/// # Parameters
-///
-/// * `value` - Candidate token to validate without normalization.
-///
-/// # Returns
-///
-/// `true` when the input is nonempty lowercase ASCII, has alphanumeric
-/// endpoints, and contains only permitted separators; otherwise, `false`.
-#[must_use]
-pub(crate) fn is_canonical_token(value: &str) -> bool {
-    !value.is_empty()
-        && value.is_ascii()
-        && value == value.trim()
-        && !value.bytes().any(|byte| byte.is_ascii_uppercase())
-        && value
-            .bytes()
-            .next()
-            .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        && value
-            .bytes()
-            .last()
-            .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        && !value.bytes().any(|byte| {
-            !byte.is_ascii_alphanumeric()
-                && !matches!(byte, b'-' | b'_' | b'.' | b'+')
-        })
 }

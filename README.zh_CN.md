@@ -145,6 +145,9 @@ impl ProviderMetadata for FriendlyGreeterProvider {
 }
 ```
 
+`ProviderId::new` 只接受已经是 canonical 的 token：非空小写 ASCII、首尾为字母或数字，
+分隔符仅限 `-`、`_`、`.`、`+`。
+
 ### 4. `app.rs`：注册 Provider 并运行 `lib-foo`
 
 App 是应用的装配入口。它在启动时把第三方 Provider 安装到 `lib-greeter` 持有的单体中，
@@ -202,6 +205,8 @@ Qubit SPI 明确分离这三个阶段，并为每个失败边界提供不同错�
 - `SyncServiceSpec` 与 `AsyncServiceSpec` 分别绑定同步和异步输出类型。
 - `ServiceProvider` 与 `AsyncServiceProvider` 是互不混合的创建契约。
 - `ProviderMetadata` 为 Provider 增加稳定 ID、alias 和 priority。
+- `ProviderId` 是严格的 canonical token：非空小写 ASCII、首尾为字母或数字，
+  中间仅允许分隔符 `-`、`_`、`.`、`+`；构造时不会 trim 或转小写。
 - `ProviderRegistry` 与 `AsyncProviderRegistry` 是相互独立的运行时目录；
   两者的注册、查询和 resolve 方法都保持同步。
 - `ProviderSelection` 同时保存选择目标和创建阶段 fallback policy。
@@ -279,7 +284,7 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 
 | 错误 | 所属边界 | 含义 |
 | --- | --- | --- |
-| `ProviderIdError` | Provider 定义 | canonical ID 非法 |
+| `ProviderIdError` | Provider 定义 | canonical ID 为空，或不符合小写 ASCII token 规则 |
 | `ProviderSelectorError` | 输入解析 | selector 无法规范化或校验失败 |
 | `ProviderSelectionBuildError` | selection 构造 | named 或 chain selection 输入非法 |
 | `ProviderDescriptorError` | Provider 定义 | alias 非法或 descriptor 内部重复 |

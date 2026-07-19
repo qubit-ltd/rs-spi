@@ -73,6 +73,7 @@ S::Config ------------------------- create
 | `SyncServiceSpec` / `AsyncServiceSpec` | 分别绑定同步和异步输出类型 |
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | 根据 `S::Config` 创建对应输出 |
 | `ProviderMetadata` | 提供 Provider 自有 descriptor |
+| `ProviderId` | 稳定 canonical 身份：非空小写 ASCII、首尾字母数字、分隔符仅限 `-`/`_`/`.`/`+`；不做规范化 |
 | `ProviderDescriptor` | 保存 canonical ID、alias 和自动选择 priority |
 | `ProviderRegistry<S>` | 保存共享的运行时注册状态和默认 selection |
 | `ProviderSelection` | 描述候选目标和创建阶段 fallback policy |
@@ -137,6 +138,9 @@ client 或轻量 handle。Qubit SPI 不会用 Provider 元数据包装成功结�
 
 1. `ServiceProvider<S>`：提供创建行为。
 2. `ProviderMetadata`：提供稳定的注册元数据。
+
+传入 `ProviderId::new` 的 canonical ID 必须已经是非空小写 ASCII token：首尾为字母或
+数字，中间仅允许分隔符 `-`、`_`、`.`、`+`；构造时不会 trim 或转小写。
 
 ```rust
 use std::sync::Arc;
@@ -232,8 +236,10 @@ Provider 后续状态变化无法修改已经注册的 ID、alias 或 priority�
 
 ### Canonical ID、alias 和 priority
 
-`ProviderId` 必须已经是 canonical 小写 ASCII，只允许字母数字和 `-`、`_`、`.`、`+`
-分隔符，并且首尾必须是字母数字。
+`ProviderId` 必须已经是 canonical 形式；构造时不会去除空白，也不会转换大小写。
+合法 ID 是非空的小写 ASCII token：首尾必须是字母或数字（`a`–`z`、`0`–`9`），
+其余字符只能是字母、数字，或分隔符 `-`、`_`、`.`、`+`。首尾空白、大写字母以及
+其他标点都会被拒绝。
 
 `ProviderSelector` 用于输入边界。解析时会去除首尾空白、把 ASCII 字母转成小写，再按照
 同一 token 语法校验。因此配置值 `" Friendly-Greeter "` 会解析成规范化 alias
@@ -564,7 +570,8 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。只有同步或
 
 ### 定义与注册错误
 
-- `ProviderIdError`：canonical ID 为空或不规范。
+- `ProviderIdError`：canonical ID 为空，或不符合小写 ASCII token 规则
+  （首尾为字母数字；分隔符仅限 `-`、`_`、`.`、`+`）。
 - `ProviderSelectorError`：规范化后的用户/配置输入为空或非法。
 - `ProviderDescriptorError`：alias 非法、重复或与 ID 相同。
 - `RegistrationError`：ID 或 alias 与 Registry 状态冲突。
@@ -663,7 +670,8 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 
 检查 `descriptor()` 返回的 canonical ID 和规范化 alias。使用
 `registry.provider_ids()` 和 `registry.descriptors()` 查看快照。注意
-`ProviderId` 不执行规范化，而 `ProviderSelector` 会规范化。
+`ProviderId` 不做规范化，且必须已满足 canonical token 规则；而
+`ProviderSelector` 会 trim 并转小写。
 
 ### `resolve()` 选择了意外 Provider
 

@@ -149,6 +149,9 @@ impl ProviderMetadata for FriendlyGreeterProvider {
 }
 ```
 
+`ProviderId::new` accepts only an already-canonical token: nonempty lowercase
+ASCII, alphanumeric endpoints, and separators limited to `-`, `_`, `.`, and `+`.
+
 ### 4. `app.rs`: Register the Provider and Run `lib-foo`
 
 The App is the composition root. During startup it installs the third-party
@@ -215,6 +218,9 @@ mixed with provider initialization failures.
   asynchronous output types.
 - `ServiceProvider` and `AsyncServiceProvider` are separate creation contracts.
 - `ProviderMetadata` adds stable ID, aliases, and priority to a provider.
+- `ProviderId` is a strict canonical token: nonempty lowercase ASCII,
+  alphanumeric endpoints, and only the separators `-`, `_`, `.`, and `+`;
+  construction never trims or lowercases the input.
 - `ProviderRegistry` and `AsyncProviderRegistry` are separate, runtime-mutable,
   thread-safe catalogs whose registration and resolution methods are synchronous.
 - `ProviderSelection` contains both its target and its creation fallback policy.
@@ -298,7 +304,7 @@ and does not hold the Registry lock while providers run.
 
 | Error | Boundary | Meaning |
 | --- | --- | --- |
-| `ProviderIdError` | Provider definition | Canonical ID is invalid |
+| `ProviderIdError` | Provider definition | Canonical ID is empty or violates the lowercase ASCII token grammar |
 | `ProviderSelectorError` | Input parsing | Selector cannot be normalized and validated |
 | `ProviderSelectionBuildError` | Selection construction | Named or chained selection input is invalid |
 | `ProviderDescriptorError` | Provider definition | Alias is invalid or internally duplicated |
