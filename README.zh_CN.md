@@ -14,7 +14,7 @@ Qubit SPI 为 Rust 提供类型安全、允许运行时注册的 Service Provide
 
 ```toml
 [dependencies]
-qubit-spi = "0.8"
+qubit-spi = "0.9"
 ```
 
 Qubit SPI 要求 Rust 1.94 或更高版本。
@@ -36,7 +36,7 @@ Qubit SPI 要求 Rust 1.94 或更高版本。
 // lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::{ProviderRegistry, ServiceSpec};
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
 /// 所有 Greeter Service 都要实现的业务接口。
 pub trait Greeter: Send + Sync {
@@ -64,6 +64,9 @@ pub struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // 创建成功后返回给消费者的 Service 类型。
     type Output = Arc<dyn Greeter>;
 }
@@ -101,9 +104,9 @@ Provider。它不会自行注册；最终 App 负责决定是否安装这个实�
 use std::sync::Arc;
 
 use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// friendly Provider 创建的具体 Greeter 实现。
@@ -125,14 +128,14 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -195,10 +198,12 @@ Qubit SPI 明确分离这三个阶段，并为每个失败边界提供不同错�
 
 ## 它提供什么
 
-- `ServiceSpec` 绑定同一服务族的配置类型和输出类型。
-- `ServiceProvider` 创建 Service，并直接返回 Service 实体。
-- `ProviderDefinition` 为 Provider 增加稳定 ID、alias 和 priority。
-- `ProviderRegistry` 允许运行时修改、线程安全，clone 后共享同一状态。
+- `ServiceSpec` 绑定同一服务族的配置类型。
+- `SyncServiceSpec` 与 `AsyncServiceSpec` 分别绑定同步和异步输出类型。
+- `ServiceProvider` 与 `AsyncServiceProvider` 是互不混合的创建契约。
+- `ProviderMetadata` 为 Provider 增加稳定 ID、alias 和 priority。
+- `ProviderRegistry` 与 `AsyncProviderRegistry` 是相互独立的运行时目录；
+  两者的注册、查询和 resolve 方法都保持同步。
 - `ProviderSelection` 同时保存选择目标和创建阶段 fallback policy。
 - `ResolvingServiceProvider` 是 Registry 解析后返回的 Provider，在创建服务时执行回退。
 - 注册、选择、叶子 Provider 和聚合创建错误相互分离，并保留失败时真正需要的上下文。
@@ -210,31 +215,55 @@ Qubit SPI 不负责动态库加载、自动发现 crate、缓存已创建的 Ser
 
 ```text
 App 启动
-  注册 ProviderDefinition
+  注册 ProviderMetadata + 创建能力
   设置 Registry 默认 ProviderSelection
                          │
                          ▼
-共享 ProviderRegistry<ServiceSpec>
+共享 ProviderRegistry<SyncServiceSpec>
                          │ resolve_selected / resolve
                          ▼
-ResolvingServiceProvider<ServiceSpec>
+ResolvingServiceProvider<SyncServiceSpec>
                          │ create_configured(config) / create()
                          ▼
-ServiceSpec::Output
+SyncServiceSpec::Output
 ```
 
 | 阶段 | 主要 API | 成功结果 | 失败类型 |
 | --- | --- | --- | --- |
 | 注册 | `register(provider)` | Provider 对所有 Registry clone 可见 | `RegistrationError` |
 | 选择 | `resolve_selected(&selection)` 或 `resolve()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderResolutionError` |
-| 创建 | `create_configured(&config)` 或 `create()` | 直接返回 `ServiceSpec::Output` | `ProviderCreationError` |
+| 创建 | `create_configured(&config)` 或 `create()` | 直接返回 `SyncServiceSpec::Output` | `ProviderCreationError` |
+
+异步路径保持相同的两阶段结构。目录操作仍然同步，只有创建服务需要
+`.await`，因此 SPI 不绑定任何 executor：
+
+```rust,ignore
+impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a GreeterConfig,
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+        Box::pin(async move { build_async_greeter(config).await })
+    }
+}
+
+let async_registry = AsyncProviderRegistry::<GreeterSpec>::default();
+async_registry.register(AsyncFriendlyGreeterProvider)?;
+let selection = ProviderSelection::named("friendly")?;
+let resolver = async_registry.resolve_selected(&selection)?;
+let greeter = resolver.create_configured(&config).await?;
+```
+
+异步叶 Provider 实现 `AsyncServiceProvider`，返回与 runtime 无关的
+`ProviderFuture<'_, Result<_, ProviderError>>`，并单独实现 `ProviderMetadata`。
 
 ## 选择与回退
 
 | Selection | 候选顺序 | selector 不存在时 |
 | --- | --- | --- |
-| `ProviderSelection::named("id")` | 只包含一个 Provider | 解析阶段返回 `UnknownProvider` |
-| `ProviderSelection::chain([..])` | 调用方顺序，并去除指向同一 Provider 的重复项 | 跳过不存在的项；全部不匹配时失败 |
+| `ProviderSelection::named("id")` | 只包含一个 Provider | 解析阶段返回 `UnknownProviders` |
+| `ProviderSelection::chain([..])` | 调用方顺序，并去除指向同一 Provider 的重复项 | 严格拒绝任何不存在的项 |
+| `ProviderSelection::chain_allowing_missing([..])` | 调用方顺序，并去重 | 跳过不存在的项；全部不匹配时失败 |
 | `ProviderSelection::auto()` | priority 降序，再按 canonical ID 升序 | Registry 为空时失败 |
 
 每个 selection 都携带一个创建阶段使用的 `FallbackPolicy`：
@@ -257,7 +286,7 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 | `RegistrationError` | 注册 | ID 或 alias 已被占用 |
 | `ProviderResolutionError` | selection 解析 | 无法解析出候选 Provider |
 | `ProviderError` | 叶子创建 | 某个具体 Provider 返回分类后的失败 |
-| `ProviderCreationError` | 创建 | 直接或聚合创建失败，并保留实际尝试记录 |
+| `ProviderCreationError` | resolver 创建 | 仅包含实际 Provider 尝试的非空聚合错误 |
 
 聚合创建错误只记录真正调用过的 Provider，并说明候选遍历是全部耗尽，还是因为 fallback
 policy 不允许继续而停止。消费者通常直接向上传递错误；只有需要针对失败采取动作时，才

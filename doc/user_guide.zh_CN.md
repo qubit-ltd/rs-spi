@@ -25,9 +25,9 @@
 
 ### 注册：当前有什么实现
 
-注册把一个 `ProviderDefinition<S>` 安装到 `ProviderRegistry<S>`。Provider 同时提供
-创建行为和自己的 descriptor。Registry 保存 Provider 身份和查找元数据，而不是已经
-创建好的 Service。
+注册把带有 `ProviderMetadata` 以及对应同步或异步创建能力的 Provider 安装到
+Registry。同步与异步 Provider 位于不同 Registry 中。Registry 保存 Provider 身份和
+查找元数据，而不是已经创建好的 Service。
 
 canonical ID 或 alias 已被占用时，注册会失败。注册不会解析某次请求的 selection，
 也不会创建 Service。
@@ -52,7 +52,7 @@ Provider 不支持请求、运行环境不可用、配置非法或初始化失�
 只保留真正调用过的 Provider。
 
 ```text
-ProviderDefinition --register--> ProviderRegistry
+metadata + provider --register--> 同步或异步 Registry
                                       │
 ProviderSelection ---------------- resolve
                                       │
@@ -69,9 +69,10 @@ S::Config ------------------------- create
 
 | 类型 | 职责 |
 | --- | --- |
-| `ServiceSpec` | 绑定一个服务族的 `Config` 和 `Output` 类型 |
-| `ServiceProvider<S>` | 根据 `S::Config` 创建 `S::Output` |
-| `ProviderDefinition<S>` | 为 Service Provider 增加自有 descriptor |
+| `ServiceSpec` | 绑定一个服务族的 `Config` 类型 |
+| `SyncServiceSpec` / `AsyncServiceSpec` | 分别绑定同步和异步输出类型 |
+| `ServiceProvider<S>` / `AsyncServiceProvider<S>` | 根据 `S::Config` 创建对应输出 |
+| `ProviderMetadata` | 提供 Provider 自有 descriptor |
 | `ProviderDescriptor` | 保存 canonical ID、alias 和自动选择 priority |
 | `ProviderRegistry<S>` | 保存共享的运行时注册状态和默认 selection |
 | `ProviderSelection` | 描述候选目标和创建阶段 fallback policy |
@@ -88,7 +89,7 @@ config 类型中。
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::ServiceSpec;
+use qubit_spi::{ServiceSpec, SyncServiceSpec};
 
 /// 所有 Greeter Service 都要实现的业务接口。
 trait Greeter: Send + Sync {
@@ -116,12 +117,15 @@ struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // 创建成功后返回给消费者的 Service 类型。
     type Output = Arc<dyn Greeter>;
 }
 ```
 
-`ServiceSpec::Output` 是消费者需要的完整实体，常见形式包括 `Arc<dyn Trait>`、具体
+`SyncServiceSpec::Output` 或 `AsyncServiceSpec::Output` 是消费者需要的完整实体，常见形式包括 `Arc<dyn Trait>`、具体
 client 或轻量 handle。Qubit SPI 不会用 Provider 元数据包装成功结果，也不会缓存它。
 
 `ServiceSpec::Config` 可以是 unsized 类型。只有 config 实现 `Default` 时才能调用
@@ -132,14 +136,14 @@ client 或轻量 handle。Qubit SPI 不会用 Provider 元数据包装成功结�
 可以注册的 Provider 实现两个契约：
 
 1. `ServiceProvider<S>`：提供创建行为。
-2. `ProviderDefinition<S>`：提供稳定的注册元数据。
+2. `ProviderMetadata`：提供稳定的注册元数据。
 
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::error::{ProviderCreationError, ProviderError};
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// friendly Provider 创建的具体 Greeter 实现。
@@ -161,12 +165,11 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         if config.prefix.trim().is_empty() {
             return Err(ProviderError::invalid_configuration(
                 "the greeting prefix must not be empty",
-            )
-            .into());
+            ));
         }
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
@@ -174,7 +177,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -185,6 +188,35 @@ impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
     }
 }
 ```
+
+## 不需要异步 Registry 锁接口的异步 Provider
+
+支持异步创建的服务族另外实现 `AsyncServiceSpec`。异步 Provider 实现
+`AsyncServiceProvider` 并返回 `ProviderFuture`，因此 Qubit SPI 不绑定 Tokio、
+async-std 或其他 executor。
+
+```rust,ignore
+impl AsyncServiceSpec for GreeterSpec {
+    type Output = Arc<dyn Greeter>;
+}
+
+impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a GreeterConfig,
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+        Box::pin(async move { build_async_greeter(config).await })
+    }
+}
+
+let registry = AsyncProviderRegistry::<GreeterSpec>::default();
+registry.register(AsyncFriendlyGreeterProvider)?;
+let resolver = registry.resolve_selected(&selection)?;
+let greeter = resolver.create_configured(&config).await?;
+```
+
+注册、查询、默认选择修改和 resolve 都保持同步，因为它们只操作内存中的元数据与
+快照。只有 Provider 创建是异步的，而且返回的 Future 被 poll 前 Registry 锁已经释放。
 
 ### 为什么 descriptor 属于 Provider
 
@@ -265,7 +297,7 @@ Registry 实例。
 // lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::{ProviderRegistry, ServiceSpec};
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
 /// 所有 Greeter Service 都要实现的业务接口。
 pub trait Greeter: Send + Sync {
@@ -293,6 +325,9 @@ pub struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // 创建成功后返回给消费者的 Service 类型。
     type Output = Arc<dyn Greeter>;
 }
@@ -329,9 +364,9 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 use std::sync::Arc;
 
 use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// friendly Provider 创建的具体 Greeter 实现。
@@ -353,14 +388,14 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -416,7 +451,7 @@ let provider = registry.resolve_selected(&selection)?;
 ```
 
 named selection 只解析一个 canonical ID 或 alias。selector 不存在时返回
-`ProviderResolutionError::UnknownProvider`。它只有一个候选，因此 fallback policy
+`ProviderResolutionError::UnknownProviders`。它只有一个候选，因此 fallback policy
 不会让其他 Provider 运行。
 
 ### 有序 chain
@@ -430,9 +465,10 @@ let selection = ProviderSelection::chain([
 let provider = registry.resolve_selected(&selection)?;
 ```
 
-chain 按调用方顺序排列。不存在的 selector 会被跳过。如果多个 selector 通过 ID 和
-alias 指向同一个 Provider，该 Provider 只在首次出现的位置保留一次。只有所有 chain
-项都不匹配时，解析才返回 `NoCandidates`。
+chain 按调用方顺序排列。`chain()` 是严格模式，只要存在未知 selector 就拒绝整个
+selection；只有确实允许可选插件未安装时才使用 `chain_allowing_missing()`。如果多个
+selector 通过 ID 和 alias 指向同一个 Provider，该 Provider 只在首次出现的位置保留
+一次。宽松 chain 的所有项都不匹配时返回 `NoCandidates`。
 
 ### 自动选择
 
@@ -519,8 +555,8 @@ Fallback 属于 `ProviderSelection`，因为它是调用方的请求策略，而
 可能属于编程或部署错误的问题则立即停止。只有明确需要降级的 best-effort 行为时才使用
 `OnAnyError`。
 
-Provider 返回叶子 `ProviderError` 后才会判断 fallback。普通注册 Provider 应把
-`ProviderError` 通过 `.into()` 转成 `ProviderCreationError::Provider` 返回。
+Provider 返回叶子 `ProviderError` 后才会判断 fallback。只有同步或异步 resolver
+会把实际尝试聚合成 `ProviderCreationError`。
 
 ## 错误模型
 
@@ -544,7 +580,7 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。普通注册 Pr
 
 `ProviderResolutionError` 在调用任何 Provider 之前返回：
 
-- `UnknownProvider`：named selection 没有匹配项；
+- `UnknownProviders`：named 或严格 chain 中存在未知项；
 - `NoCandidates`：非空 chain 中没有任何项匹配；
 - `EmptyRegistry`：自动选择时没有 Provider。
 
@@ -564,10 +600,7 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。普通注册 Pr
 
 ### 聚合创建错误
 
-`ProviderCreationError` 有两种形态：
-
-- `Provider(error)`：直接调用一个 Provider 失败；
-- `NoProviderSucceeded { attempts, termination }`：组合创建失败。
+`ProviderCreationError` 始终是 resolver 产生的非空聚合错误。
 
 每个 `ProviderAttemptFailure` 保存实际调用 Provider 的 canonical ID 和原始
 `ProviderError`。chain 中不存在的 selector 不会伪造 attempt。
@@ -589,15 +622,13 @@ for attempt in error.attempts() {
 }
 
 match error.termination() {
-    Some(ProviderCreationTermination::Exhausted) => { /* ... */ }
-    Some(ProviderCreationTermination::StoppedByPolicy) => { /* ... */ }
-    None => { /* 直接 Provider 错误 */ }
+    ProviderCreationTermination::Exhausted => { /* ... */ }
+    ProviderCreationTermination::StoppedByPolicy => { /* ... */ }
     _ => { /* 未来新增的 non-exhaustive variant */ }
 }
 ```
 
-`decisive_attempt()` 返回可以单独解释 policy stop 或单候选耗尽的 attempt。多候选全部
-耗尽时，有多个同等重要的失败，因此不会虚构唯一 decisive source。
+`decisive_attempt()` 始终返回最后一次实际尝试；它直接导致 policy stop 或候选耗尽。
 
 ## 并发与快照语义
 
@@ -617,7 +648,7 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 
 1. 每个需要独立选择的服务族定义一个 `ServiceSpec`。
 2. 由领域 crate 持有 Service trait 和可选全局 facade。
-3. 每个可注册 Provider 直接实现 `ProviderDefinition`。
+3. 每个可注册 Provider 直接实现 `ProviderMetadata`。
 4. 在下游首次使用 Service 前完成 App Provider 注册。
 5. 把默认策略放在 Registry 中；只有调用方有真实要求时才传显式 selection。
 6. 保持 selection 与 Service config 相互独立。
@@ -665,10 +696,12 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 
 | API | 用途 |
 | --- | --- |
-| `ServiceSpec` | 绑定 config 与 output 类型 |
+| `ServiceSpec` | 绑定 config 类型 |
+| `SyncServiceSpec` / `AsyncServiceSpec` | 绑定同步与异步 output 类型 |
 | `ServiceProvider::create_configured` | 使用显式 config 创建 |
 | `ServiceProvider::create` | 使用 `Config::default()` 创建 |
-| `ProviderDefinition::descriptor` | 让可注册 Provider 自描述 |
+| `AsyncServiceProvider::create_configured` | 使用显式 config 异步创建 |
+| `ProviderMetadata::descriptor` | 让可注册 Provider 自描述 |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |
 | `ProviderRegistry::register_shared` | 注册已有 shared Provider |
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
@@ -677,7 +710,8 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
 | `ProviderSelection::named` | 选择一个 ID 或 alias |
-| `ProviderSelection::chain` | 选择调用方排序的候选 |
+| `ProviderSelection::chain` | 严格选择调用方排序的候选 |
+| `ProviderSelection::chain_allowing_missing` | 显式忽略未注册的 chain 项 |
 | `ProviderSelection::auto` | 按确定顺序选择全部 Provider |
 | `ProviderSelection::with_fallback_policy` | 附加创建阶段 fallback policy |
 | `ResolvingServiceProvider` | 通过解析后的候选快照创建 Service |

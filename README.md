@@ -15,7 +15,7 @@ selected or App-defined default service without depending on its concrete type.
 
 ```toml
 [dependencies]
-qubit-spi = "0.8"
+qubit-spi = "0.9"
 ```
 
 Qubit SPI requires Rust 1.94 or later.
@@ -38,7 +38,7 @@ same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
 // lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::{ProviderRegistry, ServiceSpec};
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
 /// Business interface implemented by every Greeter service.
 pub trait Greeter: Send + Sync {
@@ -66,6 +66,9 @@ pub struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
@@ -105,9 +108,9 @@ the final App owns that policy decision.
 use std::sync::Arc;
 
 use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// Concrete Greeter created by the friendly provider.
@@ -129,14 +132,14 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -207,10 +210,13 @@ mixed with provider initialization failures.
 
 ## What It Provides
 
-- `ServiceSpec` binds one service family's configuration and output types.
-- `ServiceProvider` creates the service and returns it directly.
-- `ProviderDefinition` adds stable ID, aliases, and priority to a provider.
-- `ProviderRegistry` is runtime mutable, thread-safe, and shared by clones.
+- `ServiceSpec` binds one service family's configuration type.
+- `SyncServiceSpec` and `AsyncServiceSpec` independently bind synchronous and
+  asynchronous output types.
+- `ServiceProvider` and `AsyncServiceProvider` are separate creation contracts.
+- `ProviderMetadata` adds stable ID, aliases, and priority to a provider.
+- `ProviderRegistry` and `AsyncProviderRegistry` are separate, runtime-mutable,
+  thread-safe catalogs whose registration and resolution methods are synchronous.
 - `ProviderSelection` contains both its target and its creation fallback policy.
 - `ResolvingServiceProvider` is the provider returned by registry resolution;
   it applies fallback while creating the service.
@@ -225,31 +231,57 @@ its own global Registry facade when App-to-library sharing is required.
 
 ```text
 App startup
-  register ProviderDefinition values
+  register ProviderMetadata + creation-capability values
   set the Registry's default ProviderSelection
                          │
                          ▼
-shared ProviderRegistry<ServiceSpec>
+shared ProviderRegistry<SyncServiceSpec>
                          │ resolve_selected / resolve
                          ▼
-ResolvingServiceProvider<ServiceSpec>
+ResolvingServiceProvider<SyncServiceSpec>
                          │ create_configured(config) / create()
                          ▼
-ServiceSpec::Output
+SyncServiceSpec::Output
 ```
 
 | Stage | Main API | Success | Failure |
 | --- | --- | --- | --- |
 | Registration | `register(provider)` | Provider becomes visible through every Registry clone | `RegistrationError` |
 | Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderResolutionError` |
-| Creation | `create_configured(&config)` or `create()` | `ServiceSpec::Output` directly | `ProviderCreationError` |
+| Creation | `create_configured(&config)` or `create()` | `SyncServiceSpec::Output` directly | `ProviderCreationError` |
+
+The asynchronous path has the same two-stage shape. Catalog operations remain
+synchronous; only service creation is awaited, so no executor dependency is
+imposed:
+
+```rust,ignore
+impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a GreeterConfig,
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+        Box::pin(async move { build_async_greeter(config).await })
+    }
+}
+
+let async_registry = AsyncProviderRegistry::<GreeterSpec>::default();
+async_registry.register(AsyncFriendlyGreeterProvider)?;
+let selection = ProviderSelection::named("friendly")?;
+let resolver = async_registry.resolve_selected(&selection)?;
+let greeter = resolver.create_configured(&config).await?;
+```
+
+An asynchronous leaf provider implements `AsyncServiceProvider`, returns a
+runtime-neutral `ProviderFuture<'_, Result<_, ProviderError>>`, and implements
+`ProviderMetadata` separately.
 
 ## Selection and Fallback
 
 | Selection | Candidate order | Missing selectors |
 | --- | --- | --- |
-| `ProviderSelection::named("id")` | Exactly one provider | Returns `UnknownProvider` during resolution |
-| `ProviderSelection::chain([..])` | Caller order, with duplicate providers removed | Missing entries are skipped; resolution fails if none match |
+| `ProviderSelection::named("id")` | Exactly one provider | Returns `UnknownProviders` during resolution |
+| `ProviderSelection::chain([..])` | Caller order, with duplicate providers removed | Strictly rejects any missing entry |
+| `ProviderSelection::chain_allowing_missing([..])` | Caller order, with duplicate providers removed | Skips missing entries; fails if none match |
 | `ProviderSelection::auto()` | Priority descending, then canonical ID ascending | Fails when the Registry is empty |
 
 Every selection carries a `FallbackPolicy` used later during creation:
@@ -273,7 +305,7 @@ and does not hold the Registry lock while providers run.
 | `RegistrationError` | Registration | ID or alias is already owned |
 | `ProviderResolutionError` | Selection resolution | No candidate can be resolved |
 | `ProviderError` | Leaf creation | One concrete provider reports a classified failure |
-| `ProviderCreationError` | Creation | Direct or aggregate creation failure with actual attempts |
+| `ProviderCreationError` | Resolver creation | Nonempty aggregate containing only actual provider attempts |
 
 Aggregate creation errors contain only providers that were actually invoked.
 They also report whether traversal exhausted the candidates or stopped because

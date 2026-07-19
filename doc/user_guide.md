@@ -30,9 +30,10 @@ different questions and must not be collapsed into one operation.
 
 ### Registration: What Exists?
 
-Registration installs a `ProviderDefinition<S>` in a `ProviderRegistry<S>`.
-The Provider supplies both creation behavior and its own descriptor. Registry
-state contains provider identity and lookup metadata, not a created service.
+Registration installs a provider with `ProviderMetadata` plus the matching
+sync or async creation capability. Sync and async providers live in separate
+registries. Registry state contains identity and lookup metadata, not a
+created service.
 
 Registration can fail because a canonical ID or alias is already owned. It
 does not parse a request selection and does not create a service.
@@ -52,14 +53,15 @@ can fail because the requested provider or candidate set does not exist.
 
 `ResolvingServiceProvider<S>` implements `ServiceProvider<S>`. Its `create`
 method invokes candidates with `S::Config`, applies the fallback policy stored
-in the selection, and returns `S::Output` directly on success.
+in the selection, and returns `S::Output` directly on success. The async
+resolver has the same behavior but awaits each async provider invocation.
 
 Creation can fail because a provider does not support the request, is
 unavailable, rejects the config, or cannot initialize. Aggregate errors retain
 only the providers that were actually called.
 
 ```text
-ProviderDefinition --register--> ProviderRegistry
+metadata + provider --register--> sync or async Registry
                                       │
 ProviderSelection ---------------- resolve
                                       │
@@ -76,9 +78,10 @@ S::Config ------------------------- create
 
 | Type | Responsibility |
 | --- | --- |
-| `ServiceSpec` | Binds one service family's `Config` and `Output` types |
-| `ServiceProvider<S>` | Creates `S::Output` from `S::Config` |
-| `ProviderDefinition<S>` | Adds a self-owned descriptor to a service provider |
+| `ServiceSpec` | Binds one service family's `Config` type |
+| `SyncServiceSpec` / `AsyncServiceSpec` | Bind independent sync and async output types |
+| `ServiceProvider<S>` / `AsyncServiceProvider<S>` | Create the corresponding output from `S::Config` |
+| `ProviderMetadata` | Supplies the provider-owned descriptor |
 | `ProviderDescriptor` | Stores canonical ID, aliases, and automatic priority |
 | `ProviderRegistry<S>` | Owns shared runtime registration and default selection state |
 | `ProviderSelection` | Describes candidates and the creation fallback policy |
@@ -96,7 +99,7 @@ after initialization. Construction settings belong in a separate config type.
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::ServiceSpec;
+use qubit_spi::{ServiceSpec, SyncServiceSpec};
 
 /// Business interface implemented by every Greeter service.
 trait Greeter: Send + Sync {
@@ -124,12 +127,15 @@ struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
 ```
 
-`ServiceSpec::Output` is the complete value consumers need. Common choices are
+`SyncServiceSpec::Output` or `AsyncServiceSpec::Output` is the complete value consumers need. Common choices are
 `Arc<dyn Trait>`, a concrete client, or a lightweight handle. Qubit SPI does not
 wrap successful outputs with provider metadata and does not cache them.
 
@@ -141,14 +147,14 @@ that config implements `Default`; `create_configured(&config)` is always availab
 A registrable Provider implements two contracts:
 
 1. `ServiceProvider<S>` for creation behavior.
-2. `ProviderDefinition<S>` for stable registration metadata.
+2. `ProviderMetadata` for stable registration metadata.
 
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::error::{ProviderCreationError, ProviderError};
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// Concrete Greeter created by the friendly provider.
@@ -170,12 +176,11 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         if config.prefix.trim().is_empty() {
             return Err(ProviderError::invalid_configuration(
                 "the greeting prefix must not be empty",
-            )
-            .into());
+            ));
         }
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
@@ -183,7 +188,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -194,6 +199,37 @@ impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
     }
 }
 ```
+
+## Asynchronous Providers Without an Async Registry Lock API
+
+An async-capable service family additionally implements `AsyncServiceSpec`.
+Its provider implements `AsyncServiceProvider` and returns `ProviderFuture`,
+which keeps Qubit SPI independent of Tokio, async-std, or another executor.
+
+```rust,ignore
+impl AsyncServiceSpec for GreeterSpec {
+    type Output = Arc<dyn Greeter>;
+}
+
+impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a GreeterConfig,
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+        Box::pin(async move { build_async_greeter(config).await })
+    }
+}
+
+let registry = AsyncProviderRegistry::<GreeterSpec>::default();
+registry.register(AsyncFriendlyGreeterProvider)?;
+let resolver = registry.resolve_selected(&selection)?;
+let greeter = resolver.create_configured(&config).await?;
+```
+
+Registration, queries, default-selection changes, and resolution are all
+synchronous because they only manipulate in-memory metadata and snapshots.
+Only provider creation is asynchronous, and the Registry lock is released
+before the returned future is polled.
 
 ### Why the Descriptor Belongs to the Provider
 
@@ -285,7 +321,7 @@ by consumers, providers, and the final App.
 // lib-greeter/src/lib.rs
 use std::sync::{Arc, LazyLock};
 
-use qubit_spi::{ProviderRegistry, ServiceSpec};
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
 /// Business interface implemented by every Greeter service.
 pub trait Greeter: Send + Sync {
@@ -313,6 +349,9 @@ pub struct GreeterSpec;
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+}
+
+impl SyncServiceSpec for GreeterSpec {
     // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
@@ -351,9 +390,9 @@ modify global state by registering itself.
 use std::sync::Arc;
 
 use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderCreationError;
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition, ProviderDescriptor, ProviderId, ServiceProvider,
+    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
 
 /// Concrete Greeter created by the friendly provider.
@@ -375,14 +414,14 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderCreationError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderError> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
     }
 }
 
-impl ProviderDefinition<GreeterSpec> for FriendlyGreeterProvider {
+impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor::new(
             ProviderId::new("friendly").expect("static provider ID is valid"),
@@ -442,7 +481,7 @@ let provider = registry.resolve_selected(&selection)?;
 ```
 
 Named selection resolves exactly one canonical ID or alias. An unknown selector
-returns `ProviderResolutionError::UnknownProvider`. Because it contains one
+returns `ProviderResolutionError::UnknownProviders`. Because it contains one
 candidate, its fallback policy never causes another Provider to run.
 
 ### Ordered Chain
@@ -456,10 +495,11 @@ let selection = ProviderSelection::chain([
 let provider = registry.resolve_selected(&selection)?;
 ```
 
-Chain order is caller order. Unknown selectors are skipped. If multiple
-selectors refer to the same Provider through its ID and aliases, that Provider
-appears once at its first position. Resolution fails with `NoCandidates` only
-when no chain entry matches.
+Chain order is caller order. `chain()` is strict and rejects the entire
+selection if any selector is unknown. Use `chain_allowing_missing()` only when
+uninstalled optional plugins should be skipped. If multiple selectors refer to
+the same Provider through its ID and aliases, that Provider appears once at its
+first position. A lenient chain fails with `NoCandidates` when no entry matches.
 
 ### Automatic Selection
 
@@ -551,9 +591,9 @@ capability or environment as reasons to try an alternative, while stopping on
 likely programming or deployment errors. Use `OnAnyError` only when degraded
 best-effort behavior is explicitly desired.
 
-Fallback is evaluated after a Provider returns a leaf `ProviderError`. A
-registered Provider should normally return `ProviderCreationError::Provider`
-by converting its `ProviderError` with `.into()`.
+Fallback is evaluated after a Provider returns a leaf `ProviderError`.
+Only a sync or async resolver aggregates attempts into
+`ProviderCreationError`.
 
 ## Error Model
 
@@ -578,7 +618,7 @@ selection:
 
 `ProviderResolutionError` is returned before any Provider is invoked:
 
-- `UnknownProvider`: named selection matched nothing;
+- `UnknownProviders`: named or strict-chain selection contains unknown entries;
 - `NoCandidates`: no entry in a nonempty chain matched;
 - `EmptyRegistry`: automatic selection has no Provider.
 
@@ -600,10 +640,7 @@ complete error chain when an operation fails.
 
 ### Aggregate Creation Errors
 
-`ProviderCreationError` has two shapes:
-
-- `Provider(error)` for a direct Provider invocation;
-- `NoProviderSucceeded { attempts, termination }` for composing creation.
+`ProviderCreationError` is always a nonempty aggregate produced by a resolver.
 
 Every `ProviderAttemptFailure` contains the canonical ID and original
 `ProviderError` of an actually invoked Provider. Missing chain selectors do not
@@ -626,16 +663,14 @@ for attempt in error.attempts() {
 }
 
 match error.termination() {
-    Some(ProviderCreationTermination::Exhausted) => { /* ... */ }
-    Some(ProviderCreationTermination::StoppedByPolicy) => { /* ... */ }
-    None => { /* direct Provider error */ }
+    ProviderCreationTermination::Exhausted => { /* ... */ }
+    ProviderCreationTermination::StoppedByPolicy => { /* ... */ }
     _ => { /* future non-exhaustive variant */ }
 }
 ```
 
-`decisive_attempt()` returns the single attempt that directly explains a
-policy stop or singleton exhaustion. Multi-candidate exhaustion intentionally
-has no single decisive source.
+`decisive_attempt()` always returns the final actual attempt, which directly
+stopped traversal or exhausted the candidate snapshot.
 
 ## Concurrency and Snapshot Semantics
 
@@ -656,7 +691,7 @@ registrations. Resolve again to obtain a new snapshot.
 
 1. Define one `ServiceSpec` per independently selectable service family.
 2. Let the domain crate own the service trait and optional global facade.
-3. Make each registrable Provider implement `ProviderDefinition` directly.
+3. Make each registrable Provider implement `ProviderMetadata` directly.
 4. Register App-specific providers before downstream service use begins.
 5. Store default policy in the Registry; pass explicit selection only when the
    caller has a real requirement.
@@ -707,10 +742,12 @@ an isolated process.
 
 | API | Purpose |
 | --- | --- |
-| `ServiceSpec` | Bind config and output types |
+| `ServiceSpec` | Bind the config type |
+| `SyncServiceSpec` / `AsyncServiceSpec` | Bind sync and async output types |
 | `ServiceProvider::create_configured` | Create with explicit config |
 | `ServiceProvider::create` | Create with `Config::default()` |
-| `ProviderDefinition::descriptor` | Self-describe a registrable Provider |
+| `AsyncServiceProvider::create_configured` | Create asynchronously with explicit config |
+| `ProviderMetadata::descriptor` | Self-describe a registrable Provider |
 | `ProviderRegistry::register` | Register an owned Provider at runtime |
 | `ProviderRegistry::register_shared` | Register an existing shared Provider |
 | `ProviderRegistry::set_default_selection` | Replace the process/component default policy |
@@ -719,7 +756,8 @@ an isolated process.
 | `ProviderRegistry::descriptors` | Snapshot registration metadata |
 | `ProviderRegistry::provider_ids` | Snapshot canonical IDs |
 | `ProviderSelection::named` | Select exactly one ID or alias |
-| `ProviderSelection::chain` | Select caller-ordered candidates |
+| `ProviderSelection::chain` | Strictly select caller-ordered candidates |
+| `ProviderSelection::chain_allowing_missing` | Explicitly ignore unregistered chain entries |
 | `ProviderSelection::auto` | Select all providers deterministically |
 | `ProviderSelection::with_fallback_policy` | Attach creation fallback policy |
 | `ResolvingServiceProvider` | Create through a resolved candidate snapshot |
