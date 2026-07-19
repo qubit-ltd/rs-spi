@@ -20,6 +20,7 @@ where
     S: AsyncServiceSpec,
     S::Config: Sync,
 {
+    // empty
 }
 
 impl<S, T> AsyncProviderDefinition<S> for T
@@ -28,4 +29,5 @@ where
     S::Config: Sync,
     T: ProviderMetadata + AsyncServiceProvider<S> + ?Sized,
 {
+    // empty
 }

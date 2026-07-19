@@ -25,6 +25,24 @@ pub trait ServiceProvider<S>: Send + Sync + 'static
 where
     S: SyncServiceSpec,
 {
+    /// Creates one service output with the configuration default.
+    ///
+    /// # Returns
+    ///
+    /// The complete `S::Output` handle created from `S::Config::default()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderError`] when the provider cannot create the service
+    /// from the default configuration.
+    #[inline(always)]
+    fn create(&self) -> Result<S::Output, ProviderError>
+    where
+        S::Config: Default,
+    {
+        self.create_configured(&S::Config::default())
+    }
+
     /// Creates one service output from the supplied configuration.
     ///
     /// # Parameters
@@ -44,22 +62,4 @@ where
         &self,
         config: &S::Config,
     ) -> Result<S::Output, ProviderError>;
-
-    /// Creates one service output with the configuration default.
-    ///
-    /// # Returns
-    ///
-    /// The complete `S::Output` handle created from `S::Config::default()`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProviderError`] when the provider cannot create the service
-    /// from the default configuration.
-    #[inline(always)]
-    fn create(&self) -> Result<S::Output, ProviderError>
-    where
-        S::Config: Default,
-    {
-        self.create_configured(&S::Config::default())
-    }
 }

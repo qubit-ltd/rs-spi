@@ -32,8 +32,8 @@ use crate::error::ProviderIdError;
 /// * **No surrounding whitespace** — leading or trailing spaces or tabs are
 ///   rejected; whitespace is not stripped.
 /// * **Lowercase only** — ASCII uppercase letters (`A`–`Z`) are rejected.
-/// * **Alphanumeric endpoints** — the first and last characters must each be
-///   an ASCII letter (`a`–`z`) or digit (`0`–`9`).
+/// * **Alphanumeric endpoints** — the first and last characters must each be an
+///   ASCII letter (`a`–`z`) or digit (`0`–`9`).
 /// * **Allowed body characters** — every other character must be an ASCII
 ///   letter, digit, or one of the separators `-`, `_`, `.`, and `+`.
 ///
@@ -61,8 +61,9 @@ pub struct ProviderId(
 impl ProviderId {
     /// Creates a canonical provider identifier from already canonical text.
     ///
-    /// The input must already satisfy the [canonical form](ProviderId#canonical-form)
-    /// rules. This constructor does not trim whitespace or change letter case.
+    /// The input must already satisfy the [canonical
+    /// form](ProviderId#canonical-form) rules. This constructor does not
+    /// trim whitespace or change letter case.
     ///
     /// # Parameters
     ///

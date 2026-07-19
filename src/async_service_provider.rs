@@ -19,21 +19,6 @@ where
     S: AsyncServiceSpec,
     S::Config: Sync,
 {
-    /// Creates one service output from the supplied configuration.
-    ///
-    /// # Parameters
-    ///
-    /// * `config` - Service-family configuration borrowed by the future.
-    ///
-    /// # Returns
-    ///
-    /// A sendable future yielding the complete service output or one
-    /// classified leaf provider failure.
-    fn create_configured<'a>(
-        &'a self,
-        config: &'a S::Config,
-    ) -> ProviderFuture<'a, Result<S::Output, ProviderError>>;
-
     /// Creates one service output with the default configuration.
     ///
     /// # Returns
@@ -48,4 +33,19 @@ where
             self.create_configured(&config).await
         })
     }
+
+    /// Creates one service output from the supplied configuration.
+    ///
+    /// # Parameters
+    ///
+    /// * `config` - Service-family configuration borrowed by the future.
+    ///
+    /// # Returns
+    ///
+    /// A sendable future yielding the complete service output or one
+    /// classified leaf provider failure.
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a S::Config,
+    ) -> ProviderFuture<'a, Result<S::Output, ProviderError>>;
 }

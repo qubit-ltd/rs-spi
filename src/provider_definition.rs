@@ -21,6 +21,7 @@ pub trait ProviderDefinition<S>: ProviderMetadata + ServiceProvider<S>
 where
     S: SyncServiceSpec,
 {
+    // empty
 }
 
 impl<S, T> ProviderDefinition<S> for T
@@ -28,4 +29,5 @@ where
     S: SyncServiceSpec,
     T: ProviderMetadata + ServiceProvider<S> + ?Sized,
 {
+    // empty
 }
