@@ -46,7 +46,7 @@ canonical ID 或 alias 已被占用时，注册会失败。注册不会解析某
 
 `ResolvingServiceProvider<S>` 实现 `ServiceProvider<S>`。它的 `create` 使用
 `S::Config` 调用候选 Provider，执行 selection 中保存的 fallback policy，并在成功时
-直接返回 `S::Output`。
+直接返回 `S::Output`。异步 resolver 的行为相同，但会 await 每一次异步 Provider 调用。
 
 Provider 不支持请求、运行环境不可用、配置非法或初始化失败都会导致创建错误。聚合错误
 只保留真正调用过的 Provider。
@@ -72,12 +72,14 @@ S::Config ------------------------- create
 | `ServiceSpec` | 绑定一个服务族的 `Config` 类型 |
 | `SyncServiceSpec` / `AsyncServiceSpec` | 分别绑定同步和异步输出类型 |
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | 根据 `S::Config` 创建对应输出 |
+| `ProviderDefinition<S>` / `AsyncProviderDefinition<S>` | 组合元数据与对应同步或异步创建契约的 marker trait |
 | `ProviderMetadata` | 提供 Provider 自有 descriptor |
+| `ProviderFuture<'a, T>` | 异步 Provider 与 resolver 使用的、与运行时无关且可发送的 boxed future |
 | `ProviderId` | 稳定 canonical 身份：非空小写 ASCII、首尾字母数字、分隔符仅限 `-`/`_`/`.`/`+`；不做规范化 |
 | `ProviderDescriptor` | 保存 canonical ID、alias 和自动选择 priority |
-| `ProviderRegistry<S>` | 保存共享的运行时注册状态和默认 selection |
+| `ProviderRegistry<S>` / `AsyncProviderRegistry<S>` | 分别保存独立的同步或异步运行时注册状态和默认 selection |
 | `ProviderSelection` | 描述候选目标和创建阶段 fallback policy |
-| `ResolvingServiceProvider<S>` | 持有解析后的候选快照并创建 Service |
+| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | 持有对应候选快照并创建同步输出或返回 future |
 
 泛型参数 `S` 防止不同服务族的 Provider 被混用。MIME Provider 无法注册到文件系统
 Registry，因为它们使用不同的 `ServiceSpec`。
@@ -193,34 +195,84 @@ impl ProviderMetadata for FriendlyGreeterProvider {
 }
 ```
 
-## 不需要异步 Registry 锁接口的异步 Provider
+## 异步 Provider 与异步 Registry
 
-支持异步创建的服务族另外实现 `AsyncServiceSpec`。异步 Provider 实现
-`AsyncServiceProvider` 并返回 `ProviderFuture`，因此 Qubit SPI 不绑定 Tokio、
-async-std 或其他 executor。
+支持异步创建的服务族另外实现 `AsyncServiceSpec`。该 trait 要求 `Config: Sync`，并定义
+独立的 `Output: Send + 'static`。异步 Provider 实现 `AsyncServiceProvider<S>`，返回
+可发送的 boxed `ProviderFuture`，因此 Qubit SPI 不绑定 Tokio、async-std 或其他
+executor。`ProviderMetadata` 提供注册身份；同时实现这两个 trait 后会自动满足
+`AsyncProviderDefinition<S>` marker trait，无需显式实现。`AsyncProviderRegistry<S>`
+解析得到 `AsyncResolvingServiceProvider<S>`，后者持有候选快照，并按照 selection 的
+fallback policy 依次 await Provider。
+
+同步与异步 Registry 复用相同的 `ProviderSelection`、`MissingProviderPolicy` 和
+`FallbackPolicy` 类型。两种 Registry 的解析失败均为 `ProviderResolutionError`，两种
+resolver 都会把创建失败聚合为 `ProviderCreationError`。主要区别在于同步创建直接返回
+output，而异步创建返回需要 await 的 `ProviderFuture`。
 
 ```rust,ignore
+use std::sync::Arc;
+
+use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
+    ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
+    ProviderSelection,
+};
+
 impl AsyncServiceSpec for GreeterSpec {
     type Output = Arc<dyn Greeter>;
 }
+
+/// 由 App 注册的异步 Greeter Provider。
+pub struct AsyncFriendlyGreeterProvider;
 
 impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a GreeterConfig,
     ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
-        Box::pin(async move { build_async_greeter(config).await })
+        Box::pin(async move {
+            if config.prefix.trim().is_empty() {
+                return Err(ProviderError::invalid_configuration(
+                    "the greeting prefix must not be empty",
+                ));
+            }
+            Ok(Arc::new(FriendlyGreeter {
+                prefix: config.prefix.clone(),
+            }) as Arc<dyn Greeter>)
+        })
+    }
+}
+
+impl ProviderMetadata for AsyncFriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("async-friendly")
+                .expect("static provider ID is valid"),
+        )
+        .with_aliases(["async-default-greeter"])
+        .expect("static aliases are valid")
+        .with_priority(100)
     }
 }
 
 let registry = AsyncProviderRegistry::<GreeterSpec>::default();
 registry.register(AsyncFriendlyGreeterProvider)?;
+let selection = ProviderSelection::named("async-friendly")?;
 let resolver = registry.resolve_selected(&selection)?;
 let greeter = resolver.create_configured(&config).await?;
 ```
 
 注册、查询、默认选择修改和 resolve 都保持同步，因为它们只操作内存中的元数据与
-快照。只有 Provider 创建是异步的，而且返回的 Future 被 poll 前 Registry 锁已经释放。
+快照。只有 Provider 创建是异步的。返回的 Future 被 poll 时不持有 Registry 锁，因此
+pending 创建不会阻塞注册或查询。resolver 的候选快照不会看到 resolve 之后注册的
+Provider。
+
+异步默认 `create()` 仅在 `S::Config: Default + Send` 时可用；
+`create_configured(&config)` 只需要服务族已有的 `Config: Sync` 约束。同步与异步
+Registry 的注册状态并不共享。同时支持两种创建模式的 Provider 实现必须分别注册到
+两个 Registry。
 
 ### 为什么 descriptor 属于 Provider
 
@@ -265,8 +317,12 @@ registry.register(FriendlyGreeterProvider)?;
 registry.register(AnotherProvider)?;
 ```
 
-Provider 已经保存在 `Arc<dyn ProviderDefinition<S>>` 中时使用 `register_shared`；
-其他情况优先使用 `register(provider)`。
+`ProviderRegistry<S>` 与 `AsyncProviderRegistry<S>` 提供平行的同步 catalog API，但两种
+Registry 的状态独立，不共享注册状态或默认 selection。同时支持两种创建模式的 Provider
+必须分别注册。
+Provider 已经保存在对应的 `Arc<dyn ProviderDefinition<S>>` 或
+`Arc<dyn AsyncProviderDefinition<S>>` 中时使用 `register_shared`；其他情况优先使用
+`register(provider)`。
 
 ### Clone 与同步语义
 
@@ -534,10 +590,20 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 `ResolvingServiceProvider<S>`。它是一个组合型 `ServiceProvider<S>`：持有候选
 Provider handle，并在调用 `create` 时执行 selection 中的 fallback policy。
 
+对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的创建
+方法返回 `ProviderFuture`；await 该 future 后得到异步 `S::Output`。
+
 ```rust,ignore
 let provider = registry.resolve_selected(&selection)?;
 let service = provider.create_configured(&config)?;
+
+let async_provider = async_registry.resolve_selected(&selection)?;
+let async_service = async_provider.create_configured(&config).await?;
 ```
+
+同步默认 `create()` 要求 `S::Config: Default`；异步默认 `create()` 要求
+`S::Config: Default + Send`。只要满足服务规范本身的约束，两种模式都可以传入显式
+config。
 
 创建成功直接返回 `S::Output`。成功 fallback 的观测属于库内部职责，不属于公共
 Service 值。当前实现不对外暴露成功 attempt 数据；内部收集能力将通过 IoC 注入的
@@ -639,30 +705,34 @@ match error.termination() {
 
 ## 并发与快照语义
 
-Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderRegistry<S>` 可以跨线程
-共享。内部状态使用 `RwLock`。
+Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderRegistry<S>` 与
+`AsyncProviderRegistry<S>` 都可以跨线程共享。每个 Registry 各自拥有共享的 `RwLock`
+状态。
 
 - 注册先调用 `descriptor()`，之后才获取写锁。
 - 替换默认 selection 只短暂持有写锁。
 - 解析在复制候选 handle 时持有读锁。
-- 释放锁之后才调用 Provider 创建 Service。
+- 释放锁之后才执行同步 Provider 创建或 poll 异步 Future；pending future 不会阻塞注册
+  或查询。
 - `parking_lot::RwLock` 不会发生锁中毒；panic 后锁会正常释放。
 
-解析出的 Provider 持有候选的 `Arc` handle，因此 Registry 被 clone、修改或 drop 后仍
-可使用，但不会看到后续注册。需要新候选时重新解析。
+同步或异步解析出的 Provider 都持有候选的 `Arc` handle，因此对应 Registry 被 clone、
+修改或 drop 后仍可使用。两种快照都不会看到后续注册；需要新候选时重新解析。
 
 ## 推荐实践
 
 1. 每个需要独立选择的服务族定义一个 `ServiceSpec`。
 2. 由领域 crate 持有 Service trait 和可选全局 facade。
 3. 每个可注册 Provider 直接实现 `ProviderMetadata`。
-4. 在下游首次使用 Service 前完成 App Provider 注册。
-5. 把默认策略放在 Registry 中；只有调用方有真实要求时才传显式 selection。
-6. 保持 selection 与 Service config 相互独立。
-7. 默认使用 `OnAbsence`；在调用点说明为何需要 `OnAnyError`。
-8. 返回分类清晰并保留 causal source 的 `ProviderError`。
-9. 在 Qubit SPI 外缓存构造成本较高的 Service 输出。
-10. 修改注册或默认值的测试使用隔离 Registry。
+4. 根据创建模式选择 `ProviderRegistry` 或 `AsyncProviderRegistry`；同时支持两种模式的
+   实现分别注册到两个 Registry。
+5. 在下游首次使用 Service 前完成 App Provider 注册。
+6. 把默认策略放在 Registry 中；只有调用方有真实要求时才传显式 selection。
+7. 保持 selection 与 Service config 相互独立。
+8. 默认使用 `OnAbsence`；在调用点说明为何需要 `OnAnyError`。
+9. 返回分类清晰并保留 causal source 的 `ProviderError`。
+10. 在 Qubit SPI 外缓存构造成本较高的 Service 输出。
+11. 修改注册或默认值的测试使用隔离 Registry。
 
 ## 故障排查
 
@@ -692,8 +762,9 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 
 ### 无法调用 `create()`
 
-`S::Config` 必须实现 `Default`。否则构造 config 并调用
-`create_configured(&config)`。
+同步 `create()` 要求 `S::Config: Default`；异步 `create()` 要求
+`S::Config: Default + Send`。否则构造 config 并调用 `create_configured(&config)`
+（异步路径还需 `.await` future）。
 
 ### 重复执行测试时全局注册冲突
 
@@ -709,7 +780,10 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ServiceProvider::create_configured` | 使用显式 config 创建 |
 | `ServiceProvider::create` | 使用 `Config::default()` 创建 |
 | `AsyncServiceProvider::create_configured` | 使用显式 config 异步创建 |
+| `AsyncServiceProvider::create` | 在 `Config: Default + Send` 时使用默认 config 异步创建 |
+| `ProviderFuture` | 异步创建 API 返回的、与运行时无关且可发送的 boxed future |
 | `ProviderMetadata::descriptor` | 让可注册 Provider 自描述 |
+| `ProviderDefinition` / `AsyncProviderDefinition` | 组合元数据与同步或异步创建能力的 marker trait |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |
 | `ProviderRegistry::register_shared` | 注册已有 shared Provider |
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
@@ -717,11 +791,17 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ProviderRegistry::resolve` | 解析 Registry 当前默认值 |
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
+| `AsyncProviderRegistry::register` / `register_shared` | 同步注册 owned 或 shared 异步 Provider |
+| `AsyncProviderRegistry::set_default_selection` / `default_selection` | 替换或获取异步 Registry 默认策略快照 |
+| `AsyncProviderRegistry::resolve_selected` / `resolve` | 同步解析显式 selection 或当前默认值 |
+| `AsyncProviderRegistry::descriptors` / `provider_ids` | 获取异步注册元数据或 canonical ID 快照 |
+| `AsyncProviderRegistry::len` / `is_empty` | 查询异步 Registry 大小或是否为空 |
 | `ProviderSelection::named` | 选择一个 ID 或 alias |
 | `ProviderSelection::chain` | 严格选择调用方排序的候选 |
 | `ProviderSelection::chain_allowing_missing` | 显式忽略未注册的 chain 项 |
 | `ProviderSelection::auto` | 按确定顺序选择全部 Provider |
 | `ProviderSelection::with_fallback_policy` | 附加创建阶段 fallback policy |
 | `ResolvingServiceProvider` | 通过解析后的候选快照创建 Service |
+| `AsyncResolvingServiceProvider` | 返回 future，通过异步候选快照创建 Service |
 
 准确签名和 non-exhaustive 错误 variant 请查阅[自动生成的 API 文档](https://docs.rs/qubit-spi)。

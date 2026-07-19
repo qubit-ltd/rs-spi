@@ -184,6 +184,63 @@ let config = GreeterConfig {
 let greeter = provider.create_configured(&config)?;
 ```
 
+### 5. 异步快速入门
+
+异步 API 保持目录操作同步，仅让 Service 创建异步。因此 Registry 不依赖 executor：
+
+```rust
+use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
+    ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
+    ProviderSelection, ServiceSpec,
+};
+
+struct GreetingSpec;
+
+impl ServiceSpec for GreetingSpec {
+    type Config = str;
+}
+
+impl AsyncServiceSpec for GreetingSpec {
+    type Output = String;
+}
+
+struct FriendlyProvider;
+
+impl ProviderMetadata for FriendlyProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("friendly").expect("static provider ID is valid"),
+        )
+    }
+}
+
+impl AsyncServiceProvider<GreetingSpec> for FriendlyProvider {
+    fn create_configured<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+        Box::pin(async move { Ok(format!("Hello, {name}!")) })
+    }
+}
+
+async fn greet() -> Result<String, Box<dyn std::error::Error>> {
+    let registry = AsyncProviderRegistry::<GreetingSpec>::default();
+    registry.register(FriendlyProvider)?;
+    let selection = ProviderSelection::named("friendly")?;
+    let resolver = registry.resolve_selected(&selection)?;
+    Ok(resolver.create_configured("Rust").await?)
+}
+```
+
+在 Registry 工作流中，`register`、元数据查询、默认 selection 更新和解析均为同步操作。
+解析得到的 `AsyncResolvingServiceProvider` 创建方法返回 `ProviderFuture`，必须
+`.await` 才能获得 output。直接调用异步叶 Provider 的创建方法也会返回
+`ProviderFuture`。`ProviderFuture` 是 `Send` 且与 runtime 无关。异步 spec 要求
+`Config: Sync` 和 `Output: Send + 'static`；使用默认配置的 `create()` 还要求
+`Config: Default + Send`。
+
 ## 为什么需要这个库
 
 应用真正依赖的通常是一种能力，而不是某个固定实现。例如 MIME 检测器可以由模型、
@@ -210,7 +267,9 @@ Qubit SPI 明确分离这三个阶段，并为每个失败边界提供不同错�
 - `ProviderRegistry` 与 `AsyncProviderRegistry` 是相互独立的运行时目录；
   两者的注册、查询和 resolve 方法都保持同步。
 - `ProviderSelection` 同时保存选择目标和创建阶段 fallback policy。
-- `ResolvingServiceProvider` 是 Registry 解析后返回的 Provider，在创建服务时执行回退。
+- `ResolvingServiceProvider` 与 `AsyncResolvingServiceProvider` 分别由对应 Registry
+  解析后返回，并在创建 Service 时执行回退。
+- `ProviderFuture` 是异步创建返回的、与 runtime 无关的 `Send` future。
 - 注册、选择、叶子 Provider 和聚合创建错误相互分离，并保留失败时真正需要的上下文。
 
 Qubit SPI 不负责动态库加载、自动发现 crate、缓存已创建的 Service，也不强制提供统一的
@@ -239,28 +298,9 @@ SyncServiceSpec::Output
 | 选择 | `resolve_selected(&selection)` 或 `resolve()` | `ResolvingServiceProvider` 中的候选快照 | `ProviderResolutionError` |
 | 创建 | `create_configured(&config)` 或 `create()` | 直接返回 `SyncServiceSpec::Output` | `ProviderCreationError` |
 
-异步路径保持相同的两阶段结构。目录操作仍然同步，只有创建服务需要
-`.await`，因此 SPI 不绑定任何 executor：
-
-```rust,ignore
-impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
-    fn create_configured<'a>(
-        &'a self,
-        config: &'a GreeterConfig,
-    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
-        Box::pin(async move { build_async_greeter(config).await })
-    }
-}
-
-let async_registry = AsyncProviderRegistry::<GreeterSpec>::default();
-async_registry.register(AsyncFriendlyGreeterProvider)?;
-let selection = ProviderSelection::named("friendly")?;
-let resolver = async_registry.resolve_selected(&selection)?;
-let greeter = resolver.create_configured(&config).await?;
-```
-
-异步叶 Provider 实现 `AsyncServiceProvider`，返回与 runtime 无关的
-`ProviderFuture<'_, Result<_, ProviderError>>`，并单独实现 `ProviderMetadata`。
+异步路径遵循相同的三阶段生命周期。如[异步快速入门](#5-异步快速入门)所示，目录操作
+保持同步，只有通过 `AsyncResolvingServiceProvider` 创建 Service 时需要 `.await`，
+因此 SPI 不绑定任何 executor。
 
 ## 选择与回退
 
@@ -299,9 +339,11 @@ policy 不允许继续而停止。消费者通常直接向上传递错误；只�
 
 ## 运行时 Registry 与全局 facade
 
-`ProviderRegistry` 内部使用同步共享状态。clone 成本低，通过任意 clone 完成的注册或默认
-selection 修改，都对其他 clone 可见。descriptor 和候选查询返回自有快照，因此执行
-Provider 代码时不会持有 Registry 锁。
+`ProviderRegistry` 与 `AsyncProviderRegistry` 各自使用同步共享状态，并具有相同的低成本
+clone 语义：通过一个 clone 完成的注册或默认 selection 修改，对同一 Registry 的其他
+clone 可见。两者的 descriptor 和候选查询都返回自有快照，并在执行 Provider 代码或
+轮询异步创建 future 前释放 Registry 锁。两者的注册状态相互独立；在一个 Registry 中
+注册 Provider 不会将其注册到另一个 Registry。
 
 可复用的领域 crate 可以用 `LazyLock` 持有一个 Registry，并暴露领域专用的 `global()`
 方法。这样 App 启动时注册的 Provider，之后可以被独立发布的库通过 `resolve()`

@@ -190,6 +190,66 @@ let config = GreeterConfig {
 let greeter = provider.create_configured(&config)?;
 ```
 
+### 5. Async Quick Start
+
+The asynchronous API keeps catalog work synchronous and makes only service
+creation asynchronous. The Registry therefore has no executor dependency:
+
+```rust
+use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
+    ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
+    ProviderSelection, ServiceSpec,
+};
+
+struct GreetingSpec;
+
+impl ServiceSpec for GreetingSpec {
+    type Config = str;
+}
+
+impl AsyncServiceSpec for GreetingSpec {
+    type Output = String;
+}
+
+struct FriendlyProvider;
+
+impl ProviderMetadata for FriendlyProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("friendly").expect("static provider ID is valid"),
+        )
+    }
+}
+
+impl AsyncServiceProvider<GreetingSpec> for FriendlyProvider {
+    fn create_configured<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+        Box::pin(async move { Ok(format!("Hello, {name}!")) })
+    }
+}
+
+async fn greet() -> Result<String, Box<dyn std::error::Error>> {
+    let registry = AsyncProviderRegistry::<GreetingSpec>::default();
+    registry.register(FriendlyProvider)?;
+    let selection = ProviderSelection::named("friendly")?;
+    let resolver = registry.resolve_selected(&selection)?;
+    Ok(resolver.create_configured("Rust").await?)
+}
+```
+
+In the Registry workflow, `register`, metadata queries, default-selection
+updates, and resolution are synchronous. Creation methods on the resulting
+`AsyncResolvingServiceProvider` return a `ProviderFuture`, which must be awaited
+to obtain the output. Calling creation methods on an asynchronous leaf provider
+directly also returns a `ProviderFuture`. `ProviderFuture` is `Send` and
+runtime-neutral. Asynchronous specifications require `Config: Sync` and
+`Output: Send + 'static`; default-config `create()` additionally requires
+`Config: Default + Send`.
+
 ## Why This Crate Exists
 
 An application often depends on a capability rather than one implementation.
@@ -224,8 +284,10 @@ mixed with provider initialization failures.
 - `ProviderRegistry` and `AsyncProviderRegistry` are separate, runtime-mutable,
   thread-safe catalogs whose registration and resolution methods are synchronous.
 - `ProviderSelection` contains both its target and its creation fallback policy.
-- `ResolvingServiceProvider` is the provider returned by registry resolution;
-  it applies fallback while creating the service.
+- `ResolvingServiceProvider` and `AsyncResolvingServiceProvider` are returned by
+  their respective Registry's resolution and apply fallback during creation.
+- `ProviderFuture` is the runtime-neutral, `Send` future returned by asynchronous
+  creation.
 - Separate registration, selection, leaf-provider, and aggregate-creation
   errors retain the context needed when an operation fails.
 
@@ -256,30 +318,10 @@ SyncServiceSpec::Output
 | Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderResolutionError` |
 | Creation | `create_configured(&config)` or `create()` | `SyncServiceSpec::Output` directly | `ProviderCreationError` |
 
-The asynchronous path has the same two-stage shape. Catalog operations remain
-synchronous; only service creation is awaited, so no executor dependency is
-imposed:
-
-```rust,ignore
-impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
-    fn create_configured<'a>(
-        &'a self,
-        config: &'a GreeterConfig,
-    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
-        Box::pin(async move { build_async_greeter(config).await })
-    }
-}
-
-let async_registry = AsyncProviderRegistry::<GreeterSpec>::default();
-async_registry.register(AsyncFriendlyGreeterProvider)?;
-let selection = ProviderSelection::named("friendly")?;
-let resolver = async_registry.resolve_selected(&selection)?;
-let greeter = resolver.create_configured(&config).await?;
-```
-
-An asynchronous leaf provider implements `AsyncServiceProvider`, returns a
-runtime-neutral `ProviderFuture<'_, Result<_, ProviderError>>`, and implements
-`ProviderMetadata` separately.
+The asynchronous path follows the same three-stage lifecycle. As shown in the
+[Async Quick Start](#5-async-quick-start), catalog operations remain synchronous
+and only service creation through `AsyncResolvingServiceProvider` is awaited, so
+no executor dependency is imposed.
 
 ## Selection and Fallback
 
@@ -320,10 +362,13 @@ they only inspect attempts when failure-specific handling is needed.
 
 ## Runtime Registries and Global Facades
 
-`ProviderRegistry` wraps synchronized shared state. Cloning it is cheap, and
-registrations or default-selection changes made through one clone are visible
-through the others. Descriptor and candidate queries return owned snapshots so
-provider code never runs under a Registry lock.
+`ProviderRegistry` and `AsyncProviderRegistry` each wrap synchronized shared
+state. Both have the same cheap clone semantics: registrations or
+default-selection changes made through one clone are visible through the other
+clones of that Registry. Both return owned descriptor and candidate snapshots,
+and both release Registry locks before provider code runs or an asynchronous
+creation future is polled. Their registration states are independent; registering
+a provider in one Registry does not register it in the other.
 
 A reusable domain crate can wrap one Registry in a `LazyLock` and expose a
 domain-specific `global()` method. This is how an App can install a provider

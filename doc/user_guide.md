@@ -81,12 +81,14 @@ S::Config ------------------------- create
 | `ServiceSpec` | Binds one service family's `Config` type |
 | `SyncServiceSpec` / `AsyncServiceSpec` | Bind independent sync and async output types |
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | Create the corresponding output from `S::Config` |
+| `ProviderDefinition<S>` / `AsyncProviderDefinition<S>` | Marker traits combining metadata with the matching sync or async creation contract |
 | `ProviderMetadata` | Supplies the provider-owned descriptor |
+| `ProviderFuture<'a, T>` | Runtime-independent boxed, sendable future used by async providers and resolvers |
 | `ProviderId` | Stable canonical identity: nonempty lowercase ASCII, alphanumeric endpoints, separators `-`/`_`/`.`/`+` only; never normalized |
 | `ProviderDescriptor` | Stores canonical ID, aliases, and automatic priority |
-| `ProviderRegistry<S>` | Owns shared runtime registration and default selection state |
+| `ProviderRegistry<S>` / `AsyncProviderRegistry<S>` | Own independent sync or async runtime registration and default-selection state |
 | `ProviderSelection` | Describes candidates and the creation fallback policy |
-| `ResolvingServiceProvider<S>` | Owns the resolved candidate snapshot and creates the service |
+| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | Own the corresponding resolved candidate snapshot and create a sync output or future |
 
 The generic `S` keeps providers for unrelated service families from being
 mixed. A MIME provider cannot be registered in a filesystem Registry because
@@ -205,36 +207,92 @@ impl ProviderMetadata for FriendlyGreeterProvider {
 }
 ```
 
-## Asynchronous Providers Without an Async Registry Lock API
+## Asynchronous Providers and Registries
 
 An async-capable service family additionally implements `AsyncServiceSpec`.
-Its provider implements `AsyncServiceProvider` and returns `ProviderFuture`,
-which keeps Qubit SPI independent of Tokio, async-std, or another executor.
+That trait requires `Config: Sync` and defines an independent
+`Output: Send + 'static`. An `AsyncServiceProvider<S>` returns the sendable,
+boxed `ProviderFuture`, which keeps Qubit SPI independent of Tokio, async-std,
+or another executor. `ProviderMetadata` supplies registration identity;
+together those two traits automatically satisfy the
+`AsyncProviderDefinition<S>` marker accepted by `AsyncProviderRegistry<S>`.
+No explicit marker implementation is needed. Resolution produces an
+`AsyncResolvingServiceProvider<S>` that owns the candidate snapshot and awaits
+providers according to the selected fallback policy.
+
+The sync and async registries reuse the same `ProviderSelection`,
+`MissingProviderPolicy`, and `FallbackPolicy` types. Resolution failures from
+either Registry are `ProviderResolutionError`, and both resolver types
+aggregate creation failures as `ProviderCreationError`. The main difference is
+that sync creation returns the output directly, while async creation returns a
+`ProviderFuture` to await.
 
 ```rust,ignore
+use std::sync::Arc;
+
+use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
+    ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
+    ProviderSelection,
+};
+
 impl AsyncServiceSpec for GreeterSpec {
     type Output = Arc<dyn Greeter>;
 }
+
+/// Async Greeter provider registered by the App.
+pub struct AsyncFriendlyGreeterProvider;
 
 impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a GreeterConfig,
     ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
-        Box::pin(async move { build_async_greeter(config).await })
+        Box::pin(async move {
+            if config.prefix.trim().is_empty() {
+                return Err(ProviderError::invalid_configuration(
+                    "the greeting prefix must not be empty",
+                ));
+            }
+            Ok(Arc::new(FriendlyGreeter {
+                prefix: config.prefix.clone(),
+            }) as Arc<dyn Greeter>)
+        })
+    }
+}
+
+impl ProviderMetadata for AsyncFriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("async-friendly")
+                .expect("static provider ID is valid"),
+        )
+        .with_aliases(["async-default-greeter"])
+        .expect("static aliases are valid")
+        .with_priority(100)
     }
 }
 
 let registry = AsyncProviderRegistry::<GreeterSpec>::default();
 registry.register(AsyncFriendlyGreeterProvider)?;
+let selection = ProviderSelection::named("async-friendly")?;
 let resolver = registry.resolve_selected(&selection)?;
 let greeter = resolver.create_configured(&config).await?;
 ```
 
 Registration, queries, default-selection changes, and resolution are all
 synchronous because they only manipulate in-memory metadata and snapshots.
-Only provider creation is asynchronous, and the Registry lock is released
-before the returned future is polled.
+Only provider creation is asynchronous. No Registry lock is retained while a
+returned future is polled, so pending creation does not block registration or
+queries. The resolver's candidate snapshot does not observe providers
+registered after resolution.
+
+The default async `create()` method is available only when
+`S::Config: Default + Send`; `create_configured(&config)` needs the service
+family's baseline `Config: Sync` constraint instead. Sync and async registries
+do not share registration state. A provider implementation that supports both
+creation modes must be registered separately in each Registry.
 
 ### Why the Descriptor Belongs to the Provider
 
@@ -286,8 +344,12 @@ registry.register(FriendlyGreeterProvider)?;
 registry.register(AnotherProvider)?;
 ```
 
-Use `register_shared` when the Provider is already stored in an
-`Arc<dyn ProviderDefinition<S>>`. Otherwise prefer `register(provider)`.
+`ProviderRegistry<S>` and `AsyncProviderRegistry<S>` expose parallel synchronous
+catalog APIs, but their registration and default-selection states are
+independent. A provider supporting both creation modes must be registered in
+both. Use `register_shared` when the Provider is already stored in the matching
+`Arc<dyn ProviderDefinition<S>>` or
+`Arc<dyn AsyncProviderDefinition<S>>`; otherwise prefer `register(provider)`.
 
 ### Clone and Synchronization Semantics
 
@@ -568,10 +630,21 @@ callers that have no config object.
 `ServiceProvider<S>`: it owns candidate handles and applies the selection's
 fallback policy when `create` is called.
 
+The corresponding `AsyncProviderRegistry` methods return
+`AsyncResolvingServiceProvider<S>`. Its creation methods return
+`ProviderFuture`; await that future to obtain the async `S::Output`.
+
 ```rust,ignore
 let provider = registry.resolve_selected(&selection)?;
 let service = provider.create_configured(&config)?;
+
+let async_provider = async_registry.resolve_selected(&selection)?;
+let async_service = async_provider.create_configured(&config).await?;
 ```
+
+Sync default `create()` requires `S::Config: Default`. Async default `create()`
+requires `S::Config: Default + Send`; both modes can always use an explicit
+config when the service specification's own bounds are satisfied.
 
 Successful creation returns `S::Output` directly. Successful-fallback
 observation is an internal library concern, not part of the public service
@@ -682,32 +755,36 @@ stopped traversal or exhausted the candidate snapshot.
 
 ## Concurrency and Snapshot Semantics
 
-`ProviderRegistry<S>` is `Send + Sync` when its stored Provider definitions are,
-which the Provider traits require. Its shared state uses an `RwLock`.
+`ProviderRegistry<S>` and `AsyncProviderRegistry<S>` are `Send + Sync` when
+their stored Provider definitions are, which the Provider traits require.
+Each Registry has its own shared `RwLock` state.
 
 - Registration obtains a write lock only after calling `descriptor()`.
 - Default-selection replacement obtains a short write lock.
 - Resolution obtains a read lock while copying candidate handles.
-- Provider creation occurs after the lock is released.
+- Sync Provider creation and async future polling occur after the lock is
+  released; a pending future therefore does not block registration or queries.
 - `parking_lot::RwLock` does not poison; a panic releases the lock normally.
 
-A resolved provider owns `Arc` handles to its candidates, so it remains usable
-after the Registry is cloned, changed, or dropped. It does not see later
-registrations. Resolve again to obtain a new snapshot.
+A sync or async resolved provider owns `Arc` handles to its candidates, so it
+remains usable after its Registry is cloned, changed, or dropped. Neither
+snapshot sees later registrations. Resolve again to obtain new candidates.
 
 ## Recommended Practices
 
 1. Define one `ServiceSpec` per independently selectable service family.
 2. Let the domain crate own the service trait and optional global facade.
 3. Make each registrable Provider implement `ProviderMetadata` directly.
-4. Register App-specific providers before downstream service use begins.
-5. Store default policy in the Registry; pass explicit selection only when the
+4. Choose `ProviderRegistry` or `AsyncProviderRegistry` to match the creation
+   mode; register a dual-mode implementation separately in both.
+5. Register App-specific providers before downstream service use begins.
+6. Store default policy in the Registry; pass explicit selection only when the
    caller has a real requirement.
-6. Keep selection independent from service configuration.
-7. Prefer `OnAbsence`; justify `OnAnyError` at the call site.
-8. Return classified `ProviderError` values with causal sources.
-9. Cache expensive service outputs outside Qubit SPI.
-10. Use isolated registries in tests that mutate registrations or defaults.
+7. Keep selection independent from service configuration.
+8. Prefer `OnAbsence`; justify `OnAnyError` at the call site.
+9. Return classified `ProviderError` values with causal sources.
+10. Cache expensive service outputs outside Qubit SPI.
+11. Use isolated registries in tests that mutate registrations or defaults.
 
 ## Troubleshooting
 
@@ -738,8 +815,9 @@ also confirm App and library link the same domain-crate version.
 
 ### `create()` is unavailable
 
-`S::Config` must implement `Default`. Otherwise construct a config and call
-`create_configured(&config)`.
+Sync `create()` requires `S::Config: Default`; async `create()` requires
+`S::Config: Default + Send`. Otherwise construct a config and call
+`create_configured(&config)` (and `.await` its async future).
 
 ### Duplicate registration fails during repeated tests
 
@@ -756,7 +834,10 @@ an isolated process.
 | `ServiceProvider::create_configured` | Create with explicit config |
 | `ServiceProvider::create` | Create with `Config::default()` |
 | `AsyncServiceProvider::create_configured` | Create asynchronously with explicit config |
+| `AsyncServiceProvider::create` | Create asynchronously with `Config::default()` when `Config: Default + Send` |
+| `ProviderFuture` | Runtime-independent boxed, sendable future returned by async creation APIs |
 | `ProviderMetadata::descriptor` | Self-describe a registrable Provider |
+| `ProviderDefinition` / `AsyncProviderDefinition` | Marker traits combining metadata with sync or async creation |
 | `ProviderRegistry::register` | Register an owned Provider at runtime |
 | `ProviderRegistry::register_shared` | Register an existing shared Provider |
 | `ProviderRegistry::set_default_selection` | Replace the process/component default policy |
@@ -764,12 +845,18 @@ an isolated process.
 | `ProviderRegistry::resolve` | Resolve the current Registry default |
 | `ProviderRegistry::descriptors` | Snapshot registration metadata |
 | `ProviderRegistry::provider_ids` | Snapshot canonical IDs |
+| `AsyncProviderRegistry::register` / `register_shared` | Register an owned or shared async Provider synchronously |
+| `AsyncProviderRegistry::set_default_selection` / `default_selection` | Replace or snapshot the async Registry default policy |
+| `AsyncProviderRegistry::resolve_selected` / `resolve` | Resolve an explicit selection or current default synchronously |
+| `AsyncProviderRegistry::descriptors` / `provider_ids` | Snapshot async registration metadata or canonical IDs |
+| `AsyncProviderRegistry::len` / `is_empty` | Query the async Registry size or emptiness |
 | `ProviderSelection::named` | Select exactly one ID or alias |
 | `ProviderSelection::chain` | Strictly select caller-ordered candidates |
 | `ProviderSelection::chain_allowing_missing` | Explicitly ignore unregistered chain entries |
 | `ProviderSelection::auto` | Select all providers deterministically |
 | `ProviderSelection::with_fallback_policy` | Attach creation fallback policy |
 | `ResolvingServiceProvider` | Create through a resolved candidate snapshot |
+| `AsyncResolvingServiceProvider` | Return futures that create through an async candidate snapshot |
 
 For exact signatures and non-exhaustive error variants, use the
 [generated API documentation](https://docs.rs/qubit-spi).
