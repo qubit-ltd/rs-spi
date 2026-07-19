@@ -5,12 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for the public Qubit SPI contract.
+//! Public-behavior tests for private provider selection representation.
 
-mod common;
-mod error;
-mod lib_tests;
-mod provider;
-mod registry;
-mod selection;
-mod service;
+mod provider_selection_repr_tests;

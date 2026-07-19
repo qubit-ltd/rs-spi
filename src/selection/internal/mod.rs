@@ -5,12 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for the public Qubit SPI contract.
+//! Private invariant-preserving storage for provider selections.
 
-mod common;
-mod error;
-mod lib_tests;
-mod provider;
-mod registry;
-mod selection;
-mod service;
+mod provider_selection_repr;
+
+pub(crate) use provider_selection_repr::ProviderSelectionRepr;

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use crate::internal::RegistryEntry;
+use crate::registry::internal::RegistryEntry;
 use crate::{
     ProviderSelection,
     ProviderSelector,

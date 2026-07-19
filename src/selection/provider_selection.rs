@@ -8,7 +8,7 @@
 //! Validated provider selection inputs.
 
 use crate::error::ProviderSelectionBuildError;
-use crate::internal::ProviderSelectionRepr;
+use crate::selection::ProviderSelectionRepr;
 use crate::{
     FallbackPolicy,
     MissingProviderPolicy,

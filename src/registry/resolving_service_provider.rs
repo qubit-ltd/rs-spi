@@ -10,7 +10,7 @@
 use std::fmt;
 
 use crate::error::ProviderCreationError;
-use crate::internal::{
+use crate::registry::internal::{
     FallbackState,
     RegistryEntry,
 };

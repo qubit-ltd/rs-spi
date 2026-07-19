@@ -5,12 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for the public Qubit SPI contract.
+//! Integration tests for provider identity and metadata contracts.
 
-mod common;
-mod error;
-mod lib_tests;
-mod provider;
-mod registry;
-mod selection;
-mod service;
+mod provider_descriptor_tests;
+mod provider_id_tests;
+mod provider_metadata_tests;
+mod provider_selector_tests;

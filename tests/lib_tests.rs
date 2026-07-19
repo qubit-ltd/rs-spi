@@ -14,10 +14,18 @@ use qubit_spi::{
     AsyncServiceSpec,
     FallbackPolicy,
     MissingProviderPolicy,
+    ProviderCreationTermination,
+    ProviderDefinition,
+    ProviderDescriptor,
     ProviderFuture,
+    ProviderId,
     ProviderMetadata,
+    ProviderRegistry,
     ProviderSelection,
     ProviderSelectionTargetRef,
+    ProviderSelector,
+    ResolvingServiceProvider,
+    ServiceProvider,
     ServiceSpec,
     SyncServiceSpec,
 };
@@ -83,6 +91,30 @@ fn test_crate_root_reexports_async_provider_types() {
     let _ = assert_async_provider::<NeverProvider>;
 }
 
+/// Verifies every remaining root re-export used by the synchronous SPI API.
+#[test]
+fn test_crate_root_reexports_sync_provider_types() {
+    let provider = SyncNeverProvider;
+    let _: &dyn ServiceProvider<SurfaceSpec> = &provider;
+    let _: &dyn ProviderDefinition<SurfaceSpec> = &provider;
+    let _: Option<ResolvingServiceProvider<SurfaceSpec>> = None;
+
+    let registry = ProviderRegistry::<SurfaceSpec>::default();
+    let selector = ProviderSelector::parse("sync")
+        .expect("static selector should be valid");
+    let descriptor = ProviderDescriptor::new(
+        ProviderId::new("sync").expect("static ID should be valid"),
+    );
+
+    assert!(registry.is_empty());
+    assert_eq!("sync", selector.as_str());
+    assert_eq!("sync", descriptor.id().as_str());
+    assert!(matches!(
+        ProviderCreationTermination::Exhausted,
+        ProviderCreationTermination::Exhausted
+    ));
+}
+
 /// Compile-time provider used only to instantiate trait bounds.
 struct NeverProvider;
 
@@ -101,5 +133,25 @@ impl AsyncServiceProvider<SurfaceSpec> for NeverProvider {
         _config: &'a (),
     ) -> ProviderFuture<'a, Result<(), qubit_spi::error::ProviderError>> {
         Box::pin(async { Ok(()) })
+    }
+}
+
+/// Compile-time synchronous provider used only to instantiate trait bounds.
+struct SyncNeverProvider;
+
+impl ProviderMetadata for SyncNeverProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("sync-never").expect("static ID should be valid"),
+        )
+    }
+}
+
+impl ServiceProvider<SurfaceSpec> for SyncNeverProvider {
+    fn create_configured(
+        &self,
+        _config: &(),
+    ) -> Result<(), qubit_spi::error::ProviderError> {
+        Ok(())
     }
 }

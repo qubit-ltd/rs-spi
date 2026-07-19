@@ -22,6 +22,7 @@ use crate::error::{
     ProviderResolutionError,
     RegistrationError,
 };
+use crate::selection::ProviderSelectionRepr;
 use crate::{
     MissingProviderPolicy,
     ProviderDescriptor,
@@ -32,7 +33,6 @@ use crate::{
 };
 
 use super::{
-    ProviderSelectionRepr,
     RegistryEntry,
     RegistryInner,
     ResolvedCandidates,

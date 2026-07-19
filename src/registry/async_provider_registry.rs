@@ -16,7 +16,7 @@ use crate::error::{
     ProviderResolutionError,
     RegistrationError,
 };
-use crate::internal::ProviderCatalog;
+use crate::registry::internal::ProviderCatalog;
 use crate::{
     AsyncProviderDefinition,
     AsyncResolvingServiceProvider,

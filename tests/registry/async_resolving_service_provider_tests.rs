@@ -31,9 +31,9 @@ use qubit_spi::{
     ProviderSelection,
 };
 
-use crate::async_provider_registry_tests::register_provider;
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::registry::async_provider_registry_tests::register_provider;
 
 /// Verifies fallback policy behavior after awaited leaf failures.
 #[test]
