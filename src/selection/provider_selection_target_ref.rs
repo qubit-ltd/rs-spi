@@ -13,7 +13,23 @@ use crate::{
 };
 
 /// Borrowed, lossless view of a provider selection target.
+///
+/// This enum is non-exhaustive. Downstream matches must include a wildcard arm
+/// so future selection targets remain source-compatible.
+///
+/// ```compile_fail
+/// use qubit_spi::ProviderSelectionTargetRef;
+///
+/// fn describe(target: ProviderSelectionTargetRef<'_>) -> &'static str {
+///     match target {
+///         ProviderSelectionTargetRef::Auto => "auto",
+///         ProviderSelectionTargetRef::Named(_) => "named",
+///         ProviderSelectionTargetRef::Chain { .. } => "chain",
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum ProviderSelectionTargetRef<'a> {
     /// Providers are selected in deterministic automatic order.
     Auto,
