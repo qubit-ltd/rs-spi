@@ -84,7 +84,7 @@ where
                 .insert(alias.clone(), registration_index);
         }
         inner.entries.push(RegistryEntry {
-            descriptor,
+            descriptor: Arc::new(descriptor),
             provider,
         });
         let mut automatic_indices =
@@ -115,7 +115,7 @@ where
         let descriptors = inner
             .entries
             .iter()
-            .map(|entry| entry.descriptor.clone())
+            .map(|entry| entry.descriptor.as_ref().clone())
             .collect();
         let default_selection = inner.default_selection.clone();
         (descriptors, default_selection)
@@ -165,7 +165,7 @@ where
         self.read_inner()
             .entries
             .iter()
-            .map(|entry| entry.descriptor.clone())
+            .map(|entry| entry.descriptor.as_ref().clone())
             .collect()
     }
 

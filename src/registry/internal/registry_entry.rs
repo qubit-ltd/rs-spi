@@ -14,13 +14,13 @@ use crate::ProviderDescriptor;
 /// Internal pairing of one descriptor and the factory it represents.
 pub(crate) struct RegistryEntry<P: ?Sized> {
     /// Metadata used to identify and order this provider.
-    pub(crate) descriptor: ProviderDescriptor,
+    pub(crate) descriptor: Arc<ProviderDescriptor>,
     /// Shared factory used to create this provider's service.
     pub(crate) provider: Arc<P>,
 }
 
 impl<P: ?Sized> Clone for RegistryEntry<P> {
-    /// Clones the descriptor snapshot and shared provider handle.
+    /// Clones the shared descriptor and provider handles.
     ///
     /// # Returns
     ///
@@ -28,7 +28,7 @@ impl<P: ?Sized> Clone for RegistryEntry<P> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
-            descriptor: self.descriptor.clone(),
+            descriptor: Arc::clone(&self.descriptor),
             provider: Arc::clone(&self.provider),
         }
     }
