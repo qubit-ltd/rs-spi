@@ -18,10 +18,13 @@ use crate::{
     AsyncProviderDefinition,
     AsyncServiceSpec,
     FallbackPolicy,
-    ProviderFuture,
 };
 
 /// Resolver that awaits a point-in-time snapshot of asynchronous candidates.
+///
+/// # Type Parameters
+///
+/// * `S` - Asynchronous service family created by the candidates.
 pub struct AsyncResolvingServiceProvider<S>
 where
     S: AsyncServiceSpec,
@@ -40,9 +43,19 @@ where
 {
     /// Creates an asynchronous resolver from resolved candidates.
     ///
+    /// # Parameters
+    ///
+    /// * `candidates` - Nonempty provider snapshots in attempt order.
+    /// * `fallback_policy` - Policy controlling fallback after leaf failures.
+    ///
+    /// # Returns
+    ///
+    /// A resolver owning the candidate snapshot.
+    ///
     /// # Panics
     ///
     /// Panics when `candidates` is empty.
+    #[inline]
     #[must_use]
     pub(crate) fn new(
         candidates: Box<[RegistryEntry<dyn AsyncProviderDefinition<S>>]>,
@@ -60,54 +73,65 @@ where
 
     /// Creates a service output from the supplied configuration.
     ///
-    /// No Registry lock is retained by the returned future.
+    /// No Registry lock is retained while creation is pending.
+    ///
+    /// # Parameters
+    ///
+    /// * `config` - Service configuration borrowed until creation completes.
+    ///
+    /// # Returns
+    ///
+    /// The first service output created successfully.
     ///
     /// # Errors
     ///
-    /// The future yields [`ProviderCreationError`] when all candidates fail or
-    /// fallback policy stops traversal.
-    pub fn create_configured<'a>(
-        &'a self,
-        config: &'a S::Config,
-    ) -> ProviderFuture<'a, Result<S::Output, ProviderCreationError>> {
-        Box::pin(async move {
-            let mut fallback = FallbackState::new(self.fallback_policy);
-            let candidate_count = self.candidates.len();
-            for (index, candidate) in self.candidates.iter().enumerate() {
-                match candidate.provider.create_configured(config).await {
-                    Ok(output) => return Ok(output),
-                    Err(error) => {
-                        let has_remaining = index + 1 < candidate_count;
-                        if let Some(error) = fallback.record_failure(
-                            candidate.descriptor.id().clone(),
-                            error,
-                            has_remaining,
-                        ) {
-                            return Err(error);
-                        }
+    /// Returns [`ProviderCreationError`] when all candidates fail or fallback
+    /// policy stops traversal.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the resolver's internal nonempty-candidate invariant is
+    /// violated.
+    pub async fn create_configured(
+        &self,
+        config: &S::Config,
+    ) -> Result<S::Output, ProviderCreationError> {
+        let mut fallback = FallbackState::new(self.fallback_policy);
+        let candidate_count = self.candidates.len();
+        for (index, candidate) in self.candidates.iter().enumerate() {
+            match candidate.provider.create_configured(config).await {
+                Ok(output) => return Ok(output),
+                Err(error) => {
+                    let has_remaining = index + 1 < candidate_count;
+                    if let Some(error) = fallback.record_failure(
+                        candidate.descriptor.id().clone(),
+                        error,
+                        has_remaining,
+                    ) {
+                        return Err(error);
                     }
                 }
             }
-            unreachable!("resolved provider candidates are nonempty")
-        })
+        }
+        unreachable!("resolved provider candidates are nonempty")
     }
 
     /// Creates a service output with the default configuration.
     ///
+    /// # Returns
+    ///
+    /// The first service output created successfully.
+    ///
     /// # Errors
     ///
-    /// The future yields [`ProviderCreationError`] under the same conditions as
+    /// Returns [`ProviderCreationError`] under the same conditions as
     /// [`Self::create_configured`].
-    pub fn create(
-        &self,
-    ) -> ProviderFuture<'_, Result<S::Output, ProviderCreationError>>
+    pub async fn create(&self) -> Result<S::Output, ProviderCreationError>
     where
         S::Config: Default + Send,
     {
-        Box::pin(async move {
-            let config = S::Config::default();
-            self.create_configured(&config).await
-        })
+        let config = S::Config::default();
+        self.create_configured(&config).await
     }
 }
 
@@ -117,6 +141,11 @@ where
     S::Config: Sync,
 {
     /// Clones the candidate snapshot and shared provider handles.
+    ///
+    /// # Returns
+    ///
+    /// An independent resolver with the same candidates and policy.
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             candidates: self.candidates.to_vec().into_boxed_slice(),
@@ -131,6 +160,18 @@ where
     S::Config: Sync,
 {
     /// Formats candidate descriptors and fallback policy.
+    ///
+    /// # Parameters
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("AsyncResolvingServiceProvider")

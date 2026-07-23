@@ -35,6 +35,27 @@ use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::string_spec::StringSpec;
 use crate::registry::async_provider_registry_tests::register_provider;
 
+/// Requires a value to implement [`Send`].
+fn assert_send<T: Send>(_: T) {}
+
+/// Verifies resolver creation futures can cross executor threads.
+#[test]
+fn test_async_resolver_creation_futures_are_send() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    register_provider(
+        &registry,
+        "sendable",
+        &[],
+        10,
+        AsyncConfigurableProvider::success("value"),
+    );
+    let resolver = registry.resolve().expect("provider should resolve");
+    let config = String::new();
+
+    assert_send(resolver.create_configured(&config));
+    assert_send(resolver.create());
+}
+
 /// Verifies fallback policy behavior after awaited leaf failures.
 #[test]
 fn test_async_resolver_applies_all_fallback_policies() {
