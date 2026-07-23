@@ -63,10 +63,20 @@ where
     ///
     /// `Ok(())` after successful registration.
     ///
+    /// Registration snapshots the descriptor returned by
+    /// [`crate::ProviderMetadata::descriptor`] before acquiring the Registry's
+    /// write lock and before validating selector conflicts.
+    ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] without mutation when the provider's
     /// canonical ID or any alias is already registered.
+    ///
+    /// # Panics
+    ///
+    /// Propagates a panic raised while obtaining the provider descriptor. The
+    /// Registry remains unchanged because descriptor generation precedes all
+    /// mutation.
     #[inline]
     pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
     where
@@ -86,10 +96,20 @@ where
     ///
     /// `Ok(())` after successful registration.
     ///
+    /// Registration snapshots the descriptor returned by
+    /// [`crate::ProviderMetadata::descriptor`] before acquiring the Registry's
+    /// write lock and before validating selector conflicts.
+    ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] without mutation when the provider's
     /// canonical ID or any alias is already registered.
+    ///
+    /// # Panics
+    ///
+    /// Propagates a panic raised while obtaining the provider descriptor. The
+    /// Registry remains unchanged because descriptor generation precedes all
+    /// mutation.
     #[inline(always)]
     pub fn register_shared(
         &self,
