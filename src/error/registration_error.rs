@@ -54,4 +54,45 @@ impl RegistrationError {
             provider: provider.into(),
         }
     }
+
+    /// Returns the canonical ID or alias that caused this conflict.
+    ///
+    /// # Returns
+    ///
+    /// The selector claimed by both providers.
+    #[inline(always)]
+    #[must_use]
+    pub fn selector(&self) -> &str {
+        match self {
+            Self::DuplicateSelector { selector, .. } => selector,
+        }
+    }
+
+    /// Returns the canonical ID of the provider that owns the selector.
+    ///
+    /// # Returns
+    ///
+    /// The registered provider that already owns the conflicting selector.
+    #[inline(always)]
+    #[must_use]
+    pub fn existing_provider(&self) -> &str {
+        match self {
+            Self::DuplicateSelector {
+                existing_provider, ..
+            } => existing_provider,
+        }
+    }
+
+    /// Returns the canonical ID of the provider attempting registration.
+    ///
+    /// # Returns
+    ///
+    /// The provider whose registration conflicts with existing registry state.
+    #[inline(always)]
+    #[must_use]
+    pub fn provider(&self) -> &str {
+        match self {
+            Self::DuplicateSelector { provider, .. } => provider,
+        }
+    }
 }
