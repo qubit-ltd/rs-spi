@@ -33,6 +33,11 @@ where
     ///
     /// The future yields [`ProviderError`] when the provider cannot create the
     /// service from the default configuration.
+    ///
+    /// # Panics
+    ///
+    /// The returned future may panic if `S::Config::default()` or
+    /// [`Self::create_configured`] panics.
     fn create(&self) -> ProviderFuture<'_, Result<S::Output, ProviderError>>
     where
         S::Config: Default + Send,
@@ -62,6 +67,11 @@ where
     ///
     /// The future yields [`ProviderError`] when this provider cannot create
     /// the requested service.
+    ///
+    /// # Panics
+    ///
+    /// The returned future may panic if the provider implementation or its
+    /// creation future panics.
     fn create_configured<'a>(
         &'a self,
         config: &'a S::Config,

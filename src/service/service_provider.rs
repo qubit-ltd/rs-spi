@@ -39,6 +39,10 @@ where
     ///
     /// Returns [`ProviderError`] when the provider cannot create the service
     /// from the default configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `S::Config::default()` or [`Self::create_configured`] panics.
     #[inline(always)]
     fn create(&self) -> Result<S::Output, ProviderError>
     where
@@ -62,6 +66,11 @@ where
     /// Returns [`ProviderError`] when this provider cannot create the requested
     /// service. Registry resolvers aggregate this leaf failure with provider
     /// identity and fallback termination diagnostics.
+    ///
+    /// # Panics
+    ///
+    /// May panic if the provider implementation panics while creating the
+    /// requested service.
     fn create_configured(
         &self,
         config: &S::Config,

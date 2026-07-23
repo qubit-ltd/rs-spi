@@ -8,6 +8,10 @@
 
 use std::{
     error::Error,
+    panic::{
+        AssertUnwindSafe,
+        catch_unwind,
+    },
     sync::{
         Arc,
         Mutex,
@@ -145,6 +149,33 @@ fn test_resolving_provider_uses_default_config() {
         String::default(),
         provider.create().expect("default creation should succeed"),
     );
+}
+
+/// Verifies provider panics propagate without attempting fallback candidates.
+#[test]
+fn test_resolver_propagates_provider_panic_without_trying_fallback() {
+    let fallback_calls = Arc::new(AtomicUsize::new(0));
+    let registry = ProviderRegistry::<StringSpec>::default();
+    register_provider(&registry, "panicking", &[], 20, PanickingProvider);
+    register_provider(
+        &registry,
+        "fallback",
+        &[],
+        10,
+        ConfigurableProvider::success("fallback")
+            .with_calls(Arc::clone(&fallback_calls)),
+    );
+    let resolver = registry
+        .resolve_selected(
+            &ProviderSelection::auto()
+                .with_fallback_policy(FallbackPolicy::OnAnyError),
+        )
+        .expect("automatic selection should resolve");
+
+    let result = catch_unwind(AssertUnwindSafe(|| resolver.create()));
+
+    assert!(result.is_err(), "provider panic should propagate");
+    assert_eq!(0, fallback_calls.load(Ordering::SeqCst));
 }
 
 /// Verifies that a named alias selects exactly its owning provider.
@@ -688,4 +719,17 @@ fn register_provider<P>(
     registry
         .register(define_provider(descriptor, provider))
         .expect("unique test provider should register");
+}
+
+/// Provider fixture that panics during configured service creation.
+struct PanickingProvider;
+
+impl ServiceProvider<StringSpec> for PanickingProvider {
+    /// Panics to verify resolver propagation semantics.
+    fn create_configured(
+        &self,
+        _config: &String,
+    ) -> Result<String, ProviderError> {
+        panic!("test provider panic");
+    }
 }

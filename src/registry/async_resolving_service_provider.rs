@@ -90,8 +90,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics only if the resolver's internal nonempty-candidate invariant is
-    /// violated.
+    /// The returned future panics if a candidate provider or its creation
+    /// future panics, or if the resolver's internal nonempty-candidate
+    /// invariant is violated. Provider panics propagate directly and do not
+    /// trigger fallback.
     pub async fn create_configured(
         &self,
         config: &S::Config,
@@ -126,6 +128,12 @@ where
     ///
     /// Returns [`ProviderCreationError`] under the same conditions as
     /// [`Self::create_configured`].
+    ///
+    /// # Panics
+    ///
+    /// The returned future panics if `S::Config::default()` or a candidate
+    /// provider panics. Provider panics propagate directly and do not trigger
+    /// fallback.
     pub async fn create(&self) -> Result<S::Output, ProviderCreationError>
     where
         S::Config: Default + Send,

@@ -6,12 +6,23 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::error::Error;
 use std::sync::{
+    Arc,
     Mutex,
+    atomic::{
+        AtomicUsize,
+        Ordering,
+    },
     mpsc,
 };
 use std::thread;
+use std::{
+    error::Error,
+    panic::{
+        AssertUnwindSafe,
+        catch_unwind,
+    },
+};
 
 use futures::channel::oneshot;
 use futures::executor::block_on;
@@ -112,6 +123,34 @@ fn test_async_resolver_applies_all_fallback_policies() {
             );
         }
     }
+}
+
+/// Verifies provider panics propagate without awaiting fallback candidates.
+#[test]
+fn test_async_resolver_propagates_provider_panic_without_trying_fallback() {
+    let fallback_calls = Arc::new(AtomicUsize::new(0));
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    register_provider(&registry, "panicking", &[], 20, AsyncPanickingProvider);
+    register_provider(
+        &registry,
+        "fallback",
+        &[],
+        10,
+        AsyncCountingProvider {
+            calls: Arc::clone(&fallback_calls),
+        },
+    );
+    let resolver = registry
+        .resolve_selected(
+            &ProviderSelection::auto()
+                .with_fallback_policy(FallbackPolicy::OnAnyError),
+        )
+        .expect("automatic selection should resolve");
+
+    let result = catch_unwind(AssertUnwindSafe(|| block_on(resolver.create())));
+
+    assert!(result.is_err(), "provider panic should propagate");
+    assert_eq!(0, fallback_calls.load(Ordering::SeqCst));
 }
 
 /// Verifies ordered attempt diagnostics and original sources.
@@ -324,4 +363,33 @@ fn test_async_final_failure_is_exhausted() {
         ProviderErrorKind::InvalidConfiguration,
         error.decisive_attempt().error().kind()
     );
+}
+
+/// Provider fixture that panics while its creation future is polled.
+struct AsyncPanickingProvider;
+
+impl AsyncServiceProvider<StringSpec> for AsyncPanickingProvider {
+    /// Returns a future that panics when the resolver polls it.
+    fn create_configured<'a>(
+        &'a self,
+        _config: &'a String,
+    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+        Box::pin(async { panic!("test provider panic") })
+    }
+}
+
+/// Provider fixture that records calls before returning a stable output.
+struct AsyncCountingProvider {
+    calls: Arc<AtomicUsize>,
+}
+
+impl AsyncServiceProvider<StringSpec> for AsyncCountingProvider {
+    /// Records one invocation and returns a stable service output.
+    fn create_configured<'a>(
+        &'a self,
+        _config: &'a String,
+    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok("fallback".to_owned()) })
+    }
 }
