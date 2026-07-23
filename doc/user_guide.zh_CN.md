@@ -75,12 +75,12 @@ S::Config ------------------------- create
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | 根据 `S::Config` 创建对应输出 |
 | `ProviderDefinition<S>` / `AsyncProviderDefinition<S>` | 组合元数据与对应同步或异步创建契约的 marker trait |
 | `ProviderMetadata` | 提供 Provider 自有 descriptor |
-| `ProviderFuture<'a, T>` | 异步 Provider 与 resolver 使用的、与运行时无关且可发送的 boxed future |
+| `ProviderFuture<'a, T>` | `AsyncServiceProvider` 实现返回的、与运行时无关且可发送的 boxed future |
 | `ProviderId` | 稳定 canonical 身份：非空小写 ASCII、首尾字母数字、分隔符仅限 `-`/`_`/`.`/`+`；不做规范化 |
 | `ProviderDescriptor` | 保存 canonical ID、alias 和自动选择 priority |
 | `ProviderRegistry<S>` / `AsyncProviderRegistry<S>` | 分别保存独立的同步或异步运行时注册状态和默认 selection |
 | `ProviderSelection` | 描述候选目标和创建阶段 fallback policy |
-| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | 持有对应候选快照并创建同步输出或返回 future |
+| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | 持有对应候选快照，并创建同步或异步输出 |
 
 泛型参数 `S` 防止不同服务族的 Provider 被混用。MIME Provider 无法注册到文件系统
 Registry，因为它们使用不同的 `ServiceSpec`。
@@ -208,8 +208,9 @@ fallback policy 依次 await Provider。
 
 同步与异步 Registry 复用相同的 `ProviderSelection`、`MissingProviderPolicy` 和
 `FallbackPolicy` 类型。两种 Registry 的解析失败均为 `ProviderResolutionError`，两种
-resolver 都会把创建失败聚合为 `ProviderCreationError`。主要区别在于同步创建直接返回
-output，而异步创建返回需要 await 的 `ProviderFuture`。
+resolver 都会把创建失败聚合为 `ProviderCreationError`。同步 resolver 的创建直接返回
+output；异步 resolver 的创建方法是 `async`，必须 await 才能获得 output。直接调用异步
+叶 Provider 的创建方法才会返回 `ProviderFuture`。
 
 ```rust,ignore
 use std::sync::Arc;
@@ -608,9 +609,7 @@ let async_service = async_provider.create_configured(&config).await?;
 `S::Config: Default + Send`。只要满足服务规范本身的约束，两种模式都可以传入显式
 config。
 
-创建成功直接返回 `S::Output`。成功 fallback 的观测属于库内部职责，不属于公共
-Service 值。当前实现不对外暴露成功 attempt 数据；内部收集能力将通过 IoC 注入的
-collector 和 processor 另行实现。
+创建成功直接返回 `S::Output`。公共 API 不对外暴露成功 attempt 数据。
 
 Qubit SPI 每次调用 `create` 都会创建一个新输出。构造成本较高时，应由 App 或库缓存
 返回值，或者 clone 返回的 handle。

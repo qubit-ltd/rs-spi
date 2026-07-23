@@ -85,12 +85,12 @@ S::Config ------------------------- create
 | `ServiceProvider<S>` / `AsyncServiceProvider<S>` | Create the corresponding output from `S::Config` |
 | `ProviderDefinition<S>` / `AsyncProviderDefinition<S>` | Marker traits combining metadata with the matching sync or async creation contract |
 | `ProviderMetadata` | Supplies the provider-owned descriptor |
-| `ProviderFuture<'a, T>` | Runtime-independent boxed, sendable future used by async providers and resolvers |
+| `ProviderFuture<'a, T>` | Runtime-independent boxed, sendable future returned by `AsyncServiceProvider` implementations |
 | `ProviderId` | Stable canonical identity: nonempty lowercase ASCII, alphanumeric endpoints, separators `-`/`_`/`.`/`+` only; never normalized |
 | `ProviderDescriptor` | Stores canonical ID, aliases, and automatic priority |
 | `ProviderRegistry<S>` / `AsyncProviderRegistry<S>` | Own independent sync or async runtime registration and default-selection state |
 | `ProviderSelection` | Describes candidates and the creation fallback policy |
-| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | Own the corresponding resolved candidate snapshot and create a sync output or future |
+| `ResolvingServiceProvider<S>` / `AsyncResolvingServiceProvider<S>` | Own the corresponding resolved candidate snapshot and create sync or async output |
 
 The generic `S` keeps providers for unrelated service families from being
 mixed. A MIME provider cannot be registered in a filesystem Registry because
@@ -225,9 +225,10 @@ providers according to the selected fallback policy.
 The sync and async registries reuse the same `ProviderSelection`,
 `MissingProviderPolicy`, and `FallbackPolicy` types. Resolution failures from
 either Registry are `ProviderResolutionError`, and both resolver types
-aggregate creation failures as `ProviderCreationError`. The main difference is
-that sync creation returns the output directly, while async creation returns a
-`ProviderFuture` to await.
+aggregate creation failures as `ProviderCreationError`. Sync resolver creation
+returns the output directly, while async resolver creation is `async` and must
+be awaited to obtain the output. Calling an async leaf provider directly
+returns a `ProviderFuture`.
 
 ```rust,ignore
 use std::sync::Arc;
@@ -651,11 +652,8 @@ Sync default `create()` requires `S::Config: Default`. Async default `create()`
 requires `S::Config: Default + Send`; both modes can always use an explicit
 config when the service specification's own bounds are satisfied.
 
-Successful creation returns `S::Output` directly. Successful-fallback
-observation is an internal library concern, not part of the public service
-value. The current implementation does not expose successful attempt data;
-internal collection will be added separately through IoC-injected collector
-and processor components.
+Successful creation returns `S::Output` directly. The public API does not
+expose successful attempt data.
 
 Qubit SPI creates a new output for every `create` call. Cache or clone the
 returned handle in App or library code when construction is expensive.
