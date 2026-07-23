@@ -29,10 +29,16 @@ fn test_selection_construction_enforces_invariants() {
         "provider selection chain must not be empty",
         empty.to_string(),
     );
+    assert!(empty.selector_error().is_none());
+    assert_eq!(None, empty.selector_index());
+    assert!(empty.is_empty_chain());
     assert!(matches!(empty, ProviderSelectionBuildError::EmptyChain));
     let invalid =
         ProviderSelection::chain(["valid", "bad selector"]).unwrap_err();
     assert!(Error::source(&invalid).is_some());
+    assert_eq!("bad selector", invalid.selector_error().unwrap().input());
+    assert_eq!(Some(1), invalid.selector_index());
+    assert!(!invalid.is_empty_chain());
     assert!(matches!(
         invalid,
         ProviderSelectionBuildError::InvalidSelector {
@@ -51,6 +57,9 @@ fn test_selection_construction_enforces_invariants() {
 fn test_invalid_named_selection_preserves_input_and_source() {
     let error = ProviderSelection::named("bad selector").unwrap_err();
     assert!(Error::source(&error).is_some());
+    assert_eq!("bad selector", error.selector_error().unwrap().input());
+    assert_eq!(None, error.selector_index());
+    assert!(!error.is_empty_chain());
     assert_eq!(
         "invalid provider selector \"bad selector\"",
         error.to_string(),

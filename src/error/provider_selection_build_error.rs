@@ -31,6 +31,48 @@ pub enum ProviderSelectionBuildError {
 }
 
 impl ProviderSelectionBuildError {
+    /// Returns the selector parsing failure, when construction failed because
+    /// of an invalid selector.
+    ///
+    /// # Returns
+    ///
+    /// The selector parsing failure for [`Self::InvalidSelector`], or `None`
+    /// for [`Self::EmptyChain`].
+    #[inline(always)]
+    #[must_use]
+    pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
+        match self {
+            Self::InvalidSelector { source, .. } => Some(source),
+            Self::EmptyChain => None,
+        }
+    }
+
+    /// Returns the zero-based position of an invalid chained selector.
+    ///
+    /// # Returns
+    ///
+    /// The selector position for an invalid chained selection, or `None` for
+    /// an invalid named selection and an empty chain.
+    #[inline(always)]
+    #[must_use]
+    pub const fn selector_index(&self) -> Option<usize> {
+        match self {
+            Self::InvalidSelector { selector_index, .. } => *selector_index,
+            Self::EmptyChain => None,
+        }
+    }
+
+    /// Tests whether an empty selector chain caused this failure.
+    ///
+    /// # Returns
+    ///
+    /// `true` for [`Self::EmptyChain`]; otherwise `false`.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_empty_chain(&self) -> bool {
+        matches!(self, Self::EmptyChain)
+    }
+
     /// Creates an error for an invalid selection input.
     ///
     /// # Parameters

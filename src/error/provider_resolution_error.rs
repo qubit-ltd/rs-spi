@@ -35,6 +35,55 @@ pub enum ProviderResolutionError {
 }
 
 impl ProviderResolutionError {
+    /// Returns the selectors retained by this resolution failure.
+    ///
+    /// # Returns
+    ///
+    /// The selectors for [`Self::UnknownProviders`] or
+    /// [`Self::NoCandidates`], or `None` for [`Self::EmptyRegistry`].
+    #[inline(always)]
+    #[must_use]
+    pub fn selectors(&self) -> Option<&[ProviderSelector]> {
+        match self {
+            Self::UnknownProviders { selectors }
+            | Self::NoCandidates { selectors } => Some(selectors),
+            Self::EmptyRegistry => None,
+        }
+    }
+
+    /// Tests whether required selectors matched no registered provider.
+    ///
+    /// # Returns
+    ///
+    /// `true` for [`Self::UnknownProviders`]; otherwise `false`.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_unknown_providers(&self) -> bool {
+        matches!(self, Self::UnknownProviders { .. })
+    }
+
+    /// Tests whether a selector chain yielded no provider candidates.
+    ///
+    /// # Returns
+    ///
+    /// `true` for [`Self::NoCandidates`]; otherwise `false`.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_no_candidates(&self) -> bool {
+        matches!(self, Self::NoCandidates { .. })
+    }
+
+    /// Tests whether automatic selection targeted an empty Registry.
+    ///
+    /// # Returns
+    ///
+    /// `true` for [`Self::EmptyRegistry`]; otherwise `false`.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_empty_registry(&self) -> bool {
+        matches!(self, Self::EmptyRegistry)
+    }
+
     /// Creates an error for required selectors that matched no provider.
     ///
     /// # Parameters

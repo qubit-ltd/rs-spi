@@ -11,6 +11,33 @@ use qubit_spi::error::{
     ProviderErrorKind,
 };
 
+/// Verifies callers can construct any classified provider error directly.
+#[test]
+fn test_provider_error_supports_general_construction() {
+    let error = ProviderError::new(
+        ProviderErrorKind::Unavailable,
+        "provider dependency is absent",
+    );
+
+    assert_eq!(ProviderErrorKind::Unavailable, error.kind());
+    assert_eq!("provider dependency is absent", error.reason());
+    assert!(std::error::Error::source(&error).is_none());
+}
+
+/// Verifies general classified construction retains an underlying cause.
+#[test]
+fn test_provider_error_general_construction_retains_source() {
+    let error = ProviderError::with_source(
+        ProviderErrorKind::InitializationFailed,
+        "provider initialization failed",
+        std::io::Error::other("runtime unavailable"),
+    );
+
+    assert_eq!(ProviderErrorKind::InitializationFailed, error.kind());
+    assert_eq!("provider initialization failed", error.reason());
+    assert!(std::error::Error::source(&error).is_some());
+}
+
 /// Verifies provider error classification, reason, and causal source retention.
 #[test]
 fn test_provider_error_preserves_kind_reason_and_source() {

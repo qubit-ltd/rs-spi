@@ -21,6 +21,10 @@ use super::ProviderErrorKind;
 /// Use the constructors to report a classified failure from a
 /// [`crate::ServiceProvider`] implementation. A composing provider preserves
 /// this information in its attempt diagnostics.
+///
+/// Provider reasons and causal sources may contain configuration values,
+/// filesystem paths, or other sensitive diagnostics. Applications should
+/// sanitize errors before exposing them across a trust boundary.
 #[derive(Clone, Debug, Error)]
 #[error("provider {kind:?}: {reason}")]
 pub struct ProviderError {
@@ -190,7 +194,7 @@ impl ProviderError {
     /// The classified provider error.
     #[inline]
     #[must_use]
-    fn new(kind: ProviderErrorKind, reason: impl Into<Box<str>>) -> Self {
+    pub fn new(kind: ProviderErrorKind, reason: impl Into<Box<str>>) -> Self {
         Self {
             kind,
             reason: reason.into(),
@@ -211,7 +215,7 @@ impl ProviderError {
     /// The classified provider error with its source.
     #[inline]
     #[must_use]
-    fn with_source(
+    pub fn with_source(
         kind: ProviderErrorKind,
         reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
