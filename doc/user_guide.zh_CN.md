@@ -44,9 +44,10 @@ canonical ID 或 alias 已被占用时，注册会失败。注册不会解析某
 
 ### 创建：候选能否构造服务
 
-`ResolvingServiceProvider<S>` 实现 `ServiceProvider<S>`。它的 `create` 使用
+`ResolvingServiceProvider<S>` 是一个带有固有 `create` 方法的组合 resolver。它使用
 `S::Config` 调用候选 Provider，执行 selection 中保存的 fallback policy，并在成功时
-直接返回 `S::Output`。异步 resolver 的行为相同，但会 await 每一次异步 Provider 调用。
+直接返回 `S::Output`。它的聚合失败返回 `ProviderCreationError`，因此并不实现
+`ServiceProvider<S>`。异步 resolver 的行为相同，但会 await 每一次异步 Provider 调用。
 
 Provider 不支持请求、运行环境不可用、配置非法或初始化失败都会导致创建错误。聚合错误
 只保留真正调用过的 Provider。
@@ -587,11 +588,13 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 ## 创建 Service
 
 `ProviderRegistry::resolve` 和 `ProviderRegistry::resolve_selected` 返回
-`ResolvingServiceProvider<S>`。它是一个组合型 `ServiceProvider<S>`：持有候选
-Provider handle，并在调用 `create` 时执行 selection 中的 fallback policy。
+`ResolvingServiceProvider<S>`。它是一个组合型 resolver：持有候选 Provider handle，
+并在调用 `create` 时执行 selection 中的 fallback policy。它的固有创建方法返回聚合
+`ProviderCreationError`，而不是叶 Provider 接口要求的 `ProviderError`。
 
-对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的创建
-方法返回 `ProviderFuture`；await 该 future 后得到异步 `S::Output`。
+对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的固有创建
+方法是异步方法；await 后得到异步 `S::Output`。叶 `AsyncServiceProvider<S>` 接口才返回
+boxed 的 `ProviderFuture` 类型。
 
 ```rust,ignore
 let provider = registry.resolve_selected(&selection)?;
@@ -781,7 +784,7 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ServiceProvider::create` | 使用 `Config::default()` 创建 |
 | `AsyncServiceProvider::create_configured` | 使用显式 config 异步创建 |
 | `AsyncServiceProvider::create` | 在 `Config: Default + Send` 时使用默认 config 异步创建 |
-| `ProviderFuture` | 异步创建 API 返回的、与运行时无关且可发送的 boxed future |
+| `ProviderFuture` | `AsyncServiceProvider` 实现返回的、与运行时无关且可发送的 boxed future |
 | `ProviderMetadata::descriptor` | 让可注册 Provider 自描述 |
 | `ProviderDefinition` / `AsyncProviderDefinition` | 组合元数据与同步或异步创建能力的 marker trait |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |

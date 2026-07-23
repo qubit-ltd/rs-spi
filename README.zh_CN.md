@@ -235,9 +235,9 @@ async fn greet() -> Result<String, Box<dyn std::error::Error>> {
 ```
 
 在 Registry 工作流中，`register`、元数据查询、默认 selection 更新和解析均为同步操作。
-解析得到的 `AsyncResolvingServiceProvider` 创建方法返回 `ProviderFuture`，必须
-`.await` 才能获得 output。直接调用异步叶 Provider 的创建方法也会返回
-`ProviderFuture`。`ProviderFuture` 是 `Send` 且与 runtime 无关。异步 spec 要求
+解析得到的 `AsyncResolvingServiceProvider` 创建方法是异步方法，必须 `.await` 才能获得
+output。直接调用异步叶 Provider 的创建方法才会返回 `ProviderFuture`。
+`ProviderFuture` 是 `Send` 且与 runtime 无关。异步 spec 要求
 `Config: Sync` 和 `Output: Send + 'static`；使用默认配置的 `create()` 还要求
 `Config: Default + Send`。
 
@@ -269,7 +269,8 @@ Qubit SPI 明确分离这三个阶段，并为每个失败边界提供不同错�
 - `ProviderSelection` 同时保存选择目标和创建阶段 fallback policy。
 - `ResolvingServiceProvider` 与 `AsyncResolvingServiceProvider` 分别由对应 Registry
   解析后返回，并在创建 Service 时执行回退。
-- `ProviderFuture` 是异步创建返回的、与 runtime 无关的 `Send` future。
+- `ProviderFuture` 是 `AsyncServiceProvider` 实现返回的、与 runtime 无关的
+  `Send` future。
 - 注册、选择、叶子 Provider 和聚合创建错误相互分离，并保留失败时真正需要的上下文。
 
 Qubit SPI 不负责动态库加载、自动发现 crate、缓存已创建的 Service，也不强制提供统一的

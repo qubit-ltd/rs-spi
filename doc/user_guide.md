@@ -51,10 +51,12 @@ can fail because the requested provider or candidate set does not exist.
 
 ### Creation: Can a Candidate Build the Service?
 
-`ResolvingServiceProvider<S>` implements `ServiceProvider<S>`. Its `create`
-method invokes candidates with `S::Config`, applies the fallback policy stored
-in the selection, and returns `S::Output` directly on success. The async
-resolver has the same behavior but awaits each async provider invocation.
+`ResolvingServiceProvider<S>` is a composing resolver with inherent `create`
+methods. It invokes candidates with `S::Config`, applies the fallback policy
+stored in the selection, and returns `S::Output` directly on success. Its
+aggregate failures are reported as `ProviderCreationError`, so it is not a
+`ServiceProvider<S>` implementation. The async resolver has the same behavior
+but awaits each async provider invocation.
 
 Creation can fail because a provider does not support the request, is
 unavailable, rejects the config, or cannot initialize. Aggregate errors retain
@@ -626,13 +628,16 @@ callers that have no config object.
 ## Creating the Service
 
 `ProviderRegistry::resolve` and `ProviderRegistry::resolve_selected` return
-`ResolvingServiceProvider<S>`. This type is a composing
-`ServiceProvider<S>`: it owns candidate handles and applies the selection's
-fallback policy when `create` is called.
+`ResolvingServiceProvider<S>`. This type is a composing resolver: it owns
+candidate handles and applies the selection's fallback policy when `create` is
+called. Its inherent creation methods return aggregate
+`ProviderCreationError` values rather than the leaf `ProviderError` required by
+`ServiceProvider<S>`.
 
 The corresponding `AsyncProviderRegistry` methods return
-`AsyncResolvingServiceProvider<S>`. Its creation methods return
-`ProviderFuture`; await that future to obtain the async `S::Output`.
+`AsyncResolvingServiceProvider<S>`. Its inherent creation methods are async;
+await them to obtain the async `S::Output`. The leaf
+`AsyncServiceProvider<S>` contract returns the boxed `ProviderFuture` type.
 
 ```rust,ignore
 let provider = registry.resolve_selected(&selection)?;
@@ -835,7 +840,7 @@ an isolated process.
 | `ServiceProvider::create` | Create with `Config::default()` |
 | `AsyncServiceProvider::create_configured` | Create asynchronously with explicit config |
 | `AsyncServiceProvider::create` | Create asynchronously with `Config::default()` when `Config: Default + Send` |
-| `ProviderFuture` | Runtime-independent boxed, sendable future returned by async creation APIs |
+| `ProviderFuture` | Runtime-independent boxed, sendable future returned by `AsyncServiceProvider` implementations |
 | `ProviderMetadata::descriptor` | Self-describe a registrable Provider |
 | `ProviderDefinition` / `AsyncProviderDefinition` | Marker traits combining metadata with sync or async creation |
 | `ProviderRegistry::register` | Register an owned Provider at runtime |

@@ -243,10 +243,10 @@ async fn greet() -> Result<String, Box<dyn std::error::Error>> {
 
 In the Registry workflow, `register`, metadata queries, default-selection
 updates, and resolution are synchronous. Creation methods on the resulting
-`AsyncResolvingServiceProvider` return a `ProviderFuture`, which must be awaited
-to obtain the output. Calling creation methods on an asynchronous leaf provider
-directly also returns a `ProviderFuture`. `ProviderFuture` is `Send` and
-runtime-neutral. Asynchronous specifications require `Config: Sync` and
+`AsyncResolvingServiceProvider` are async and must be awaited to obtain the
+output. Calling creation methods on an asynchronous leaf provider directly
+returns a `ProviderFuture`. `ProviderFuture` is `Send` and runtime-neutral.
+Asynchronous specifications require `Config: Sync` and
 `Output: Send + 'static`; default-config `create()` additionally requires
 `Config: Default + Send`.
 
@@ -286,8 +286,8 @@ mixed with provider initialization failures.
 - `ProviderSelection` contains both its target and its creation fallback policy.
 - `ResolvingServiceProvider` and `AsyncResolvingServiceProvider` are returned by
   their respective Registry's resolution and apply fallback during creation.
-- `ProviderFuture` is the runtime-neutral, `Send` future returned by asynchronous
-  creation.
+- `ProviderFuture` is the runtime-neutral, `Send` future returned by
+  `AsyncServiceProvider` implementations.
 - Separate registration, selection, leaf-provider, and aggregate-creation
   errors retain the context needed when an operation fails.
 
