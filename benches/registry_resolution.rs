@@ -9,6 +9,12 @@
 
 use std::{
     hint::black_box,
+    panic::{
+        AssertUnwindSafe,
+        catch_unwind,
+        resume_unwind,
+    },
+    sync::Barrier,
     thread,
     time::Instant,
 };
@@ -235,31 +241,56 @@ fn benchmark_auto_resolution(criterion: &mut Criterion) {
 
 /// Benchmarks concurrent automatic resolution against one shared Registry.
 ///
+/// Worker threads reach a readiness barrier before timing starts. The returned
+/// duration excludes thread creation and scoped-thread joining.
+///
 /// # Parameters
 ///
 /// * `criterion` - Criterion benchmark manager.
 fn benchmark_concurrent_resolution(criterion: &mut Criterion) {
     let registry = build_registry(16, ALIASES_PER_PROVIDER);
     let selection = ProviderSelection::auto();
+    let worker_count = usize::try_from(CONCURRENT_WORKERS)
+        .expect("benchmark worker count should fit usize");
     let mut group = criterion.benchmark_group("concurrent_resolution");
     group.throughput(Throughput::Elements(CONCURRENT_WORKERS));
     group.bench_function("4_workers_16_providers", |bencher| {
         bencher.iter_custom(|iterations| {
-            let started_at = Instant::now();
+            let participant_count = worker_count + 1;
+            let ready = Barrier::new(participant_count);
+            let start = Barrier::new(participant_count);
+            let completed = Barrier::new(participant_count);
             thread::scope(|scope| {
-                for _ in 0..CONCURRENT_WORKERS {
-                    scope.spawn(|| {
-                        for _ in 0..iterations {
-                            black_box(
-                                registry
-                                    .resolve_selected(black_box(&selection))
-                                    .expect("concurrent automatic selection should resolve"),
-                            );
+                for _ in 0..worker_count {
+                    let ready = &ready;
+                    let start = &start;
+                    let completed = &completed;
+                    let registry = &registry;
+                    let selection = &selection;
+                    scope.spawn(move || {
+                        ready.wait();
+                        let outcome = catch_unwind(AssertUnwindSafe(|| {
+                            start.wait();
+                            for _ in 0..iterations {
+                                black_box(
+                                    registry
+                                        .resolve_selected(black_box(selection))
+                                        .expect("concurrent automatic selection should resolve"),
+                                );
+                            }
+                        }));
+                        completed.wait();
+                        if let Err(payload) = outcome {
+                            resume_unwind(payload);
                         }
                     });
                 }
-            });
-            started_at.elapsed()
+                ready.wait();
+                let started_at = Instant::now();
+                start.wait();
+                completed.wait();
+                started_at.elapsed()
+            })
         });
     });
     group.finish();
