@@ -17,6 +17,10 @@ use crate::{
 ///
 /// Every type implementing both [`ProviderMetadata`] and
 /// [`ServiceProvider<S>`] automatically implements this trait.
+///
+/// # Type Parameters
+///
+/// * `S` - Synchronous service family implemented by the provider.
 pub trait ProviderDefinition<S>: ProviderMetadata + ServiceProvider<S>
 where
     S: SyncServiceSpec,

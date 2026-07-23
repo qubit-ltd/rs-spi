@@ -13,4 +13,9 @@ use std::{
 };
 
 /// Sendable boxed future used by asynchronous provider APIs.
+///
+/// # Type Parameters
+///
+/// * `'a` - Maximum lifetime of data borrowed by the future.
+/// * `T` - Value produced when the future completes.
 pub type ProviderFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

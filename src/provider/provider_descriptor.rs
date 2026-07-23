@@ -74,6 +74,11 @@ impl ProviderDescriptor {
 
     /// Replaces the descriptor's aliases with normalized lookup selectors.
     ///
+    /// # Type Parameters
+    ///
+    /// * `I` - Iterator-like source of alias inputs.
+    /// * `T` - Individual alias input convertible to a string reference.
+    ///
     /// # Parameters
     ///
     /// * `aliases` - Raw aliases trimmed, lowercased, and validated in order.

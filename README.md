@@ -15,7 +15,7 @@ selected or App-defined default service without depending on its concrete type.
 
 ```toml
 [dependencies]
-qubit-spi = "0.9"
+qubit-spi = "0.10"
 ```
 
 Qubit SPI requires Rust 1.94 or later.

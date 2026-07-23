@@ -39,6 +39,10 @@ use super::{
 };
 
 /// Shared provider catalog independent of creation mode.
+///
+/// # Type Parameters
+///
+/// * `P` - Possibly unsized provider metadata contract stored by the catalog.
 pub(crate) struct ProviderCatalog<P: ?Sized> {
     /// Synchronized provider entries and lookup indexes.
     inner: Arc<RwLock<RegistryInner<P>>>,
@@ -52,6 +56,14 @@ where
     ///
     /// Provider-controlled metadata is obtained before the write lock is
     /// acquired.
+    ///
+    /// # Parameters
+    ///
+    /// * `provider` - Shared provider definition to register.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after successful registration.
     ///
     /// # Errors
     ///
@@ -122,6 +134,10 @@ where
     }
 
     /// Returns the current default selection snapshot.
+    ///
+    /// # Returns
+    ///
+    /// An owned snapshot of the current default selection.
     #[inline(always)]
     #[must_use]
     pub(crate) fn default_selection(&self) -> ProviderSelection {
@@ -129,12 +145,24 @@ where
     }
 
     /// Replaces the selection used for future default resolutions.
+    ///
+    /// # Parameters
+    ///
+    /// * `selection` - New default selection stored in the catalog.
     #[inline(always)]
     pub(crate) fn set_default_selection(&self, selection: ProviderSelection) {
         self.write_inner().default_selection = selection;
     }
 
     /// Resolves one explicit selection against a single catalog snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// * `selection` - Validated selection to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A nonempty candidate snapshot and its fallback policy.
     ///
     /// # Errors
     ///
@@ -149,6 +177,10 @@ where
 
     /// Resolves the current default selection against one catalog snapshot.
     ///
+    /// # Returns
+    ///
+    /// A nonempty candidate snapshot and its fallback policy.
+    ///
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
@@ -160,6 +192,10 @@ where
     }
 
     /// Returns descriptors in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// Owned descriptor snapshots in registration order.
     #[must_use]
     pub(crate) fn descriptors(&self) -> Vec<ProviderDescriptor> {
         self.read_inner()
@@ -170,6 +206,10 @@ where
     }
 
     /// Returns canonical provider IDs in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// Owned canonical IDs in registration order.
     #[must_use]
     pub(crate) fn provider_ids(&self) -> Vec<ProviderId> {
         self.read_inner()
@@ -180,6 +220,10 @@ where
     }
 
     /// Returns the number of registered providers.
+    ///
+    /// # Returns
+    ///
+    /// The number of successful registrations.
     #[inline(always)]
     #[must_use]
     pub(crate) fn len(&self) -> usize {
@@ -187,6 +231,10 @@ where
     }
 
     /// Returns whether no provider is registered.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the catalog has no provider; otherwise `false`.
     #[inline(always)]
     #[must_use]
     pub(crate) fn is_empty(&self) -> bool {
@@ -195,6 +243,20 @@ where
 
     /// Resolves a selection while one read lock represents the catalog
     /// snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Locked catalog state used as one consistent snapshot.
+    /// * `selection` - Validated selection to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A nonempty candidate snapshot and its fallback policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderResolutionError`] when required providers are absent,
+    /// no lenient-chain candidate exists, or automatic selection is empty.
     fn resolve_from_inner(
         inner: &RegistryInner<P>,
         selection: &ProviderSelection,
@@ -261,6 +323,21 @@ where
     }
 
     /// Ensures a normalized selector is not already claimed.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Catalog state whose selector index is checked.
+    /// * `selector` - Normalized selector proposed by the new provider.
+    /// * `provider` - Canonical ID of the provider being registered.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the selector is unclaimed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError`] naming both providers when the selector
+    /// is already claimed.
     fn validate_selector(
         inner: &RegistryInner<P>,
         selector: &ProviderSelector,
@@ -281,12 +358,20 @@ where
     }
 
     /// Acquires shared catalog state.
+    ///
+    /// # Returns
+    ///
+    /// A read guard held until the caller drops it.
     #[inline(always)]
     fn read_inner(&self) -> RwLockReadGuard<'_, RegistryInner<P>> {
         self.inner.read()
     }
 
     /// Acquires exclusive catalog state.
+    ///
+    /// # Returns
+    ///
+    /// A write guard held until the caller drops it.
     #[inline(always)]
     fn write_inner(&self) -> RwLockWriteGuard<'_, RegistryInner<P>> {
         self.inner.write()
@@ -295,6 +380,11 @@ where
 
 impl<P: ?Sized> Clone for ProviderCatalog<P> {
     /// Clones the catalog by sharing its synchronized state.
+    ///
+    /// # Returns
+    ///
+    /// A catalog handle observing the same synchronized state.
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -304,6 +394,11 @@ impl<P: ?Sized> Clone for ProviderCatalog<P> {
 
 impl<P: ?Sized> Default for ProviderCatalog<P> {
     /// Creates an empty provider catalog.
+    ///
+    /// # Returns
+    ///
+    /// An empty catalog using automatic default selection.
+    #[inline]
     fn default() -> Self {
         Self {
             inner: Arc::new(RwLock::new(RegistryInner::default())),

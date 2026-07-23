@@ -14,6 +14,10 @@ use crate::{
 };
 
 /// Marker combining asynchronous creation with registration metadata.
+///
+/// # Type Parameters
+///
+/// * `S` - Asynchronous service family implemented by the provider.
 pub trait AsyncProviderDefinition<S>:
     ProviderMetadata + AsyncServiceProvider<S>
 where

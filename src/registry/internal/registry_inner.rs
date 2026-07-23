@@ -16,6 +16,10 @@ use crate::{
 };
 
 /// Mutable provider catalog protected by the registry's synchronization lock.
+///
+/// # Type Parameters
+///
+/// * `P` - Possibly unsized provider definition stored by the catalog.
 pub(crate) struct RegistryInner<P: ?Sized> {
     /// Registrations retained in their original registration order.
     pub(crate) entries: Vec<RegistryEntry<P>>,

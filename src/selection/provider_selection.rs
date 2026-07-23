@@ -94,6 +94,11 @@ impl ProviderSelection {
 
     /// Creates a nonempty ordered candidate chain from configuration input.
     ///
+    /// # Type Parameters
+    ///
+    /// * `I` - Iterator-like source of selector inputs.
+    /// * `T` - Individual selector input convertible to a string reference.
+    ///
     /// # Parameters
     ///
     /// * `values` - Raw selectors normalized in encounter order.
@@ -106,6 +111,7 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
+    #[inline(always)]
     pub fn chain<I, T>(values: I) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
@@ -115,6 +121,11 @@ impl ProviderSelection {
     }
 
     /// Creates a nonempty ordered chain that ignores unknown selectors.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `I` - Iterator-like source of selector inputs.
+    /// * `T` - Individual selector input convertible to a string reference.
     ///
     /// # Parameters
     ///
@@ -129,6 +140,7 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
+    #[inline(always)]
     pub fn chain_allowing_missing<I, T>(
         values: I,
     ) -> Result<Self, ProviderSelectionBuildError>
@@ -140,6 +152,11 @@ impl ProviderSelection {
     }
 
     /// Builds a validated chain with the specified missing-provider policy.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `I` - Iterator-like source of selector inputs.
+    /// * `T` - Individual selector input convertible to a string reference.
     ///
     /// # Parameters
     ///

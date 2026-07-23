@@ -17,6 +17,10 @@ use crate::{
 /// This enum is non-exhaustive. Downstream matches must include a wildcard arm
 /// so future selection targets remain source-compatible.
 ///
+/// # Type Parameters
+///
+/// * `'a` - Lifetime of selectors borrowed from the owning selection.
+///
 /// ```compile_fail
 /// use qubit_spi::ProviderSelectionTargetRef;
 ///

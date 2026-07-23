@@ -21,6 +21,10 @@ use crate::error::ProviderError;
 /// creation methods run. Once a service output is returned successfully,
 /// errors from later operations on that output do not trigger another
 /// provider attempt.
+///
+/// # Type Parameters
+///
+/// * `S` - Synchronous service family created by this provider.
 pub trait ServiceProvider<S>: Send + Sync + 'static
 where
     S: SyncServiceSpec,

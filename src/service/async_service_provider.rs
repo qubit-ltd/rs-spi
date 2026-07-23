@@ -14,6 +14,10 @@ use crate::{
 };
 
 /// Runtime-independent asynchronous factory contract for one provider.
+///
+/// # Type Parameters
+///
+/// * `S` - Asynchronous service family created by this provider.
 pub trait AsyncServiceProvider<S>: Send + Sync + 'static
 where
     S: AsyncServiceSpec,
@@ -24,6 +28,11 @@ where
     /// # Returns
     ///
     /// A sendable future yielding the service output or leaf provider failure.
+    ///
+    /// # Errors
+    ///
+    /// The future yields [`ProviderError`] when the provider cannot create the
+    /// service from the default configuration.
     fn create(&self) -> ProviderFuture<'_, Result<S::Output, ProviderError>>
     where
         S::Config: Default + Send,
@@ -36,6 +45,10 @@ where
 
     /// Creates one service output from the supplied configuration.
     ///
+    /// # Type Parameters
+    ///
+    /// * `'a` - Lifetime shared by the provider, configuration, and future.
+    ///
     /// # Parameters
     ///
     /// * `config` - Service-family configuration borrowed by the future.
@@ -44,6 +57,11 @@ where
     ///
     /// A sendable future yielding the complete service output or one
     /// classified leaf provider failure.
+    ///
+    /// # Errors
+    ///
+    /// The future yields [`ProviderError`] when this provider cannot create
+    /// the requested service.
     fn create_configured<'a>(
         &'a self,
         config: &'a S::Config,

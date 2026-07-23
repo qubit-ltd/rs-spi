@@ -14,7 +14,7 @@ Qubit SPI 为 Rust 提供类型安全、允许运行时注册的 Service Provide
 
 ```toml
 [dependencies]
-qubit-spi = "0.9"
+qubit-spi = "0.10"
 ```
 
 Qubit SPI 要求 Rust 1.94 或更高版本。

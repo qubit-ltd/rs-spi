@@ -127,6 +127,10 @@ impl ProviderCreationError {
     /// # Returns
     ///
     /// The last attempt, which directly terminated or exhausted traversal.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal nonempty-attempt invariant is violated.
     #[inline]
     #[must_use]
     pub fn decisive_attempt(&self) -> &ProviderAttemptFailure {

@@ -30,6 +30,10 @@ use crate::{
 ///
 /// Clones observe the same registrations and default selection. Catalog locks
 /// are released before a resolver invokes any provider.
+///
+/// # Type Parameters
+///
+/// * `S` - Synchronous service family whose providers are registered.
 pub struct ProviderRegistry<S>
 where
     S: SyncServiceSpec,
@@ -43,6 +47,18 @@ where
     S: SyncServiceSpec,
 {
     /// Registers an owned synchronous provider.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `P` - Concrete provider definition transferred into the Registry.
+    ///
+    /// # Parameters
+    ///
+    /// * `provider` - Provider to register and share through the Registry.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after successful registration.
     ///
     /// # Errors
     ///
@@ -59,6 +75,14 @@ where
 
     /// Registers an already shared synchronous provider.
     ///
+    /// # Parameters
+    ///
+    /// * `provider` - Shared provider definition to register.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after successful registration.
+    ///
     /// # Errors
     ///
     /// Returns [`RegistrationError`] without mutation when the provider's
@@ -72,6 +96,10 @@ where
     }
 
     /// Returns the selection used by [`Self::resolve`].
+    ///
+    /// # Returns
+    ///
+    /// A snapshot of the Registry's current default selection.
     #[inline(always)]
     #[must_use]
     pub fn default_selection(&self) -> ProviderSelection {
@@ -79,12 +107,24 @@ where
     }
 
     /// Replaces the selection used by future [`Self::resolve`] calls.
+    ///
+    /// # Parameters
+    ///
+    /// * `selection` - New default selection stored by the Registry.
     #[inline(always)]
     pub fn set_default_selection(&self, selection: ProviderSelection) {
         self.providers.set_default_selection(selection);
     }
 
     /// Resolves an explicit selection into a synchronous candidate snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// * `selection` - Validated selection to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A resolver owning the selected provider snapshot.
     ///
     /// # Errors
     ///
@@ -103,6 +143,10 @@ where
 
     /// Resolves the current default selection.
     ///
+    /// # Returns
+    ///
+    /// A resolver owning the selected provider snapshot.
+    ///
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
@@ -117,6 +161,10 @@ where
     }
 
     /// Returns descriptors in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// Owned descriptor snapshots in registration order.
     #[inline(always)]
     #[must_use]
     pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
@@ -124,6 +172,10 @@ where
     }
 
     /// Returns canonical provider IDs in successful registration order.
+    ///
+    /// # Returns
+    ///
+    /// Owned canonical IDs in registration order.
     #[inline(always)]
     #[must_use]
     pub fn provider_ids(&self) -> Vec<ProviderId> {
@@ -131,6 +183,10 @@ where
     }
 
     /// Returns the number of registered providers.
+    ///
+    /// # Returns
+    ///
+    /// The number of successful registrations.
     #[inline(always)]
     #[must_use]
     pub fn len(&self) -> usize {
@@ -138,6 +194,10 @@ where
     }
 
     /// Returns whether no provider is registered.
+    ///
+    /// # Returns
+    ///
+    /// `true` when the Registry contains no provider; otherwise `false`.
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -150,6 +210,11 @@ where
     S: SyncServiceSpec,
 {
     /// Clones this facade by sharing its provider catalog.
+    ///
+    /// # Returns
+    ///
+    /// A Registry facade observing the same catalog state.
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             providers: self.providers.clone(),
@@ -162,6 +227,11 @@ where
     S: SyncServiceSpec,
 {
     /// Creates an empty synchronous provider registry.
+    ///
+    /// # Returns
+    ///
+    /// An empty Registry using automatic default selection.
+    #[inline]
     fn default() -> Self {
         Self {
             providers: ProviderCatalog::default(),
@@ -174,6 +244,18 @@ where
     S: SyncServiceSpec,
 {
     /// Formats owned snapshots of registry metadata.
+    ///
+    /// # Parameters
+    ///
+    /// * `formatter` - Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// The formatter result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (descriptors, default_selection) =
             self.providers.metadata_snapshot();

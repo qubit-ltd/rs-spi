@@ -12,6 +12,10 @@ use crate::FallbackPolicy;
 use super::RegistryEntry;
 
 /// Resolved provider entries and the fallback policy applied to them.
+///
+/// # Type Parameters
+///
+/// * `P` - Possibly unsized provider definition held by each candidate.
 pub(crate) struct ResolvedCandidates<P: ?Sized> {
     /// Nonempty provider entries in deterministic attempt order.
     pub(crate) entries: Box<[RegistryEntry<P>]>,

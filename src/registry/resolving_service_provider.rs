@@ -26,6 +26,10 @@ use crate::{
 /// a separate operation that supplies configuration and applies the selection's
 /// fallback policy. Successful creation returns the service output directly;
 /// failures from later operations on that output do not re-enter fallback.
+///
+/// # Type Parameters
+///
+/// * `S` - Synchronous service family created by the candidates.
 pub struct ResolvingServiceProvider<S>
 where
     S: SyncServiceSpec,
@@ -85,6 +89,11 @@ where
     ///
     /// Returns [`ProviderCreationError`] when every candidate fails or the
     /// fallback policy stops traversal.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the resolver's internal nonempty-candidate invariant is
+    /// violated.
     pub fn create_configured(
         &self,
         config: &S::Config,

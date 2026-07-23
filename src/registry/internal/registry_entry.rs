@@ -12,6 +12,10 @@ use std::sync::Arc;
 use crate::ProviderDescriptor;
 
 /// Internal pairing of one descriptor and the factory it represents.
+///
+/// # Type Parameters
+///
+/// * `P` - Possibly unsized provider definition held by the entry.
 pub(crate) struct RegistryEntry<P: ?Sized> {
     /// Metadata used to identify and order this provider.
     pub(crate) descriptor: Arc<ProviderDescriptor>,
@@ -25,7 +29,7 @@ impl<P: ?Sized> Clone for RegistryEntry<P> {
     /// # Returns
     ///
     /// An owned entry referring to the same provider definition.
-    #[inline]
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             descriptor: Arc::clone(&self.descriptor),
