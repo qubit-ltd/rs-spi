@@ -95,7 +95,8 @@ impl ProviderId {
     #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.0
+        let Self(value) = self;
+        value
     }
 
     /// Tests the shared canonical-token grammar for IDs and selectors.
