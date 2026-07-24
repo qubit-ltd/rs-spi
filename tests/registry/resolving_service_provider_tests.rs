@@ -301,6 +301,40 @@ fn test_registry_resolves_auto_by_priority_then_id() {
     assert_eq!("alpha", output);
 }
 
+/// Verifies automatic fallback attempts retain the complete ranked order.
+#[test]
+fn test_registry_auto_fallback_attempts_follow_ranked_order() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    for (id, priority) in [("zulu", 10), ("beta", 20), ("alpha", 20)] {
+        register_provider(
+            &registry,
+            id,
+            &[],
+            priority,
+            ConfigurableProvider::failure(ProviderError::unavailable(
+                format!("{id} unavailable"),
+            )),
+        );
+    }
+    let selection = ProviderSelection::auto()
+        .with_fallback_policy(FallbackPolicy::OnAnyError);
+
+    let error = registry
+        .resolve_selected(&selection)
+        .expect("automatic selection should resolve")
+        .create()
+        .expect_err("all providers should fail");
+
+    assert_eq!(
+        vec!["alpha", "beta", "zulu"],
+        error
+            .attempts()
+            .iter()
+            .map(|attempt| attempt.provider_id().as_str())
+            .collect::<Vec<_>>(),
+    );
+}
+
 /// Verifies that unknown named selection fails before provider creation.
 #[test]
 fn test_registry_reports_named_unknown_before_creation() {

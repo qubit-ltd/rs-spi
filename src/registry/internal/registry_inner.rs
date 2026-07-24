@@ -9,8 +9,11 @@
 
 use std::collections::HashMap;
 
+use qubit_collections::OrderedIndexMap;
+
 use crate::registry::internal::RegistryEntry;
 use crate::{
+    ProviderId,
     ProviderSelection,
     ProviderSelector,
 };
@@ -21,12 +24,16 @@ use crate::{
 ///
 /// * `P` - Possibly unsized provider definition stored by the catalog.
 pub(crate) struct RegistryInner<P: ?Sized> {
-    /// Registrations retained in their original registration order.
-    pub(crate) entries: Vec<RegistryEntry<P>>,
-    /// Mapping from canonical IDs and aliases to positions in `entries`.
-    pub(crate) selector_indices: HashMap<ProviderSelector, usize>,
-    /// Positions in the deterministic automatic-selection order.
-    pub(crate) automatic_indices: Vec<usize>,
+    /// Entries indexed by canonical ID and automatic-selection order.
+    pub(crate) entries: OrderedIndexMap<
+        ProviderId,
+        (std::cmp::Reverse<i32>, ProviderId),
+        RegistryEntry<P>,
+    >,
+    /// Mapping from canonical IDs and aliases to canonical provider IDs.
+    pub(crate) selector_ids: HashMap<ProviderSelector, ProviderId>,
+    /// Canonical IDs retained in successful registration order.
+    pub(crate) registration_ids: Vec<ProviderId>,
     /// Selection used by callers that do not supply an explicit preference.
     pub(crate) default_selection: ProviderSelection,
 }
@@ -40,9 +47,9 @@ impl<P: ?Sized> Default for RegistryInner<P> {
     #[inline]
     fn default() -> Self {
         Self {
-            entries: Vec::new(),
-            selector_indices: HashMap::new(),
-            automatic_indices: Vec::new(),
+            entries: OrderedIndexMap::new(),
+            selector_ids: HashMap::new(),
+            registration_ids: Vec::new(),
             default_selection: ProviderSelection::auto(),
         }
     }

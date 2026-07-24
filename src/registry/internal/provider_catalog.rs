@@ -8,6 +8,7 @@
 //! Shared registration, indexing, ordering, and selection algorithms.
 
 use std::{
+    cmp::Reverse,
     collections::HashSet,
     sync::Arc,
 };
@@ -86,30 +87,22 @@ where
             Self::validate_selector(&inner, alias, descriptor.id().as_str())?;
         }
 
-        let registration_index = inner.entries.len();
+        let provider_id = descriptor.id().clone();
         inner
-            .selector_indices
-            .insert(canonical_selector, registration_index);
+            .selector_ids
+            .insert(canonical_selector, provider_id.clone());
         for alias in descriptor.aliases() {
             inner
-                .selector_indices
-                .insert(alias.clone(), registration_index);
+                .selector_ids
+                .insert(alias.clone(), provider_id.clone());
         }
-        inner.entries.push(RegistryEntry {
+        let priority = descriptor.priority();
+        let previous = inner.entries.insert(provider_id.clone(), (Reverse(priority), provider_id.clone()), RegistryEntry {
             descriptor: Arc::new(descriptor),
             provider,
         });
-        let mut automatic_indices =
-            (0..inner.entries.len()).collect::<Vec<_>>();
-        automatic_indices.sort_unstable_by(|left, right| {
-            let left = &inner.entries[*left].descriptor;
-            let right = &inner.entries[*right].descriptor;
-            right
-                .priority()
-                .cmp(&left.priority())
-                .then_with(|| left.id().cmp(right.id()))
-        });
-        inner.automatic_indices = automatic_indices;
+        assert!(previous.is_none(), "validated provider ID must be unique");
+        inner.registration_ids.push(provider_id);
         Ok(())
     }
 
@@ -124,11 +117,13 @@ where
         &self,
     ) -> (Vec<ProviderDescriptor>, ProviderSelection) {
         let inner = self.read_inner();
-        let descriptors = inner
-            .entries
-            .iter()
-            .map(|entry| entry.descriptor.as_ref().clone())
-            .collect();
+        let descriptors = inner.registration_ids.iter().map(|provider_id| {
+            inner.entries.get(provider_id)
+                .expect("registered provider ID must have an entry")
+                .descriptor
+                .as_ref()
+                .clone()
+        }).collect();
         let default_selection = inner.default_selection.clone();
         (descriptors, default_selection)
     }
@@ -198,11 +193,14 @@ where
     /// Owned descriptor snapshots in registration order.
     #[must_use]
     pub(crate) fn descriptors(&self) -> Vec<ProviderDescriptor> {
-        self.read_inner()
-            .entries
-            .iter()
-            .map(|entry| entry.descriptor.as_ref().clone())
-            .collect()
+        let inner = self.read_inner();
+        inner.registration_ids.iter().map(|provider_id| {
+            inner.entries.get(provider_id)
+                .expect("registered provider ID must have an entry")
+                .descriptor
+                .as_ref()
+                .clone()
+        }).collect()
     }
 
     /// Returns canonical provider IDs in successful registration order.
@@ -212,11 +210,7 @@ where
     /// Owned canonical IDs in registration order.
     #[must_use]
     pub(crate) fn provider_ids(&self) -> Vec<ProviderId> {
-        self.read_inner()
-            .entries
-            .iter()
-            .map(|entry| entry.descriptor.id().clone())
-            .collect()
+        self.read_inner().registration_ids.clone()
     }
 
     /// Returns the number of registered providers.
@@ -263,15 +257,17 @@ where
     ) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
         let entries = match selection.repr() {
             ProviderSelectionRepr::Named(selector) => {
-                let index =
-                    inner.selector_indices.get(selector).copied().ok_or_else(
+                let provider_id =
+                    inner.selector_ids.get(selector).ok_or_else(
                         || {
                             ProviderResolutionError::unknown_providers(vec![
                                 selector.clone(),
                             ])
                         },
                     )?;
-                vec![inner.entries[index].clone()]
+                vec![inner.entries.get(provider_id)
+                    .expect("registered selector must have an entry")
+                    .clone()]
             }
             ProviderSelectionRepr::Chain {
                 selectors,
@@ -281,14 +277,16 @@ where
                 let mut candidates = Vec::with_capacity(selectors.len());
                 let mut missing = Vec::new();
                 for selector in selectors {
-                    let Some(index) =
-                        inner.selector_indices.get(selector).copied()
+                    let Some(provider_id) =
+                        inner.selector_ids.get(selector)
                     else {
                         missing.push(selector.clone());
                         continue;
                     };
-                    if seen.insert(index) {
-                        candidates.push(inner.entries[index].clone());
+                    if seen.insert(provider_id.clone()) {
+                        candidates.push(inner.entries.get(provider_id)
+                            .expect("registered selector must have an entry")
+                            .clone());
                     }
                 }
                 if *missing_policy == MissingProviderPolicy::Reject
@@ -306,13 +304,13 @@ where
                 candidates
             }
             ProviderSelectionRepr::Auto => {
-                if inner.automatic_indices.is_empty() {
+                if inner.entries.is_empty() {
                     return Err(ProviderResolutionError::empty_registry());
                 }
                 inner
-                    .automatic_indices
-                    .iter()
-                    .map(|index| inner.entries[*index].clone())
+                    .entries
+                    .iter_ordered()
+                    .map(|(_provider_id, _order_key, entry)| entry.clone())
                     .collect()
             }
         };
@@ -344,9 +342,9 @@ where
         provider: &str,
     ) -> Result<(), RegistrationError> {
         let Some(existing) = inner
-            .selector_indices
+            .selector_ids
             .get(selector)
-            .and_then(|index| inner.entries.get(*index))
+            .and_then(|provider_id| inner.entries.get(provider_id))
         else {
             return Ok(());
         };
