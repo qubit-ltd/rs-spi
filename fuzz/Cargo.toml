@@ -1,0 +1,22 @@
+[package]
+name = "qubit-spi-fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qubit-spi = { path = ".." }
+
+[workspace]
+
+[[bin]]
+name = "provider_input"
+path = "fuzz_targets/provider_input.rs"
+test = false
+doc = false
+bench = false
