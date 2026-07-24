@@ -311,9 +311,9 @@ fn test_registry_auto_fallback_attempts_follow_ranked_order() {
             id,
             &[],
             priority,
-            ConfigurableProvider::failure(ProviderError::unavailable(
-                format!("{id} unavailable"),
-            )),
+            ConfigurableProvider::failure(ProviderError::unavailable(format!(
+                "{id} unavailable"
+            ))),
         );
     }
     let selection = ProviderSelection::auto()
