@@ -97,7 +97,7 @@ where
                 .insert(alias.clone(), provider_id.clone());
         }
         let priority = descriptor.priority();
-        let previous = inner.entries.insert(
+        let inserted = inner.entries.try_insert(
             provider_id.clone(),
             (Reverse(priority), provider_id.clone()),
             RegistryEntry {
@@ -105,7 +105,7 @@ where
                 provider,
             },
         );
-        assert!(previous.is_none(), "validated provider ID must be unique");
+        assert!(inserted.is_ok(), "validated provider ID must be unique");
         inner.registration_ids.push(provider_id);
         Ok(())
     }
