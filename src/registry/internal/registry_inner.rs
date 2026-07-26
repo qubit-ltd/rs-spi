@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use qubit_collections::OrderedIndexMap;
+use qubit_collections::map::OrderedIndexMap;
 
 use crate::registry::internal::RegistryEntry;
 use crate::{
