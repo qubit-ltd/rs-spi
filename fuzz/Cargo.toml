@@ -20,3 +20,10 @@ path = "fuzz_targets/provider_input.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "registry_model"
+path = "fuzz_targets/registry_model.rs"
+test = false
+doc = false
+bench = false
