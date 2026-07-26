@@ -41,6 +41,7 @@ use qubit_spi::{
 const NAMED_ALIAS_COUNTS: [usize; 3] = [0, 2, 8];
 const CHAIN_CANDIDATE_COUNTS: [usize; 3] = [1, 8, 32];
 const AUTO_PROVIDER_COUNTS: [usize; 3] = [1, 8, 64];
+const REGISTRATION_PROVIDER_COUNTS: [usize; 4] = [1, 8, 64, 256];
 const ALIASES_PER_PROVIDER: usize = 2;
 const CONCURRENT_WORKERS: u64 = 4;
 
@@ -149,6 +150,45 @@ fn build_registry(
             .expect("benchmark provider should register");
     }
     registry
+}
+
+/// Benchmarks registration while varying the number of providers.
+///
+/// Provider descriptors are prepared outside timed iterations so the measured
+/// work isolates Registry construction, selector indexing, and priority
+/// ordering.
+///
+/// # Parameters
+///
+/// * `criterion` - Criterion benchmark manager.
+fn benchmark_registration(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("registration");
+    for provider_count in REGISTRATION_PROVIDER_COUNTS {
+        let descriptors = (0..provider_count)
+            .map(|index| provider_descriptor(index, ALIASES_PER_PROVIDER))
+            .collect::<Vec<_>>();
+        group.throughput(Throughput::Elements(
+            u64::try_from(provider_count)
+                .expect("benchmark provider count should fit u64"),
+        ));
+        group.bench_function(
+            BenchmarkId::new("register", format!("{provider_count}_providers")),
+            |bencher| {
+                bencher.iter(|| {
+                    let registry = ProviderRegistry::default();
+                    for descriptor in &descriptors {
+                        registry
+                            .register(BenchmarkProvider {
+                                descriptor: descriptor.clone(),
+                            })
+                            .expect("benchmark provider should register");
+                    }
+                    black_box(registry);
+                });
+            },
+        );
+    }
+    group.finish();
 }
 
 /// Benchmarks named resolution while varying descriptor alias count.
@@ -298,6 +338,7 @@ fn benchmark_concurrent_resolution(criterion: &mut Criterion) {
 
 criterion_group!(
     registry_resolution_benches,
+    benchmark_registration,
     benchmark_named_resolution,
     benchmark_chain_resolution,
     benchmark_auto_resolution,
