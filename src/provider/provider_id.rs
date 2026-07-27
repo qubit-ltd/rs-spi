@@ -115,23 +115,28 @@ impl ProviderId {
     /// alphanumeric endpoints and only permitted separators; otherwise,
     /// `false`.
     #[must_use]
-    pub(crate) fn is_canonical_token(value: &str) -> bool {
-        !value.is_empty()
-            && value.is_ascii()
-            && value == value.trim()
-            && !value.bytes().any(|byte| byte.is_ascii_uppercase())
-            && value
-                .bytes()
-                .next()
-                .is_some_and(|byte| byte.is_ascii_alphanumeric())
-            && value
-                .bytes()
-                .last()
-                .is_some_and(|byte| byte.is_ascii_alphanumeric())
-            && !value.bytes().any(|byte| {
-                !byte.is_ascii_alphanumeric()
-                    && !matches!(byte, b'-' | b'_' | b'.' | b'+')
-            })
+    pub(crate) const fn is_canonical_token(value: &str) -> bool {
+        let bytes = value.as_bytes();
+        if bytes.is_empty() {
+            return false;
+        }
+        let mut index = 0;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            if !byte.is_ascii_lowercase()
+                && !byte.is_ascii_digit()
+                && !matches!(byte, b'-' | b'_' | b'.' | b'+')
+            {
+                return false;
+            }
+            if (index == 0 || index + 1 == bytes.len())
+                && !byte.is_ascii_alphanumeric()
+            {
+                return false;
+            }
+            index += 1;
+        }
+        true
     }
 }
 
