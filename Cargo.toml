@@ -38,7 +38,7 @@ harness = false
 
 [dependencies]
 parking_lot = "0.12"
-qubit-collections = { version = "0.1" }
+qubit-collections = { version = "0.2" }
 thiserror = "2.0"
 
 [dev-dependencies]
