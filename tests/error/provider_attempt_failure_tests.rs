@@ -10,6 +10,7 @@ use std::error::Error;
 
 use qubit_spi::error::ProviderFailureKind;
 use qubit_spi::{
+    ProviderCreationTermination,
     ProviderDescriptor,
     ProviderId,
     ProviderRegistry,
@@ -53,4 +54,40 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
     assert!(attempt.to_string().contains("runtime is absent"));
     assert!(Error::source(attempt).is_some());
     assert!(Error::source(attempt).and_then(Error::source).is_some());
+}
+
+/// Verifies aggregate and attempt diagnostics transfer their owned parts
+/// intact.
+#[test]
+fn test_provider_attempt_failure_into_parts_preserves_identity_and_failure() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("remote")
+                    .expect("test provider ID should be valid"),
+            ),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable(
+                "offline",
+            )),
+        ))
+        .expect("test provider should register");
+    let error = registry
+        .resolve_selected(&ProviderSelection::auto())
+        .expect("automatic selection should resolve")
+        .create()
+        .expect_err("test provider should fail");
+
+    let (attempts, termination) = error.into_parts();
+    let mut attempts = attempts.into_vec();
+    let attempt = attempts
+        .pop()
+        .expect("aggregate should retain the attempted provider");
+    let (provider_id, failure) = attempt.into_parts();
+
+    assert!(attempts.is_empty());
+    assert_eq!(ProviderCreationTermination::Exhausted, termination);
+    assert_eq!("remote", provider_id.as_str());
+    assert_eq!(ProviderFailureKind::Unavailable, failure.kind());
+    assert_eq!("offline", failure.error().reason());
 }

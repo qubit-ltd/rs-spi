@@ -102,7 +102,11 @@ Start with the business capability. It should contain operations consumers call
 after initialization. Construction settings belong in a separate config type.
 
 ```rust
-use std::sync::Arc;
+use std::{
+    error::Error,
+    fmt,
+    sync::Arc,
+};
 
 use qubit_spi::{ServiceSpec, SyncServiceSpec};
 
@@ -126,12 +130,36 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Domain error retained when a Greeter provider fails.
+#[derive(Debug)]
+struct GreeterError {
+    message: String,
+}
+
+impl GreeterError {
+    fn invalid_configuration(message: &str) -> Self {
+        Self {
+            message: message.to_owned(),
+        }
+    }
+}
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for GreeterError {}
+
 /// Connects the Greeter configuration and output types to Qubit SPI.
 struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+    // Domain error preserved by classified provider failures.
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -161,7 +189,7 @@ lowercase ASCII token with alphanumeric endpoints and only the separators
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -185,10 +213,12 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         if config.prefix.trim().is_empty() {
-            return Err(ProviderError::invalid_configuration(
-                "the greeting prefix must not be empty",
+            return Err(ProviderFailure::invalid_configuration(
+                GreeterError::invalid_configuration(
+                    "the greeting prefix must not be empty",
+                ),
             ));
         }
         Ok(Arc::new(FriendlyGreeter {
@@ -233,7 +263,7 @@ returns a `ProviderFuture`.
 ```rust,ignore
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
     ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
@@ -251,11 +281,13 @@ impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a GreeterConfig,
-    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>>> {
         Box::pin(async move {
             if config.prefix.trim().is_empty() {
-                return Err(ProviderError::invalid_configuration(
-                    "the greeting prefix must not be empty",
+                return Err(ProviderFailure::invalid_configuration(
+                    GreeterError::invalid_configuration(
+                        "the greeting prefix must not be empty",
+                    ),
                 ));
             }
             Ok(Arc::new(FriendlyGreeter {
@@ -391,7 +423,11 @@ by consumers, providers, and the final App.
 
 ```rust
 // lib-greeter/src/lib.rs
-use std::sync::{Arc, LazyLock};
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
@@ -415,12 +451,26 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Domain error retained when a Greeter provider fails.
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
 /// Connects the Greeter configuration and output types to Qubit SPI.
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+    // Domain error preserved by classified provider failures.
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -461,8 +511,8 @@ modify global state by registering itself.
 // lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderError;
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -486,7 +536,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
@@ -632,7 +682,7 @@ callers that have no config object.
 `ResolvingServiceProvider<S>`. This type is a composing resolver: it owns
 candidate handles and applies the selection's fallback policy when `create` is
 called. Its inherent creation methods return aggregate
-`ProviderCreationError` values rather than the leaf `ProviderError` required by
+`ProviderCreationError` values rather than the leaf `ProviderFailure<E>` required by
 `ServiceProvider<S>`.
 
 The corresponding `AsyncProviderRegistry` methods return
@@ -674,7 +724,7 @@ capability or environment as reasons to try an alternative, while stopping on
 likely programming or deployment errors. Use `OnAnyError` only when degraded
 best-effort behavior is explicitly desired.
 
-Fallback is evaluated after a Provider returns a leaf `ProviderError`.
+Fallback is evaluated after a Provider returns a leaf `ProviderFailure<E>`.
 Only a sync or async resolver aggregates attempts into
 `ProviderCreationError`.
 
@@ -710,8 +760,8 @@ These errors contain no Provider creation attempts because none occurred.
 
 ### Leaf Provider Errors
 
-One concrete Provider reports a `ProviderError` classified by
-`ProviderErrorKind`:
+One concrete Provider reports a `ProviderFailure<E>` classified by
+`ProviderFailureKind`:
 
 - `Unsupported`: provider cannot serve this request;
 - `Unavailable`: provider or required environment is absent;
@@ -727,7 +777,7 @@ complete error chain when an operation fails.
 `ProviderCreationError` is always a nonempty aggregate produced by a resolver.
 
 Every `ProviderAttemptFailure` contains the canonical ID and original
-`ProviderError` of an actually invoked Provider. Missing chain selectors do not
+`ProviderFailure<E>` of an actually invoked Provider. Missing chain selectors do not
 fabricate attempts.
 
 `ProviderCreationTermination` explains traversal:
@@ -785,7 +835,7 @@ snapshot sees later registrations. Resolve again to obtain new candidates.
    caller has a real requirement.
 7. Keep selection independent from service configuration.
 8. Prefer `OnAbsence`; justify `OnAnyError` at the call site.
-9. Return classified `ProviderError` values with causal sources.
+9. Return classified `ProviderFailure<E>` values with causal sources.
 10. Cache expensive service outputs outside Qubit SPI.
 11. Use isolated registries in tests that mutate registrations or defaults.
 
@@ -806,7 +856,7 @@ startup should pick one provider, call `set_default_selection` explicitly.
 
 ### Fallback does not continue
 
-Inspect the terminal attempt's `ProviderErrorKind` and the selection's policy.
+Inspect the terminal attempt's `ProviderFailureKind` and the selection's policy.
 `OnAbsence` stops on `InvalidConfiguration` and `InitializationFailed` by
 design. Named selection has no second candidate.
 

@@ -25,6 +25,8 @@ use qubit_spi::{
 const FUZZ_PROVIDER_ID: &str = "fuzz-provider";
 /// Maximum number of alias or chain fields derived from one input.
 const MAX_FIELDS: usize = 16;
+/// Maximum input size aligned with the CI fuzzing limit to cap parsing work.
+const MAX_INPUT_BYTES: usize = 4096;
 
 /// Verifies successful identity and selector parsing remains canonical.
 ///
@@ -118,6 +120,9 @@ fn assert_chain_invariants(inputs: &[&str]) {
 }
 
 fuzz_target!(|data: &[u8]| {
+    if data.len() > MAX_INPUT_BYTES {
+        return;
+    }
     let Ok(input) = str::from_utf8(data) else {
         return;
     };

@@ -15,7 +15,7 @@ selected or App-defined default service without depending on its concrete type.
 
 ```toml
 [dependencies]
-qubit-spi = "0.10"
+qubit-spi = "0.11"
 ```
 
 Qubit SPI requires Rust 1.94 or later.
@@ -36,7 +36,11 @@ same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
 
 ```rust
 // lib-greeter/src/lib.rs
-use std::sync::{Arc, LazyLock};
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
@@ -60,12 +64,26 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Domain error returned when a Greeter provider cannot create a service.
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
 /// Connects the Greeter configuration and output types to Qubit SPI.
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Input accepted by Greeter providers during service creation.
     type Config = GreeterConfig;
+    // Domain error retained by classified provider failures.
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -107,8 +125,8 @@ the final App owns that policy decision.
 // lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderError;
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -132,7 +150,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
@@ -196,7 +214,7 @@ The asynchronous API keeps catalog work synchronous and makes only service
 creation asynchronous. The Registry therefore has no executor dependency:
 
 ```rust
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
     ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
@@ -207,6 +225,7 @@ struct GreetingSpec;
 
 impl ServiceSpec for GreetingSpec {
     type Config = str;
+    type Error = std::io::Error;
 }
 
 impl AsyncServiceSpec for GreetingSpec {
@@ -227,7 +246,7 @@ impl AsyncServiceProvider<GreetingSpec> for FriendlyProvider {
     fn create_configured<'a>(
         &'a self,
         name: &'a str,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
         Box::pin(async move { Ok(format!("Hello, {name}!")) })
     }
 }
@@ -352,7 +371,7 @@ and does not hold the Registry lock while providers run.
 | `ProviderDescriptorError` | Provider definition | Alias is invalid or internally duplicated |
 | `RegistrationError` | Registration | ID or alias is already owned |
 | `ProviderResolutionError` | Selection resolution | No candidate can be resolved |
-| `ProviderError` | Leaf creation | One concrete provider reports a classified failure |
+| `ProviderFailure<E>` | Leaf creation | One concrete provider reports a classified domain failure |
 | `ProviderCreationError` | Resolver creation | Nonempty aggregate containing only actual provider attempts |
 
 Aggregate creation errors contain only providers that were actually invoked.

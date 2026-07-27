@@ -46,3 +46,11 @@ fn test_provider_failure_into_parts_preserves_non_clone_error() {
     assert_eq!(ProviderFailureKind::InvalidConfiguration, kind);
     assert_eq!("bad", error.0);
 }
+
+/// Verifies typed provider failures transfer the retained domain error alone.
+#[test]
+fn test_provider_failure_into_error_preserves_non_clone_error() {
+    let error = ProviderFailure::unavailable(TestError("offline")).into_error();
+
+    assert_eq!("offline", error.0);
+}

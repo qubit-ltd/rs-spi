@@ -14,7 +14,7 @@ Qubit SPI 为 Rust 提供类型安全、允许运行时注册的 Service Provide
 
 ```toml
 [dependencies]
-qubit-spi = "0.10"
+qubit-spi = "0.11"
 ```
 
 Qubit SPI 要求 Rust 1.94 或更高版本。
@@ -34,7 +34,11 @@ Qubit SPI 要求 Rust 1.94 或更高版本。
 
 ```rust
 // lib-greeter/src/lib.rs
-use std::sync::{Arc, LazyLock};
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
@@ -58,12 +62,26 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Greeter Provider 无法创建 Service 时返回的领域错误。
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
 /// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+    // 分类后的 Provider failure 所保留的领域错误。
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -103,8 +121,8 @@ Provider。它不会自行注册；最终 App 负责决定是否安装这个实�
 // lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderError;
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -128,7 +146,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
@@ -189,7 +207,7 @@ let greeter = provider.create_configured(&config)?;
 异步 API 保持目录操作同步，仅让 Service 创建异步。因此 Registry 不依赖 executor：
 
 ```rust
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
     ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
@@ -200,6 +218,7 @@ struct GreetingSpec;
 
 impl ServiceSpec for GreetingSpec {
     type Config = str;
+    type Error = std::io::Error;
 }
 
 impl AsyncServiceSpec for GreetingSpec {
@@ -220,7 +239,7 @@ impl AsyncServiceProvider<GreetingSpec> for FriendlyProvider {
     fn create_configured<'a>(
         &'a self,
         name: &'a str,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
         Box::pin(async move { Ok(format!("Hello, {name}!")) })
     }
 }
@@ -331,7 +350,7 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 | `ProviderDescriptorError` | Provider 定义 | alias 非法或 descriptor 内部重复 |
 | `RegistrationError` | 注册 | ID 或 alias 已被占用 |
 | `ProviderResolutionError` | selection 解析 | 无法解析出候选 Provider |
-| `ProviderError` | 叶子创建 | 某个具体 Provider 返回分类后的失败 |
+| `ProviderFailure<E>` | 叶子创建 | 某个具体 Provider 返回分类后的领域失败 |
 | `ProviderCreationError` | resolver 创建 | 仅包含实际 Provider 尝试的非空聚合错误 |
 
 聚合创建错误只记录真正调用过的 Provider，并说明候选遍历是全部耗尽，还是因为 fallback

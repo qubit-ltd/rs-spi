@@ -8,6 +8,7 @@
 //! Integration tests for the public Qubit SPI contract.
 
 mod common;
+mod documentation_api_tests;
 mod error;
 mod lib_tests;
 mod provider;

@@ -114,7 +114,9 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
     assert!(!error.is_absence());
     assert_eq!("invalid", error.decisive_attempt().provider_id().as_str());
     assert!(Error::source(&error).is_some());
-    assert!(error.to_string().contains(
+    let mut display = String::new();
+    write!(&mut display, "{error}").expect("display formatting should succeed");
+    assert!(display.contains(
         "provider creation stopped by fallback policy after 1 attempt(s)"
     ));
 }

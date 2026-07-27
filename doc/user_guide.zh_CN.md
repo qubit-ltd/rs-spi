@@ -91,7 +91,11 @@ Registry，因为它们使用不同的 `ServiceSpec`。
 config 类型中。
 
 ```rust
-use std::sync::Arc;
+use std::{
+    error::Error,
+    fmt,
+    sync::Arc,
+};
 
 use qubit_spi::{ServiceSpec, SyncServiceSpec};
 
@@ -115,12 +119,36 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Greeter Provider 失败时保留的领域错误。
+#[derive(Debug)]
+struct GreeterError {
+    message: String,
+}
+
+impl GreeterError {
+    fn invalid_configuration(message: &str) -> Self {
+        Self {
+            message: message.to_owned(),
+        }
+    }
+}
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for GreeterError {}
+
 /// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
 struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+    // 分类后的 Provider failure 所保留的领域错误。
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -148,7 +176,7 @@ client 或轻量 handle。Qubit SPI 不会用 Provider 元数据包装成功结�
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -172,10 +200,12 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         if config.prefix.trim().is_empty() {
-            return Err(ProviderError::invalid_configuration(
-                "the greeting prefix must not be empty",
+            return Err(ProviderFailure::invalid_configuration(
+                GreeterError::invalid_configuration(
+                    "the greeting prefix must not be empty",
+                ),
             ));
         }
         Ok(Arc::new(FriendlyGreeter {
@@ -215,7 +245,7 @@ output；异步 resolver 的创建方法是 `async`，必须 await 才能获得 
 ```rust,ignore
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
     ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
@@ -233,11 +263,13 @@ impl AsyncServiceProvider<GreeterSpec> for AsyncFriendlyGreeterProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a GreeterConfig,
-    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>>> {
         Box::pin(async move {
             if config.prefix.trim().is_empty() {
-                return Err(ProviderError::invalid_configuration(
-                    "the greeting prefix must not be empty",
+                return Err(ProviderFailure::invalid_configuration(
+                    GreeterError::invalid_configuration(
+                        "the greeting prefix must not be empty",
+                    ),
                 ));
             }
             Ok(Arc::new(FriendlyGreeter {
@@ -359,7 +391,11 @@ Registry 实例。
 
 ```rust
 // lib-greeter/src/lib.rs
-use std::sync::{Arc, LazyLock};
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
 use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
 
@@ -383,12 +419,26 @@ impl Default for GreeterConfig {
     }
 }
 
+/// Greeter Provider 失败时保留的领域错误。
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
 /// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
 pub struct GreeterSpec;
 
 impl ServiceSpec for GreeterSpec {
     // Provider 创建 Greeter 时接收的输入类型。
     type Config = GreeterConfig;
+    // 分类后的 Provider failure 所保留的领域错误。
+    type Error = GreeterError;
 }
 
 impl SyncServiceSpec for GreeterSpec {
@@ -427,8 +477,8 @@ pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
 // lib-friendly-greeter/src/lib.rs
 use std::sync::Arc;
 
-use lib_greeter::{Greeter, GreeterConfig, GreeterSpec};
-use qubit_spi::error::ProviderError;
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
 };
@@ -452,7 +502,7 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
     fn create_configured(
         &self,
         config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderError> {
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
         Ok(Arc::new(FriendlyGreeter {
             prefix: config.prefix.clone(),
         }))
@@ -591,7 +641,7 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 `ProviderRegistry::resolve` 和 `ProviderRegistry::resolve_selected` 返回
 `ResolvingServiceProvider<S>`。它是一个组合型 resolver：持有候选 Provider handle，
 并在调用 `create` 时执行 selection 中的 fallback policy。它的固有创建方法返回聚合
-`ProviderCreationError`，而不是叶 Provider 接口要求的 `ProviderError`。
+`ProviderCreationError`，而不是叶 Provider 接口要求的 `ProviderFailure<E>`。
 
 对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的固有创建
 方法是异步方法；await 后得到异步 `S::Output`。叶 `AsyncServiceProvider<S>` 接口才返回
@@ -629,7 +679,7 @@ Fallback 属于 `ProviderSelection`，因为它是调用方的请求策略，而
 可能属于编程或部署错误的问题则立即停止。只有明确需要降级的 best-effort 行为时才使用
 `OnAnyError`。
 
-Provider 返回叶子 `ProviderError` 后才会判断 fallback。只有同步或异步 resolver
+Provider 返回叶子 `ProviderFailure<E>` 后才会判断 fallback。只有同步或异步 resolver
 会把实际尝试聚合成 `ProviderCreationError`。
 
 ## 错误模型
@@ -663,7 +713,7 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。只有同步或
 
 ### 叶子 Provider 错误
 
-具体 Provider 使用 `ProviderErrorKind` 对 `ProviderError` 分类：
+具体 Provider 使用 `ProviderFailureKind` 对 `ProviderFailure<E>` 分类：
 
 - `Unsupported`：Provider 不支持本次请求；
 - `Unavailable`：Provider 或依赖环境不存在；
@@ -678,7 +728,7 @@ Provider 返回叶子 `ProviderError` 后才会判断 fallback。只有同步或
 `ProviderCreationError` 始终是 resolver 产生的非空聚合错误。
 
 每个 `ProviderAttemptFailure` 保存实际调用 Provider 的 canonical ID 和原始
-`ProviderError`。chain 中不存在的 selector 不会伪造 attempt。
+`ProviderFailure<E>`。chain 中不存在的 selector 不会伪造 attempt。
 
 `ProviderCreationTermination` 说明遍历为何结束：
 
@@ -732,7 +782,7 @@ Provider trait 要求存储的定义满足线程安全约束，因此 `ProviderR
 6. 把默认策略放在 Registry 中；只有调用方有真实要求时才传显式 selection。
 7. 保持 selection 与 Service config 相互独立。
 8. 默认使用 `OnAbsence`；在调用点说明为何需要 `OnAnyError`。
-9. 返回分类清晰并保留 causal source 的 `ProviderError`。
+9. 返回分类清晰并保留 causal source 的 `ProviderFailure<E>`。
 10. 在 Qubit SPI 外缓存构造成本较高的 Service 输出。
 11. 修改注册或默认值的测试使用隔离 Registry。
 
@@ -753,7 +803,7 @@ canonical ID 升序排列。如果 App 启动时应固定一个 Provider，请�
 
 ### Fallback 没有继续
 
-检查 terminal attempt 的 `ProviderErrorKind` 和 selection policy。`OnAbsence` 有意在
+检查 terminal attempt 的 `ProviderFailureKind` 和 selection policy。`OnAbsence` 有意在
 `InvalidConfiguration` 和 `InitializationFailed` 后停止。named selection 也没有第二
 个候选。
 
