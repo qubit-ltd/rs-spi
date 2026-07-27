@@ -7,8 +7,10 @@
 // =============================================================================
 //! Provider contract for pluggable service implementations.
 
-use crate::SyncServiceSpec;
-use crate::error::ProviderError;
+use crate::{
+    SyncServiceSpec,
+    error::ProviderFailure,
+};
 
 /// Factory contract for one pluggable service implementation.
 ///
@@ -37,14 +39,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderError`] when the provider cannot create the service
+    /// Returns ProviderFailure when the provider cannot create the service
     /// from the default configuration.
     ///
     /// # Panics
     ///
     /// Panics if `S::Config::default()` or [`Self::create_configured`] panics.
     #[inline(always)]
-    fn create(&self) -> Result<S::Output, ProviderError>
+    fn create(&self) -> Result<S::Output, ProviderFailure<S::Error>>
     where
         S::Config: Default,
     {
@@ -63,7 +65,7 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`ProviderError`] when this provider cannot create the requested
+    /// Returns ProviderFailure when this provider cannot create the requested
     /// service. Registry resolvers aggregate this leaf failure with provider
     /// identity and fallback termination diagnostics.
     ///
@@ -74,5 +76,5 @@ where
     fn create_configured(
         &self,
         config: &S::Config,
-    ) -> Result<S::Output, ProviderError>;
+    ) -> Result<S::Output, ProviderFailure<S::Error>>;
 }

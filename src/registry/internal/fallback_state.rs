@@ -10,7 +10,7 @@
 use crate::error::{
     ProviderAttemptFailure,
     ProviderCreationError,
-    ProviderError,
+    ProviderFailure,
 };
 use crate::{
     FallbackPolicy,
@@ -18,14 +18,14 @@ use crate::{
 };
 
 /// Mutable failure state retained while a resolver traverses candidates.
-pub(crate) struct FallbackState {
+pub(crate) struct FallbackState<E> {
     /// Policy deciding whether an untried candidate remains admissible.
     policy: FallbackPolicy,
     /// Actual provider failures in encounter order.
-    attempts: Vec<ProviderAttemptFailure>,
+    attempts: Vec<ProviderAttemptFailure<E>>,
 }
 
-impl FallbackState {
+impl<E> FallbackState<E> {
     /// Creates empty traversal state for one fallback policy.
     ///
     /// # Parameters
@@ -59,18 +59,18 @@ impl FallbackState {
     pub(crate) fn record_failure(
         &mut self,
         provider_id: ProviderId,
-        error: ProviderError,
+        failure: ProviderFailure<E>,
         has_remaining: bool,
-    ) -> Option<ProviderCreationError> {
-        let kind = error.kind();
+    ) -> Option<ProviderCreationError<E>> {
+        let kind = failure.kind();
         self.attempts
-            .push(ProviderAttemptFailure::new(provider_id, error));
+            .push(ProviderAttemptFailure::new(provider_id, failure));
         if !has_remaining {
             return Some(ProviderCreationError::exhausted(std::mem::take(
                 &mut self.attempts,
             )));
         }
-        if !self.policy.allows(kind) {
+        if !self.policy.should_continue_after(kind) {
             return Some(ProviderCreationError::stopped_by_policy(
                 std::mem::take(&mut self.attempts),
             ));

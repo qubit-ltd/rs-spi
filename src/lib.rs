@@ -16,7 +16,11 @@
 //! # Example
 //!
 //! ```rust
-//! use std::sync::Arc;
+//! use std::{
+//!     error::Error,
+//!     fmt,
+//!     sync::Arc,
+//! };
 //!
 //! use qubit_spi::{
 //!     ProviderDescriptor,
@@ -28,7 +32,7 @@
 //!     ServiceSpec,
 //!     SyncServiceSpec,
 //! };
-//! use qubit_spi::error::ProviderError;
+//! use qubit_spi::error::ProviderFailure;
 //!
 //! trait Greeter: Send + Sync {
 //!     fn greet(&self) -> &'static str;
@@ -44,8 +48,20 @@
 //!
 //! struct GreeterSpec;
 //!
+//! #[derive(Debug)]
+//! struct GreeterError;
+//!
+//! impl fmt::Display for GreeterError {
+//!     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         formatter.write_str("greeter creation failed")
+//!     }
+//! }
+//!
+//! impl Error for GreeterError {}
+//!
 //! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
+//!     type Error = GreeterError;
 //! }
 //!
 //! impl SyncServiceSpec for GreeterSpec {
@@ -60,7 +76,7 @@
 //!     fn create_configured(
 //!         &self,
 //!         _config: &(),
-//!     ) -> Result<Arc<dyn Greeter>, ProviderError> {
+//!     ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
 //!         Ok(Arc::new(EnglishGreeter))
 //!     }
 //! }
@@ -89,9 +105,13 @@
 //! runtime-independent [`ProviderFuture`]:
 //!
 //! ```rust
-//! use std::sync::Arc;
+//! use std::{
+//!     error::Error,
+//!     fmt,
+//!     sync::Arc,
+//! };
 //!
-//! use qubit_spi::error::ProviderError;
+//! use qubit_spi::error::ProviderFailure;
 //! use qubit_spi::{
 //!     AsyncProviderRegistry,
 //!     AsyncServiceProvider,
@@ -118,8 +138,20 @@
 //!
 //! struct GreeterSpec;
 //!
+//! #[derive(Debug)]
+//! struct GreeterError;
+//!
+//! impl fmt::Display for GreeterError {
+//!     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         formatter.write_str("greeter creation failed")
+//!     }
+//! }
+//!
+//! impl Error for GreeterError {}
+//!
 //! impl ServiceSpec for GreeterSpec {
 //!     type Config = ();
+//!     type Error = GreeterError;
 //! }
 //!
 //! impl AsyncServiceSpec for GreeterSpec {
@@ -132,7 +164,7 @@
 //!     fn create_configured<'a>(
 //!         &'a self,
 //!         _config: &'a (),
-//!     ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderError>> {
+//!     ) -> ProviderFuture<'a, Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>>> {
 //!         Box::pin(async {
 //!             Ok(Arc::new(EnglishGreeter) as Arc<dyn Greeter>)
 //!         })

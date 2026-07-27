@@ -9,11 +9,15 @@
 use futures::executor::block_on;
 use qubit_spi::AsyncServiceProvider;
 use qubit_spi::error::{
-    ProviderError,
-    ProviderErrorKind,
+    ProviderFailure,
+    ProviderFailureKind,
 };
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
+use crate::common::test_error::{
+    TestError,
+    TestProviderFailure,
+};
 
 /// Verifies explicit and default asynchronous provider creation.
 #[test]
@@ -32,20 +36,20 @@ fn test_async_provider_creates_with_explicit_and_default_config() {
     );
 }
 
-/// Verifies that asynchronous leaf providers return `ProviderError` directly.
+/// Verifies that asynchronous leaf providers return their typed failure directly.
 #[test]
-fn test_async_leaf_provider_returns_provider_error_directly() {
+fn test_async_leaf_provider_returns_typed_failure_directly() {
     let provider = AsyncConfigurableProvider::failure(
-        ProviderError::unavailable("offline"),
+        TestProviderFailure::unavailable("offline"),
     );
     let config = String::new();
     let future = provider.create_configured(&config);
 
     fn assert_send<T: Send>(_: &T) {}
     assert_send(&future);
-    let error: ProviderError =
+    let error: ProviderFailure<TestError> =
         block_on(future).expect_err("async leaf provider should fail");
-    assert_eq!(ProviderErrorKind::Unavailable, error.kind());
+    assert_eq!(ProviderFailureKind::Unavailable, error.kind());
 }
 
 /// Verifies stable asynchronous provider output.

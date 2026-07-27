@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderError;
 use qubit_spi::{
     AsyncServiceProvider,
     AsyncServiceSpec,
@@ -15,6 +14,7 @@ use qubit_spi::{
     ProviderMetadata,
     ServiceProvider,
     SyncServiceSpec,
+    error::ProviderFailure,
 };
 
 /// A self-described provider assembled from existing test fixtures.
@@ -32,7 +32,7 @@ where
     fn create_configured<'a>(
         &'a self,
         config: &'a S::Config,
-    ) -> ProviderFuture<'a, Result<S::Output, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<S::Output, ProviderFailure<S::Error>>> {
         self.provider.create_configured(config)
     }
 }
@@ -45,7 +45,7 @@ where
     fn create_configured(
         &self,
         config: &S::Config,
-    ) -> Result<S::Output, ProviderError> {
+    ) -> Result<S::Output, ProviderFailure<S::Error>> {
         self.provider.create_configured(config)
     }
 }

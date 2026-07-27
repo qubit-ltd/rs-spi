@@ -12,11 +12,14 @@ use qubit_spi::{
     SyncServiceSpec,
 };
 
+use super::test_error::TestError;
+
 /// Service family pairing string configuration with string output.
 pub(crate) struct StringSpec;
 
 impl ServiceSpec for StringSpec {
     type Config = String;
+    type Error = TestError;
 }
 
 impl SyncServiceSpec for StringSpec {

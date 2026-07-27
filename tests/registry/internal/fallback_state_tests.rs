@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
@@ -17,6 +16,7 @@ use qubit_spi::{
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies resolver fallback state advances after an absence failure.
@@ -28,7 +28,7 @@ fn test_fallback_state_advances_to_the_next_candidate() {
             ProviderDescriptor::new(
                 ProviderId::new("missing").expect("static ID should be valid"),
             ),
-            ConfigurableProvider::failure(ProviderError::unavailable(
+            ConfigurableProvider::failure(TestProviderFailure::unavailable(
                 "provider is absent",
             )),
         ))

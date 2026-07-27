@@ -34,7 +34,7 @@ impl qubit_spi::AsyncServiceProvider<StringSpec> for DescribedAsyncProvider {
         config: &'a String,
     ) -> qubit_spi::ProviderFuture<
         'a,
-        Result<String, qubit_spi::error::ProviderError>,
+        Result<String, qubit_spi::error::ProviderFailure<crate::common::test_error::TestError>>,
     > {
         self.provider.create_configured(config)
     }

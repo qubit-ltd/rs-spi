@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderMetadata,
@@ -14,6 +14,7 @@ use qubit_spi::{
 };
 
 use super::string_spec::StringSpec;
+use super::test_error::TestError;
 
 /// Provider fixture carrying its registration metadata and service output.
 pub(crate) struct SelfDescribedProvider {
@@ -56,7 +57,7 @@ impl ServiceProvider<StringSpec> for SelfDescribedProvider {
     fn create_configured(
         &self,
         _config: &String,
-    ) -> Result<String, ProviderError> {
+    ) -> Result<String, ProviderFailure<TestError>> {
         Ok(self.output.to_string())
     }
 }

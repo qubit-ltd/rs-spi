@@ -6,18 +6,19 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderError;
 use qubit_spi::{
     AsyncServiceProvider,
     ProviderFuture,
+    error::ProviderFailure,
 };
 
 use super::string_spec::StringSpec;
+use super::test_error::TestError;
 
 /// Asynchronous provider fixture supporting stable, echo, and failing outcomes.
 pub(crate) struct AsyncConfigurableProvider {
     output: Option<Box<str>>,
-    error: Option<ProviderError>,
+    error: Option<ProviderFailure<TestError>>,
     echo_config: bool,
 }
 
@@ -41,7 +42,7 @@ impl AsyncConfigurableProvider {
     }
 
     /// Creates an asynchronous provider returning one classified failure.
-    pub(crate) fn failure(error: ProviderError) -> Self {
+    pub(crate) fn failure(error: ProviderFailure<TestError>) -> Self {
         Self {
             output: None,
             error: Some(error),
@@ -55,7 +56,7 @@ impl AsyncServiceProvider<StringSpec> for AsyncConfigurableProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a String,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         Box::pin(async move {
             if let Some(error) = &self.error {
                 return Err(error.clone());

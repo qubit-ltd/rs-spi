@@ -16,10 +16,7 @@ use std::{
 };
 
 use futures::executor::block_on;
-use qubit_spi::error::{
-    ProviderError,
-    ProviderResolutionError,
-};
+use qubit_spi::error::ProviderResolutionError;
 use qubit_spi::{
     AsyncProviderDefinition,
     AsyncProviderRegistry,
@@ -32,6 +29,7 @@ use qubit_spi::{
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies synchronous registration and resolution with asynchronous creation.
@@ -104,7 +102,7 @@ fn test_async_registry_allows_explicit_missing_chain_entries() {
         "first",
         &["one"],
         0,
-        AsyncConfigurableProvider::failure(ProviderError::unavailable(
+        AsyncConfigurableProvider::failure(TestProviderFailure::unavailable(
             "offline",
         )),
     );

@@ -14,22 +14,19 @@ use std::{
 
 use crate::ProviderCreationTermination;
 
-use super::{
-    ProviderAttemptFailure,
-    ProviderErrorKind,
-};
+use super::ProviderAttemptFailure;
 
 /// Nonempty aggregate returned when a resolver cannot create a service.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct ProviderCreationError {
+pub struct ProviderCreationError<E> {
     /// Actual provider failures in encounter order.
-    attempts: Box<[ProviderAttemptFailure]>,
+    attempts: Box<[ProviderAttemptFailure<E>]>,
     /// Reason candidate traversal ended without a service.
     termination: ProviderCreationTermination,
 }
 
-impl ProviderCreationError {
+impl<E> ProviderCreationError<E> {
     /// Creates an aggregate after every admitted candidate fails.
     ///
     /// # Parameters
@@ -45,7 +42,7 @@ impl ProviderCreationError {
     /// Panics when `attempts` is empty.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure>) -> Self {
+    pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::Exhausted)
     }
 
@@ -65,7 +62,7 @@ impl ProviderCreationError {
     #[inline(always)]
     #[must_use]
     pub(crate) fn stopped_by_policy(
-        attempts: Vec<ProviderAttemptFailure>,
+        attempts: Vec<ProviderAttemptFailure<E>>,
     ) -> Self {
         Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
@@ -87,7 +84,7 @@ impl ProviderCreationError {
     #[inline]
     #[must_use]
     fn new(
-        attempts: Vec<ProviderAttemptFailure>,
+        attempts: Vec<ProviderAttemptFailure<E>>,
         termination: ProviderCreationTermination,
     ) -> Self {
         assert!(
@@ -107,7 +104,7 @@ impl ProviderCreationError {
     /// The nonempty attempt sequence retained by this aggregate.
     #[inline(always)]
     #[must_use]
-    pub const fn attempts(&self) -> &[ProviderAttemptFailure] {
+    pub const fn attempts(&self) -> &[ProviderAttemptFailure<E>] {
         &self.attempts
     }
 
@@ -133,7 +130,7 @@ impl ProviderCreationError {
     /// Panics only if the internal nonempty-attempt invariant is violated.
     #[inline]
     #[must_use]
-    pub fn decisive_attempt(&self) -> &ProviderAttemptFailure {
+    pub fn decisive_attempt(&self) -> &ProviderAttemptFailure<E> {
         self.attempts
             .last()
             .expect("provider creation errors contain an attempt")
@@ -148,15 +145,28 @@ impl ProviderCreationError {
     #[must_use]
     pub fn is_absence(&self) -> bool {
         self.attempts.iter().all(|attempt| {
-            matches!(
-                attempt.error().kind(),
-                ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable
-            )
+            attempt.failure().kind().is_absence()
         })
+    }
+
+    /// Transfers ownership of all attempts and the termination reason.
+    ///
+    /// # Returns
+    ///
+    /// The ordered attempts and the reason traversal ended.
+    #[inline(always)]
+    #[must_use]
+    pub fn into_parts(
+        self,
+    ) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
+        (self.attempts, self.termination)
     }
 }
 
-impl fmt::Display for ProviderCreationError {
+impl<E> fmt::Display for ProviderCreationError<E>
+where
+    E: fmt::Display,
+{
     /// Formats aggregate provider creation diagnostics.
     ///
     /// # Parameters
@@ -190,7 +200,10 @@ impl fmt::Display for ProviderCreationError {
     }
 }
 
-impl Error for ProviderCreationError {
+impl<E> Error for ProviderCreationError<E>
+where
+    E: Error + 'static,
+{
     /// Returns the final provider attempt as the decisive cause.
     ///
     /// # Returns

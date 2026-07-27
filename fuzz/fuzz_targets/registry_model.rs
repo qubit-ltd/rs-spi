@@ -15,7 +15,7 @@ use std::collections::{
 };
 
 use libfuzzer_sys::fuzz_target;
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
@@ -39,6 +39,8 @@ struct FuzzSpec;
 impl ServiceSpec for FuzzSpec {
     /// Configuration is unused by the provider fixtures.
     type Config = ();
+    /// Fuzz providers do not produce domain errors.
+    type Error = std::io::Error;
 }
 
 impl SyncServiceSpec for FuzzSpec {
@@ -73,7 +75,10 @@ impl ServiceProvider<FuzzSpec> for FuzzProvider {
     /// # Errors
     ///
     /// This fixture never returns a provider creation error.
-    fn create_configured(&self, _config: &()) -> Result<String, ProviderError> {
+    fn create_configured(
+        &self,
+        _config: &(),
+    ) -> Result<String, ProviderFailure<std::io::Error>> {
         Ok(self.descriptor.id().as_str().to_owned())
     }
 }

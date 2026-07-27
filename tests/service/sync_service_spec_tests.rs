@@ -16,6 +16,7 @@ struct ByteCountSpec;
 
 impl ServiceSpec for ByteCountSpec {
     type Config = [u8];
+    type Error = std::io::Error;
 }
 
 impl SyncServiceSpec for ByteCountSpec {

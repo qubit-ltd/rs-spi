@@ -11,7 +11,7 @@ use std::{
     fmt::Write,
 };
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     FallbackPolicy,
     ProviderCreationTermination,
@@ -24,6 +24,10 @@ use qubit_spi::{
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::failing_writer::FailingWriter;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::{
+    TestError,
+    TestProviderFailure,
+};
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies diagnostics for exhaustion after multiple absence failures.
@@ -34,13 +38,13 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         &registry,
         "first",
         20,
-        ProviderError::unavailable("first unavailable"),
+        TestProviderFailure::unavailable("first unavailable"),
     );
     register_failure(
         &registry,
         "second",
         10,
-        ProviderError::unsupported("second unsupported"),
+        TestProviderFailure::unsupported("second unsupported"),
     );
     let selection = ProviderSelection::auto()
         .with_fallback_policy(FallbackPolicy::OnAnyError);
@@ -84,7 +88,7 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         &registry,
         "invalid",
         20,
-        ProviderError::invalid_configuration("bad config"),
+        TestProviderFailure::invalid_configuration("bad config"),
     );
     registry
         .register(define_provider(
@@ -123,7 +127,7 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
         &registry,
         "remote",
         0,
-        ProviderError::unavailable("offline"),
+        TestProviderFailure::unavailable("offline"),
     );
     let selection = ProviderSelection::named("remote")
         .expect("test selector should be valid");
@@ -153,13 +157,13 @@ fn test_aggregate_creation_error_propagates_formatter_failures() {
         &registry,
         "first",
         10,
-        ProviderError::unavailable("first unavailable"),
+        TestProviderFailure::unavailable("first unavailable"),
     );
     register_failure(
         &registry,
         "second",
         0,
-        ProviderError::unavailable("second unavailable"),
+        TestProviderFailure::unavailable("second unavailable"),
     );
     let error = registry
         .resolve_selected(&ProviderSelection::auto())
@@ -189,7 +193,7 @@ fn register_failure(
     registry: &ProviderRegistry<StringSpec>,
     id: &str,
     priority: i32,
-    error: ProviderError,
+    error: ProviderFailure<TestError>,
 ) {
     registry
         .register(define_provider(

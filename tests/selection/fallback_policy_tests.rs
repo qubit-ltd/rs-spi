@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::error::ProviderErrorKind;
+use qubit_spi::error::ProviderFailureKind;
 use qubit_spi::{
     FallbackPolicy,
     ProviderSelection,
@@ -23,61 +23,61 @@ fn test_selection_uses_on_absence_by_default() {
 
 /// Verifies every fallback policy against every provider error kind.
 #[test]
-fn test_fallback_policy_allows_expected_error_kinds() {
+fn test_fallback_policy_continues_after_expected_failure_kinds() {
     for (policy, kind, expected) in [
-        (FallbackPolicy::Never, ProviderErrorKind::Unsupported, false),
-        (FallbackPolicy::Never, ProviderErrorKind::Unavailable, false),
+        (FallbackPolicy::Never, ProviderFailureKind::Unsupported, false),
+        (FallbackPolicy::Never, ProviderFailureKind::Unavailable, false),
         (
             FallbackPolicy::Never,
-            ProviderErrorKind::InvalidConfiguration,
+            ProviderFailureKind::InvalidConfiguration,
             false,
         ),
         (
             FallbackPolicy::Never,
-            ProviderErrorKind::InitializationFailed,
+            ProviderFailureKind::InitializationFailed,
             false,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderErrorKind::Unsupported,
+            ProviderFailureKind::Unsupported,
             true,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderErrorKind::Unavailable,
+            ProviderFailureKind::Unavailable,
             true,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderErrorKind::InvalidConfiguration,
+            ProviderFailureKind::InvalidConfiguration,
             false,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderErrorKind::InitializationFailed,
+            ProviderFailureKind::InitializationFailed,
             false,
         ),
         (
             FallbackPolicy::OnAnyError,
-            ProviderErrorKind::Unsupported,
+            ProviderFailureKind::Unsupported,
             true,
         ),
         (
             FallbackPolicy::OnAnyError,
-            ProviderErrorKind::Unavailable,
+            ProviderFailureKind::Unavailable,
             true,
         ),
         (
             FallbackPolicy::OnAnyError,
-            ProviderErrorKind::InvalidConfiguration,
+            ProviderFailureKind::InvalidConfiguration,
             true,
         ),
         (
             FallbackPolicy::OnAnyError,
-            ProviderErrorKind::InitializationFailed,
+            ProviderFailureKind::InitializationFailed,
             true,
         ),
     ] {
-        assert_eq!(expected, policy.allows(kind));
+        assert_eq!(expected, policy.should_continue_after(kind));
     }
 }

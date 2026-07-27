@@ -27,8 +27,8 @@ use std::{
 use futures::channel::oneshot;
 use futures::executor::block_on;
 use qubit_spi::error::{
-    ProviderError,
-    ProviderErrorKind,
+    ProviderFailure,
+    ProviderFailureKind,
 };
 use qubit_spi::{
     AsyncProviderRegistry,
@@ -44,6 +44,10 @@ use qubit_spi::{
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::{
+    TestError,
+    TestProviderFailure,
+};
 use crate::registry::async_provider_registry_tests::register_provider;
 
 /// Requires a value to implement [`Send`].
@@ -73,22 +77,22 @@ fn test_async_resolver_applies_all_fallback_policies() {
     for (policy, error, succeeds) in [
         (
             FallbackPolicy::Never,
-            ProviderError::unavailable("offline"),
+            TestProviderFailure::unavailable("offline"),
             false,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderError::unavailable("offline"),
+            TestProviderFailure::unavailable("offline"),
             true,
         ),
         (
             FallbackPolicy::OnAbsence,
-            ProviderError::invalid_configuration("invalid"),
+            TestProviderFailure::invalid_configuration("invalid"),
             false,
         ),
         (
             FallbackPolicy::OnAnyError,
-            ProviderError::initialization_failed("broken"),
+            TestProviderFailure::initialization_failed("broken"),
             true,
         ),
     ] {
@@ -164,7 +168,7 @@ fn test_async_resolver_retains_attempt_order_and_sources() {
             &[],
             priority,
             AsyncConfigurableProvider::failure(
-                ProviderError::unavailable_with_source(
+                TestProviderFailure::unavailable_with_source(
                     format!("{id} unavailable"),
                     std::io::Error::other(format!("{id} source")),
                 ),
@@ -268,7 +272,7 @@ impl AsyncServiceProvider<StringSpec> for PendingProvider {
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         let entered = self
             .entered
             .lock()
@@ -286,7 +290,7 @@ impl AsyncServiceProvider<StringSpec> for PendingProvider {
                 .send(())
                 .expect("entry receiver should remain alive");
             release.await.map_err(|error| {
-                ProviderError::initialization_failed_with_source(
+                TestProviderFailure::initialization_failed_with_source(
                     "release signal was canceled",
                     error,
                 )
@@ -347,7 +351,7 @@ fn test_async_final_failure_is_exhausted() {
         &[],
         0,
         AsyncConfigurableProvider::failure(
-            ProviderError::invalid_configuration("invalid"),
+            TestProviderFailure::invalid_configuration("invalid"),
         ),
     );
 
@@ -360,8 +364,8 @@ fn test_async_final_failure_is_exhausted() {
     .expect_err("only provider should fail");
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination());
     assert_eq!(
-        ProviderErrorKind::InvalidConfiguration,
-        error.decisive_attempt().error().kind()
+        ProviderFailureKind::InvalidConfiguration,
+        error.decisive_attempt().failure().kind()
     );
 }
 
@@ -373,7 +377,7 @@ impl AsyncServiceProvider<StringSpec> for AsyncPanickingProvider {
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         Box::pin(async { panic!("test provider panic") })
     }
 }
@@ -388,7 +392,7 @@ impl AsyncServiceProvider<StringSpec> for AsyncCountingProvider {
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
-    ) -> ProviderFuture<'a, Result<String, ProviderError>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok("fallback".to_owned()) })
     }

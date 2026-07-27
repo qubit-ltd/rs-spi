@@ -8,10 +8,7 @@
 
 use std::error::Error;
 
-use qubit_spi::error::{
-    ProviderError,
-    ProviderErrorKind,
-};
+use qubit_spi::error::ProviderFailureKind;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
@@ -21,6 +18,7 @@ use qubit_spi::{
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies attempt accessors, display text, and standard error chaining.
@@ -34,7 +32,7 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
                     .expect("test provider ID should be valid"),
             ),
             ConfigurableProvider::failure(
-                ProviderError::unavailable_with_source(
+                TestProviderFailure::unavailable_with_source(
                     "runtime is absent",
                     std::io::Error::other("ENOENT"),
                 ),
@@ -49,8 +47,8 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
     let attempt = &error.attempts()[0];
 
     assert_eq!("remote", attempt.provider_id().as_str());
-    assert_eq!(ProviderErrorKind::Unavailable, attempt.error().kind());
-    assert_eq!("runtime is absent", attempt.error().reason());
+    assert_eq!(ProviderFailureKind::Unavailable, attempt.failure().kind());
+    assert_eq!("runtime is absent", attempt.failure().error().reason());
     assert!(attempt.to_string().contains("remote"));
     assert!(attempt.to_string().contains("runtime is absent"));
     assert!(Error::source(attempt).is_some());

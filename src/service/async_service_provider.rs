@@ -7,10 +7,10 @@
 // =============================================================================
 //! Asynchronous provider contract for pluggable service implementations.
 
-use crate::error::ProviderError;
 use crate::{
     AsyncServiceSpec,
     ProviderFuture,
+    error::ProviderFailure,
 };
 
 /// Runtime-independent asynchronous factory contract for one provider.
@@ -31,14 +31,16 @@ where
     ///
     /// # Errors
     ///
-    /// The future yields [`ProviderError`] when the provider cannot create the
+    /// The future yields ProviderFailure when the provider cannot create the
     /// service from the default configuration.
     ///
     /// # Panics
     ///
     /// The returned future may panic if `S::Config::default()` or
     /// [`Self::create_configured`] panics.
-    fn create(&self) -> ProviderFuture<'_, Result<S::Output, ProviderError>>
+    fn create(
+        &self,
+    ) -> ProviderFuture<'_, Result<S::Output, ProviderFailure<S::Error>>>
     where
         S::Config: Default + Send,
     {
@@ -65,7 +67,7 @@ where
     ///
     /// # Errors
     ///
-    /// The future yields [`ProviderError`] when this provider cannot create
+    /// The future yields ProviderFailure when this provider cannot create
     /// the requested service.
     ///
     /// # Panics
@@ -75,5 +77,5 @@ where
     fn create_configured<'a>(
         &'a self,
         config: &'a S::Config,
-    ) -> ProviderFuture<'a, Result<S::Output, ProviderError>>;
+    ) -> ProviderFuture<'a, Result<S::Output, ProviderFailure<S::Error>>>;
 }

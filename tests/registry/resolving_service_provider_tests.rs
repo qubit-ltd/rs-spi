@@ -24,7 +24,7 @@ use std::{
 };
 
 use qubit_spi::error::{
-    ProviderError,
+    ProviderFailure,
     ProviderResolutionError,
 };
 use qubit_spi::{
@@ -40,6 +40,10 @@ use qubit_spi::{
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::{
+    TestError,
+    TestProviderFailure,
+};
 use crate::common::test_provider_definition::define_provider;
 
 mod inherent_api_tests {
@@ -252,7 +256,7 @@ fn test_registry_allows_explicitly_missing_chain_entries_and_deduplicates() {
         "first",
         &["one"],
         0,
-        ConfigurableProvider::failure(ProviderError::unavailable("offline"))
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline"))
             .with_calls(Arc::clone(&first_calls)),
     );
     register_provider(
@@ -311,7 +315,7 @@ fn test_registry_auto_fallback_attempts_follow_ranked_order() {
             id,
             &[],
             priority,
-            ConfigurableProvider::failure(ProviderError::unavailable(format!(
+            ConfigurableProvider::failure(TestProviderFailure::unavailable(format!(
                 "{id} unavailable"
             ))),
         );
@@ -458,7 +462,7 @@ fn test_never_stops_after_first_failure() {
         "first",
         &[],
         20,
-        ConfigurableProvider::failure(ProviderError::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     register_provider(
         &registry,
@@ -494,14 +498,14 @@ fn test_on_absence_continues_after_unsupported_and_unavailable() {
         "unsupported",
         &[],
         30,
-        ConfigurableProvider::failure(ProviderError::unsupported("no format")),
+        ConfigurableProvider::failure(TestProviderFailure::unsupported("no format")),
     );
     register_provider(
         &registry,
         "unavailable",
         &[],
         20,
-        ConfigurableProvider::failure(ProviderError::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     register_provider(
         &registry,
@@ -524,8 +528,8 @@ fn test_on_absence_continues_after_unsupported_and_unavailable() {
 #[test]
 fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
     for error in [
-        ProviderError::invalid_configuration("bad config"),
-        ProviderError::initialization_failed("broken"),
+        TestProviderFailure::invalid_configuration("bad config"),
+        TestProviderFailure::initialization_failed("broken"),
     ] {
         let registry = ProviderRegistry::<StringSpec>::default();
         register_provider(
@@ -561,10 +565,10 @@ fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
 #[test]
 fn test_on_any_error_continues_after_every_leaf_failure_kind() {
     for error in [
-        ProviderError::unsupported("unsupported"),
-        ProviderError::unavailable("unavailable"),
-        ProviderError::invalid_configuration("invalid"),
-        ProviderError::initialization_failed("broken"),
+        TestProviderFailure::unsupported("unsupported"),
+        TestProviderFailure::unavailable("unavailable"),
+        TestProviderFailure::invalid_configuration("invalid"),
+        TestProviderFailure::initialization_failed("broken"),
     ] {
         let registry = ProviderRegistry::<StringSpec>::default();
         register_provider(
@@ -605,7 +609,7 @@ fn test_creation_error_preserves_ordered_provider_ids_and_sources() {
             &[],
             priority,
             ConfigurableProvider::failure(
-                ProviderError::unavailable_with_source(
+                TestProviderFailure::unavailable_with_source(
                     format!("{id} unavailable"),
                     std::io::Error::other(format!("{id} source")),
                 ),
@@ -645,7 +649,7 @@ fn test_named_selection_failure_contains_exact_provider_id() {
         "remote",
         &["cloud"],
         0,
-        ConfigurableProvider::failure(ProviderError::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     let selection = ProviderSelection::named("cloud")
         .expect("test selector should be valid");
@@ -763,7 +767,7 @@ impl ServiceProvider<StringSpec> for PanickingProvider {
     fn create_configured(
         &self,
         _config: &String,
-    ) -> Result<String, ProviderError> {
+    ) -> Result<String, ProviderFailure<TestError>> {
         panic!("test provider panic");
     }
 }

@@ -16,6 +16,7 @@ struct UnsizedConfigSpec;
 
 impl ServiceSpec for UnsizedConfigSpec {
     type Config = str;
+    type Error = std::io::Error;
 }
 
 /// Service family proving that synchronous output is a separate capability.
@@ -23,6 +24,7 @@ struct StringOutputSpec;
 
 impl ServiceSpec for StringOutputSpec {
     type Config = str;
+    type Error = std::io::Error;
 }
 
 impl SyncServiceSpec for StringOutputSpec {

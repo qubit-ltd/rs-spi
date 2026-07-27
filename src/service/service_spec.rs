@@ -7,6 +7,8 @@
 // =============================================================================
 //! Base service specification binding provider configuration.
 
+use std::error::Error;
+
 /// Type-level description of one pluggable service family.
 ///
 /// A service specification gives registries one type parameter carrying the
@@ -20,4 +22,6 @@ pub trait ServiceSpec: 'static {
     /// This may be unsized when providers operate on a dynamically sized
     /// configuration view.
     type Config: ?Sized;
+    /// Domain error returned when a provider cannot create this service.
+    type Error: Error + Send + Sync + 'static;
 }

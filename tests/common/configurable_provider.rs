@@ -15,15 +15,18 @@ use std::sync::{
     },
 };
 
-use qubit_spi::ServiceProvider;
-use qubit_spi::error::ProviderError;
+use qubit_spi::{
+    ServiceProvider,
+    error::ProviderFailure,
+};
 
 use super::string_spec::StringSpec;
+use super::test_error::TestError;
 
 /// Provider fixture supporting success, echo, failure, and call recording.
 pub(crate) struct ConfigurableProvider {
     output: Option<Box<str>>,
-    error: Option<ProviderError>,
+    error: Option<ProviderFailure<TestError>>,
     echo_config: bool,
     calls: Option<Arc<AtomicUsize>>,
     seen_config: Option<Arc<Mutex<Option<String>>>>,
@@ -73,7 +76,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// A failing provider fixture.
-    pub(crate) fn failure(error: ProviderError) -> Self {
+    pub(crate) fn failure(error: ProviderFailure<TestError>) -> Self {
         Self {
             output: None,
             error: Some(error),
@@ -132,7 +135,7 @@ impl ServiceProvider<StringSpec> for ConfigurableProvider {
     fn create_configured(
         &self,
         config: &String,
-    ) -> Result<String, ProviderError> {
+    ) -> Result<String, ProviderFailure<TestError>> {
         if let Some(calls) = &self.calls {
             calls.fetch_add(1, Ordering::SeqCst);
         }

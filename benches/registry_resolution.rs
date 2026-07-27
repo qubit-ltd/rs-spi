@@ -26,7 +26,7 @@ use criterion::{
     criterion_group,
     criterion_main,
 };
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
@@ -55,6 +55,8 @@ struct BenchmarkProvider {
 impl ServiceSpec for BenchmarkProvider {
     /// Zero-sized configuration excluded from measured resolution work.
     type Config = ();
+    /// Benchmark providers do not produce domain errors.
+    type Error = std::io::Error;
 }
 
 impl SyncServiceSpec for BenchmarkProvider {
@@ -87,7 +89,10 @@ impl ServiceProvider<BenchmarkProvider> for BenchmarkProvider {
     /// # Errors
     ///
     /// This fixture never returns a provider error.
-    fn create_configured(&self, _config: &()) -> Result<(), ProviderError> {
+    fn create_configured(
+        &self,
+        _config: &(),
+    ) -> Result<(), ProviderFailure<std::io::Error>> {
         Ok(())
     }
 }

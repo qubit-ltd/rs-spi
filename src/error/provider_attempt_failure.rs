@@ -14,32 +14,38 @@ use std::{
 
 use crate::ProviderId;
 
-use super::ProviderError;
+use super::ProviderFailure;
 
 /// Diagnostic record for one provider that failed to create a service.
 #[derive(Clone, Debug)]
-pub struct ProviderAttemptFailure {
+pub struct ProviderAttemptFailure<E> {
     /// Canonical identifier of the provider that was invoked.
     provider_id: ProviderId,
     /// Original provider failure retained with its causal source.
-    error: ProviderError,
+    failure: ProviderFailure<E>,
 }
 
-impl ProviderAttemptFailure {
+impl<E> ProviderAttemptFailure<E> {
     /// Creates a diagnostic from an actual provider invocation failure.
     ///
     /// # Parameters
     ///
     /// * `provider_id` - Canonical ID of the provider that was invoked.
-    /// * `error` - Original provider error transferred into the diagnostic.
+    /// * failure - Original provider failure transferred into the diagnostic.
     ///
     /// # Returns
     ///
     /// A provider attempt retaining its identity and causal error.
     #[inline]
     #[must_use]
-    pub(crate) fn new(provider_id: ProviderId, error: ProviderError) -> Self {
-        Self { provider_id, error }
+    pub(crate) fn new(
+        provider_id: ProviderId,
+        failure: ProviderFailure<E>,
+    ) -> Self {
+        Self {
+            provider_id,
+            failure,
+        }
     }
 
     /// Returns the canonical ID of the attempted provider.
@@ -53,19 +59,33 @@ impl ProviderAttemptFailure {
         &self.provider_id
     }
 
-    /// Returns the provider's original classified failure.
+    /// Returns the provider's original typed failure.
     ///
     /// # Returns
     ///
-    /// The retained leaf provider error.
+    /// The retained leaf provider failure.
     #[inline(always)]
     #[must_use]
-    pub const fn error(&self) -> &ProviderError {
-        &self.error
+    pub const fn failure(&self) -> &ProviderFailure<E> {
+        &self.failure
+    }
+
+    /// Transfers ownership of the provider identity and failure.
+    ///
+    /// # Returns
+    ///
+    /// The provider ID captured before invocation and its typed failure.
+    #[inline(always)]
+    #[must_use]
+    pub fn into_parts(self) -> (ProviderId, ProviderFailure<E>) {
+        (self.provider_id, self.failure)
     }
 }
 
-impl fmt::Display for ProviderAttemptFailure {
+impl<E> fmt::Display for ProviderAttemptFailure<E>
+where
+    E: fmt::Display,
+{
     /// Formats the failure with canonical provider context.
     ///
     /// # Parameters
@@ -82,22 +102,24 @@ impl fmt::Display for ProviderAttemptFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "provider {} failed with {:?}: {}",
+            "provider {} failed: {}",
             self.provider_id,
-            self.error.kind(),
-            self.error.reason(),
+            self.failure,
         )
     }
 }
 
-impl Error for ProviderAttemptFailure {
-    /// Returns the retained provider error.
+impl<E> Error for ProviderAttemptFailure<E>
+where
+    E: Error + 'static,
+{
+    /// Returns the retained provider failure.
     ///
     /// # Returns
     ///
-    /// The provider's original classified failure.
+    /// The provider's original typed failure.
     #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.error)
+        Some(&self.failure)
     }
 }

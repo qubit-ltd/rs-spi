@@ -16,6 +16,7 @@ struct AsyncByteCountSpec;
 
 impl ServiceSpec for AsyncByteCountSpec {
     type Config = [u8];
+    type Error = std::io::Error;
 }
 
 impl AsyncServiceSpec for AsyncByteCountSpec {
