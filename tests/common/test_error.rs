@@ -215,8 +215,12 @@ impl TestProviderFailure {
     ) -> ProviderFailure<TestError> {
         let error = TestError { reason, source };
         match kind {
-            ProviderFailureKind::Unsupported => ProviderFailure::unsupported(error),
-            ProviderFailureKind::Unavailable => ProviderFailure::unavailable(error),
+            ProviderFailureKind::Unsupported => {
+                ProviderFailure::unsupported(error)
+            }
+            ProviderFailureKind::Unavailable => {
+                ProviderFailure::unavailable(error)
+            }
             ProviderFailureKind::InvalidConfiguration => {
                 ProviderFailure::invalid_configuration(error)
             }

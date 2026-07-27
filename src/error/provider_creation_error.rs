@@ -144,9 +144,9 @@ impl<E> ProviderCreationError<E> {
     /// `true` when every attempt is classified as unsupported or unavailable.
     #[must_use]
     pub fn is_absence(&self) -> bool {
-        self.attempts.iter().all(|attempt| {
-            attempt.failure().kind().is_absence()
-        })
+        self.attempts
+            .iter()
+            .all(|attempt| attempt.failure().kind().is_absence())
     }
 
     /// Transfers ownership of all attempts and the termination reason.
@@ -158,7 +158,10 @@ impl<E> ProviderCreationError<E> {
     #[must_use]
     pub fn into_parts(
         self,
-    ) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
+    ) -> (
+        Box<[ProviderAttemptFailure<E>]>,
+        ProviderCreationTermination,
+    ) {
         (self.attempts, self.termination)
     }
 }

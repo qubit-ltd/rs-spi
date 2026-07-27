@@ -36,7 +36,8 @@ fn test_async_provider_creates_with_explicit_and_default_config() {
     );
 }
 
-/// Verifies that asynchronous leaf providers return their typed failure directly.
+/// Verifies that asynchronous leaf providers return their typed failure
+/// directly.
 #[test]
 fn test_async_leaf_provider_returns_typed_failure_directly() {
     let provider = AsyncConfigurableProvider::failure(

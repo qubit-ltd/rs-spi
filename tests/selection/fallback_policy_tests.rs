@@ -25,8 +25,16 @@ fn test_selection_uses_on_absence_by_default() {
 #[test]
 fn test_fallback_policy_continues_after_expected_failure_kinds() {
     for (policy, kind, expected) in [
-        (FallbackPolicy::Never, ProviderFailureKind::Unsupported, false),
-        (FallbackPolicy::Never, ProviderFailureKind::Unavailable, false),
+        (
+            FallbackPolicy::Never,
+            ProviderFailureKind::Unsupported,
+            false,
+        ),
+        (
+            FallbackPolicy::Never,
+            ProviderFailureKind::Unavailable,
+            false,
+        ),
         (
             FallbackPolicy::Never,
             ProviderFailureKind::InvalidConfiguration,

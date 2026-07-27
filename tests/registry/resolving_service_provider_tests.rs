@@ -256,8 +256,10 @@ fn test_registry_allows_explicitly_missing_chain_entries_and_deduplicates() {
         "first",
         &["one"],
         0,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline"))
-            .with_calls(Arc::clone(&first_calls)),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable(
+            "offline",
+        ))
+        .with_calls(Arc::clone(&first_calls)),
     );
     register_provider(
         &registry,
@@ -315,9 +317,9 @@ fn test_registry_auto_fallback_attempts_follow_ranked_order() {
             id,
             &[],
             priority,
-            ConfigurableProvider::failure(TestProviderFailure::unavailable(format!(
-                "{id} unavailable"
-            ))),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable(
+                format!("{id} unavailable"),
+            )),
         );
     }
     let selection = ProviderSelection::auto()
@@ -462,7 +464,9 @@ fn test_never_stops_after_first_failure() {
         "first",
         &[],
         20,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable(
+            "offline",
+        )),
     );
     register_provider(
         &registry,
@@ -498,14 +502,18 @@ fn test_on_absence_continues_after_unsupported_and_unavailable() {
         "unsupported",
         &[],
         30,
-        ConfigurableProvider::failure(TestProviderFailure::unsupported("no format")),
+        ConfigurableProvider::failure(TestProviderFailure::unsupported(
+            "no format",
+        )),
     );
     register_provider(
         &registry,
         "unavailable",
         &[],
         20,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable(
+            "offline",
+        )),
     );
     register_provider(
         &registry,
@@ -649,7 +657,9 @@ fn test_named_selection_failure_contains_exact_provider_id() {
         "remote",
         &["cloud"],
         0,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable(
+            "offline",
+        )),
     );
     let selection = ProviderSelection::named("cloud")
         .expect("test selector should be valid");

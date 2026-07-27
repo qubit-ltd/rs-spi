@@ -103,8 +103,7 @@ where
         write!(
             formatter,
             "provider {} failed: {}",
-            self.provider_id,
-            self.failure,
+            self.provider_id, self.failure,
         )
     }
 }
