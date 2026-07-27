@@ -1,6 +1,6 @@
 [package]
 name = "qubit-spi"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
 rust-version = "1.94"
 autotests = false
@@ -18,10 +18,10 @@ include = [
     "/LICENSE",
     "/README.md",
     "/README.zh_CN.md",
-    "/benches/**",
-    "/doc/**/user_guide*.md",
     "/src/**",
+    "/doc/**",
     "/tests/**",
+    "/benches/**",
 ]
 
 [lib]
