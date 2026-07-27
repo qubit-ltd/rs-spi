@@ -271,64 +271,68 @@ where
         inner: &RegistryInner<P>,
         selection: &ProviderSelection,
     ) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
-        let entries =
-            match selection.repr() {
-                ProviderSelectionRepr::Named(selector) => {
-                    let provider_id =
-                        inner.selector_ids.get(selector).ok_or_else(|| {
-                            ProviderResolutionError::unknown_providers(vec![
-                                selector.clone(),
-                            ])
-                        })?;
-                    vec![
-                        inner
-                            .entries
-                            .get(provider_id)
-                            .expect("registered selector must have an entry")
-                            .clone(),
-                    ]
-                }
-                ProviderSelectionRepr::Chain {
-                    selectors,
-                    missing_policy,
-                } => {
-                    let mut seen = HashSet::with_capacity(selectors.len());
-                    let mut candidates = Vec::with_capacity(selectors.len());
-                    let mut missing = Vec::new();
-                    for selector in selectors {
-                        let Some(provider_id) =
-                            inner.selector_ids.get(selector)
-                        else {
-                            missing.push(selector.clone());
-                            continue;
-                        };
-                        if seen.insert(provider_id.clone()) {
-                            candidates.push(inner.entries.get(provider_id)
-                            .expect("registered selector must have an entry")
-                            .clone());
-                        }
-                    }
-                    if *missing_policy == MissingProviderPolicy::Reject
-                        && !missing.is_empty()
-                    {
-                        return Err(
-                            ProviderResolutionError::unknown_providers(missing),
+        let entries = match selection.repr() {
+            ProviderSelectionRepr::Named(selector) => {
+                let provider_id =
+                    inner.selector_ids.get(selector).ok_or_else(|| {
+                        ProviderResolutionError::unknown_providers(vec![
+                            selector.clone(),
+                        ])
+                    })?;
+                vec![
+                    inner
+                        .entries
+                        .get(provider_id)
+                        .expect("registered selector must have an entry")
+                        .clone(),
+                ]
+            }
+            ProviderSelectionRepr::Chain {
+                selectors,
+                missing_policy,
+            } => {
+                let mut seen = HashSet::with_capacity(selectors.len());
+                let mut candidates = Vec::with_capacity(selectors.len());
+                let mut missing = Vec::new();
+                for selector in selectors {
+                    let Some(provider_id) = inner.selector_ids.get(selector)
+                    else {
+                        missing.push(selector.clone());
+                        continue;
+                    };
+                    if seen.insert(provider_id.clone()) {
+                        candidates.push(
+                            inner
+                                .entries
+                                .get(provider_id)
+                                .expect(
+                                    "registered selector must have an entry",
+                                )
+                                .clone(),
                         );
                     }
-                    if candidates.is_empty() {
-                        return Err(ProviderResolutionError::no_candidates(
-                            selectors.to_vec(),
-                        ));
-                    }
-                    candidates
                 }
-                ProviderSelectionRepr::Auto => {
-                    if inner.entries.is_empty() {
-                        return Err(ProviderResolutionError::empty_registry());
-                    }
-                    inner.entries.values_ordered().cloned().collect()
+                if *missing_policy == MissingProviderPolicy::Reject
+                    && !missing.is_empty()
+                {
+                    return Err(ProviderResolutionError::unknown_providers(
+                        missing,
+                    ));
                 }
-            };
+                if candidates.is_empty() {
+                    return Err(ProviderResolutionError::no_candidates(
+                        selectors.to_vec(),
+                    ));
+                }
+                candidates
+            }
+            ProviderSelectionRepr::Auto => {
+                if inner.entries.is_empty() {
+                    return Err(ProviderResolutionError::empty_registry());
+                }
+                inner.entries.values_ordered().cloned().collect()
+            }
+        };
         Ok(ResolvedCandidates {
             entries: entries.into_boxed_slice(),
             fallback_policy: selection.fallback_policy(),
