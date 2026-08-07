@@ -6,15 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    error::Error,
-    fmt,
-};
+use std::error::Error;
+use std::fmt;
 
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderFailureKind,
-};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 /// Non-cloneable domain error used to prove provider failures retain ownership.
 #[derive(Debug)]

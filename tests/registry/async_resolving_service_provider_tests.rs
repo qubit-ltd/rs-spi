@@ -6,48 +6,34 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::{
-    Arc,
-    Mutex,
-    atomic::{
-        AtomicUsize,
-        Ordering,
-    },
-    mpsc,
-};
+use std::error::Error;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread;
-use std::{
-    error::Error,
-    panic::{
-        AssertUnwindSafe,
-        catch_unwind,
-    },
-};
 
 use futures::channel::oneshot;
 use futures::executor::block_on;
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderFailureKind,
-};
-use qubit_spi::{
-    AsyncProviderRegistry,
-    AsyncServiceProvider,
-    FallbackPolicy,
-    ProviderCreationTermination,
-    ProviderDescriptor,
-    ProviderFuture,
-    ProviderId,
-    ProviderMetadata,
-    ProviderSelection,
-};
+use qubit_spi::AsyncProviderRegistry;
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderFuture;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::ProviderSelection;
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::string_spec::StringSpec;
-use crate::common::test_error::{
-    TestError,
-    TestProviderFailure,
-};
+use crate::common::test_error::TestError;
+use crate::common::test_error::TestProviderFailure;
 use crate::registry::async_provider_registry_tests::register_provider;
 
 /// Requires a value to implement [`Send`].

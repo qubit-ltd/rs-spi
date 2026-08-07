@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ServiceSpec,
-    SyncServiceSpec,
-};
+use qubit_spi::ServiceSpec;
+use qubit_spi::SyncServiceSpec;
 
 /// A synchronous service family used to check the split specification traits.
 struct ByteCountSpec;

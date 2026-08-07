@@ -196,32 +196,24 @@ mod registry;
 mod selection;
 mod service;
 
-pub use provider::{
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-    ProviderSelector,
-};
-pub use registry::{
-    AsyncProviderRegistry,
-    AsyncResolvingServiceProvider,
-    ProviderCreationTermination,
-    ProviderRegistry,
-    ResolvingServiceProvider,
-};
-pub use selection::{
-    FallbackPolicy,
-    MissingProviderPolicy,
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-};
-pub use service::{
-    AsyncProviderDefinition,
-    AsyncServiceProvider,
-    AsyncServiceSpec,
-    ProviderDefinition,
-    ProviderFuture,
-    ServiceProvider,
-    ServiceSpec,
-    SyncServiceSpec,
-};
+pub use provider::ProviderDescriptor;
+pub use provider::ProviderId;
+pub use provider::ProviderMetadata;
+pub use provider::ProviderSelector;
+pub use registry::AsyncProviderRegistry;
+pub use registry::AsyncResolvingServiceProvider;
+pub use registry::ProviderCreationTermination;
+pub use registry::ProviderRegistry;
+pub use registry::ResolvingServiceProvider;
+pub use selection::FallbackPolicy;
+pub use selection::MissingProviderPolicy;
+pub use selection::ProviderSelection;
+pub use selection::ProviderSelectionTargetRef;
+pub use service::AsyncProviderDefinition;
+pub use service::AsyncServiceProvider;
+pub use service::AsyncServiceSpec;
+pub use service::ProviderDefinition;
+pub use service::ProviderFuture;
+pub use service::ServiceProvider;
+pub use service::ServiceSpec;
+pub use service::SyncServiceSpec;

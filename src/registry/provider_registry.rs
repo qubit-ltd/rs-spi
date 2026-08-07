@@ -7,24 +7,18 @@
 // =============================================================================
 //! Synchronous provider registry facade.
 
-use std::{
-    fmt,
-    sync::Arc,
-};
+use std::fmt;
+use std::sync::Arc;
 
-use crate::error::{
-    ProviderResolutionError,
-    RegistrationError,
-};
+use crate::ProviderDefinition;
+use crate::ProviderDescriptor;
+use crate::ProviderId;
+use crate::ProviderSelection;
+use crate::ResolvingServiceProvider;
+use crate::SyncServiceSpec;
+use crate::error::ProviderResolutionError;
+use crate::error::RegistrationError;
 use crate::registry::internal::ProviderCatalog;
-use crate::{
-    ProviderDefinition,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderSelection,
-    ResolvingServiceProvider,
-    SyncServiceSpec,
-};
 
 /// Shared catalog of synchronous providers for one service family.
 ///

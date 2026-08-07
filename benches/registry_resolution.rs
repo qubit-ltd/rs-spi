@@ -7,36 +7,28 @@
 // =============================================================================
 //! Provider Registry resolution benchmarks.
 
-use std::{
-    hint::black_box,
-    panic::{
-        AssertUnwindSafe,
-        catch_unwind,
-        resume_unwind,
-    },
-    sync::Barrier,
-    thread,
-    time::Instant,
-};
+use std::hint::black_box;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::panic::resume_unwind;
+use std::sync::Barrier;
+use std::thread;
+use std::time::Instant;
 
-use criterion::{
-    BenchmarkId,
-    Criterion,
-    Throughput,
-    criterion_group,
-    criterion_main,
-};
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ServiceProvider;
+use qubit_spi::ServiceSpec;
+use qubit_spi::SyncServiceSpec;
 use qubit_spi::error::ProviderFailure;
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-    ProviderRegistry,
-    ProviderSelection,
-    ServiceProvider,
-    ServiceSpec,
-    SyncServiceSpec,
-};
 
 const NAMED_ALIAS_COUNTS: [usize; 3] = [0, 2, 8];
 const CHAIN_CANDIDATE_COUNTS: [usize; 3] = [1, 8, 32];

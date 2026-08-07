@@ -7,10 +7,8 @@
 // =============================================================================
 //! Runtime-independent future type returned by asynchronous providers.
 
-use std::{
-    future::Future,
-    pin::Pin,
-};
+use std::future::Future;
+use std::pin::Pin;
 
 /// Sendable boxed future used by asynchronous provider APIs.
 ///

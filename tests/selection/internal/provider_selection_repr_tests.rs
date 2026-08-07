@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderResolutionError;
-use qubit_spi::{
-    ProviderRegistry,
-    ProviderSelection,
-};
 
 use crate::common::string_spec::StringSpec;
 

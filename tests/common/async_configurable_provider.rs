@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncServiceProvider,
-    ProviderFuture,
-    error::ProviderFailure,
-};
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::ProviderFuture;
+use qubit_spi::error::ProviderFailure;
 
 use super::string_spec::StringSpec;
 use super::test_error::TestError;

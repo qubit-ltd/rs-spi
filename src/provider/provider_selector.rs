@@ -7,10 +7,8 @@
 // =============================================================================
 //! Provider selectors parsed from configuration or user input.
 
-use std::{
-    fmt,
-    str::FromStr,
-};
+use std::fmt;
+use std::str::FromStr;
 
 use crate::ProviderId;
 use crate::error::ProviderSelectorError;

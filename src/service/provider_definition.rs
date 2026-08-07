@@ -7,11 +7,9 @@
 // =============================================================================
 //! Self-described providers accepted by a provider registry.
 
-use crate::{
-    ProviderMetadata,
-    ServiceProvider,
-    SyncServiceSpec,
-};
+use crate::ProviderMetadata;
+use crate::ServiceProvider;
+use crate::SyncServiceSpec;
 
 /// Marker combining synchronous creation with registration metadata.
 ///

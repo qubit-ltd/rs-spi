@@ -12,14 +12,12 @@
 use std::collections::BTreeSet;
 
 use libfuzzer_sys::fuzz_target;
-use qubit_spi::{
-    MissingProviderPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-    ProviderSelector,
-};
+use qubit_spi::MissingProviderPolicy;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ProviderSelectionTargetRef;
+use qubit_spi::ProviderSelector;
 
 /// Canonical provider ID reserved for descriptor fuzz fixtures.
 const FUZZ_PROVIDER_ID: &str = "fuzz-provider";

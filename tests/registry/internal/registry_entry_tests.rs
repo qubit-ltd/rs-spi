@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-};
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderRegistry;
 
 use crate::common::self_described_provider::SelfDescribedProvider;
 use crate::common::string_spec::StringSpec;

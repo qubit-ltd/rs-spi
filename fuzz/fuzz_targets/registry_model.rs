@@ -9,24 +9,20 @@
 
 #![no_main]
 
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use libfuzzer_sys::fuzz_target;
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ServiceProvider;
+use qubit_spi::ServiceSpec;
+use qubit_spi::SyncServiceSpec;
 use qubit_spi::error::ProviderFailure;
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-    ProviderRegistry,
-    ProviderSelection,
-    ServiceProvider,
-    ServiceSpec,
-    SyncServiceSpec,
-};
 
 /// Upper bound for provider registrations derived from one fuzzer input.
 const MAX_REGISTRATIONS: usize = 32;

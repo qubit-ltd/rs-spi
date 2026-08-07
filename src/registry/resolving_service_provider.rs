@@ -9,16 +9,12 @@
 
 use std::fmt;
 
+use crate::FallbackPolicy;
+use crate::ProviderDefinition;
+use crate::SyncServiceSpec;
 use crate::error::ProviderCreationError;
-use crate::registry::internal::{
-    FallbackState,
-    RegistryEntry,
-};
-use crate::{
-    FallbackPolicy,
-    ProviderDefinition,
-    SyncServiceSpec,
-};
+use crate::registry::internal::FallbackState;
+use crate::registry::internal::RegistryEntry;
 
 /// Service provider that tries a point-in-time snapshot of registry candidates.
 ///

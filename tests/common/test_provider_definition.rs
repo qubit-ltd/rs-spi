@@ -6,16 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncServiceProvider,
-    AsyncServiceSpec,
-    ProviderDescriptor,
-    ProviderFuture,
-    ProviderMetadata,
-    ServiceProvider,
-    SyncServiceSpec,
-    error::ProviderFailure,
-};
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::AsyncServiceSpec;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderFuture;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::ServiceProvider;
+use qubit_spi::SyncServiceSpec;
+use qubit_spi::error::ProviderFailure;
 
 /// A self-described provider assembled from existing test fixtures.
 pub(crate) struct TestProviderDefinition<P> {

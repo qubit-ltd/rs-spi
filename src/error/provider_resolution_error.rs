@@ -7,10 +7,8 @@
 // =============================================================================
 //! Errors raised while resolving provider selections.
 
-use std::{
-    error::Error,
-    fmt,
-};
+use std::error::Error;
+use std::fmt;
 
 use crate::ProviderSelector;
 

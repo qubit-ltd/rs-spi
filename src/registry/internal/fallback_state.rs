@@ -7,15 +7,11 @@
 // =============================================================================
 //! Shared fallback state transitions for provider resolvers.
 
-use crate::error::{
-    ProviderAttemptFailure,
-    ProviderCreationError,
-    ProviderFailure,
-};
-use crate::{
-    FallbackPolicy,
-    ProviderId,
-};
+use crate::FallbackPolicy;
+use crate::ProviderId;
+use crate::error::ProviderAttemptFailure;
+use crate::error::ProviderCreationError;
+use crate::error::ProviderFailure;
 
 /// Mutable failure state retained while a resolver traverses candidates.
 pub(crate) struct FallbackState<E> {

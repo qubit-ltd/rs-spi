@@ -6,19 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::{
-    Arc,
-    Mutex,
-    atomic::{
-        AtomicUsize,
-        Ordering,
-    },
-};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-use qubit_spi::{
-    ServiceProvider,
-    error::ProviderFailure,
-};
+use qubit_spi::ServiceProvider;
+use qubit_spi::error::ProviderFailure;
 
 use super::string_spec::StringSpec;
 use super::test_error::TestError;

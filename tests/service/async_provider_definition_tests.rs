@@ -6,12 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncProviderDefinition,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-};
+use qubit_spi::AsyncProviderDefinition;
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderFuture;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::error::ProviderFailure;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::string_spec::StringSpec;
@@ -28,18 +29,13 @@ impl ProviderMetadata for DescribedAsyncProvider {
     }
 }
 
-impl qubit_spi::AsyncServiceProvider<StringSpec> for DescribedAsyncProvider {
+impl AsyncServiceProvider<StringSpec> for DescribedAsyncProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a String,
-    ) -> qubit_spi::ProviderFuture<
+    ) -> ProviderFuture<
         'a,
-        Result<
-            String,
-            qubit_spi::error::ProviderFailure<
-                crate::common::test_error::TestError,
-            >,
-        >,
+        Result<String, ProviderFailure<crate::common::test_error::TestError>>,
     > {
         self.provider.create_configured(config)
     }

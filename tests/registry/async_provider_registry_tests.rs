@@ -6,25 +6,20 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    fmt::Write,
-    sync::{
-        Arc,
-        mpsc,
-    },
-    thread,
-};
+use std::fmt::Write;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 
 use futures::executor::block_on;
+use qubit_spi::AsyncProviderDefinition;
+use qubit_spi::AsyncProviderRegistry;
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderResolutionError;
-use qubit_spi::{
-    AsyncProviderDefinition,
-    AsyncProviderRegistry,
-    FallbackPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderSelection,
-};
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
@@ -211,7 +206,7 @@ pub(crate) fn register_provider<P>(
     priority: i32,
     provider: P,
 ) where
-    P: qubit_spi::AsyncServiceProvider<StringSpec>,
+    P: AsyncServiceProvider<StringSpec>,
 {
     let descriptor = ProviderDescriptor::new(
         ProviderId::new(id).expect("test provider ID should be valid"),

@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderId,
-    provider_descriptor,
-};
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::provider_descriptor;
 
 /// Verifies that the static-descriptor macro preserves validated metadata.
 #[test]

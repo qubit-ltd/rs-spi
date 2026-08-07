@@ -7,11 +7,9 @@
 // =============================================================================
 //! Strict canonical provider identifiers.
 
-use std::{
-    fmt,
-    str::FromStr,
-    sync::Arc,
-};
+use std::fmt;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::error::ProviderIdError;
 

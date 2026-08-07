@@ -6,26 +6,24 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncProviderDefinition,
-    AsyncProviderRegistry,
-    AsyncResolvingServiceProvider,
-    AsyncServiceProvider,
-    FallbackPolicy,
-    MissingProviderPolicy,
-    ProviderCreationTermination,
-    ProviderDefinition,
-    ProviderDescriptor,
-    ProviderFuture,
-    ProviderId,
-    ProviderMetadata,
-    ProviderRegistry,
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-    ProviderSelector,
-    ResolvingServiceProvider,
-    ServiceProvider,
-};
+use qubit_spi::AsyncProviderDefinition;
+use qubit_spi::AsyncProviderRegistry;
+use qubit_spi::AsyncResolvingServiceProvider;
+use qubit_spi::AsyncServiceProvider;
+use qubit_spi::FallbackPolicy;
+use qubit_spi::MissingProviderPolicy;
+use qubit_spi::ProviderCreationTermination;
+use qubit_spi::ProviderDefinition;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderFuture;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderMetadata;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ProviderSelectionTargetRef;
+use qubit_spi::ProviderSelector;
+use qubit_spi::ResolvingServiceProvider;
+use qubit_spi::ServiceProvider;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::configurable_provider::ConfigurableProvider;

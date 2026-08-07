@@ -7,16 +7,12 @@
 // =============================================================================
 //! Typed domain errors and failure constructors shared by SPI tests.
 
-use std::{
-    error::Error,
-    fmt,
-    sync::Arc,
-};
+use std::error::Error;
+use std::fmt;
+use std::sync::Arc;
 
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderFailureKind,
-};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 /// Cloneable domain error used by reusable provider fixtures.
 #[derive(Clone, Debug)]

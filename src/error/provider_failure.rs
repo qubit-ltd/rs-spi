@@ -7,10 +7,8 @@
 // =============================================================================
 //! Typed leaf failures returned by provider construction.
 
-use std::{
-    error::Error,
-    fmt,
-};
+use std::error::Error;
+use std::fmt;
 
 use super::ProviderFailureKind;
 

@@ -7,37 +7,26 @@
 // =============================================================================
 //! Shared registration, indexing, ordering, and selection algorithms.
 
-use std::{
-    cmp::Reverse,
-    collections::HashSet,
-    sync::Arc,
-};
+use std::cmp::Reverse;
+use std::collections::HashSet;
+use std::sync::Arc;
 
-use parking_lot::{
-    RwLock,
-    RwLockReadGuard,
-    RwLockWriteGuard,
-};
+use parking_lot::RwLock;
+use parking_lot::RwLockReadGuard;
+use parking_lot::RwLockWriteGuard;
 
-use crate::error::{
-    ProviderResolutionError,
-    RegistrationError,
-};
+use super::RegistryEntry;
+use super::RegistryInner;
+use super::ResolvedCandidates;
+use crate::MissingProviderPolicy;
+use crate::ProviderDescriptor;
+use crate::ProviderId;
+use crate::ProviderMetadata;
+use crate::ProviderSelection;
+use crate::ProviderSelector;
+use crate::error::ProviderResolutionError;
+use crate::error::RegistrationError;
 use crate::selection::ProviderSelectionRepr;
-use crate::{
-    MissingProviderPolicy,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-    ProviderSelection,
-    ProviderSelector,
-};
-
-use super::{
-    RegistryEntry,
-    RegistryInner,
-    ResolvedCandidates,
-};
 
 /// Shared provider catalog independent of creation mode.
 ///

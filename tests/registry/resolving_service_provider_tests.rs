@@ -6,56 +6,39 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    error::Error,
-    panic::{
-        AssertUnwindSafe,
-        catch_unwind,
-    },
-    sync::{
-        Arc,
-        Mutex,
-        atomic::{
-            AtomicUsize,
-            Ordering,
-        },
-    },
-    thread,
-};
+use std::error::Error;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::thread;
 
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderResolutionError,
-};
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderCreationTermination,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderSelection,
-    ResolvingServiceProvider,
-    ServiceProvider,
-};
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ResolvingServiceProvider;
+use qubit_spi::ServiceProvider;
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderResolutionError;
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
-use crate::common::test_error::{
-    TestError,
-    TestProviderFailure,
-};
+use crate::common::test_error::TestError;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 mod inherent_api_tests {
-    use qubit_spi::{
-        ProviderRegistry,
-        ProviderSelection,
-    };
-
-    use crate::common::configurable_provider::ConfigurableProvider;
-    use crate::common::string_spec::StringSpec;
+    use qubit_spi::ProviderRegistry;
+    use qubit_spi::ProviderSelection;
 
     use super::register_provider;
+    use crate::common::configurable_provider::ConfigurableProvider;
+    use crate::common::string_spec::StringSpec;
 
     /// Verifies creation methods remain callable without importing the trait.
     #[test]

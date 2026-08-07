@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ProviderId,
-    ProviderSelector,
-};
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderSelector;
 
 /// Verifies trimming and ASCII case normalization at the selector boundary.
 #[test]

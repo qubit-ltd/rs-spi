@@ -7,14 +7,11 @@
 // =============================================================================
 //! Aggregate errors raised while a resolver tries provider candidates.
 
-use std::{
-    error::Error,
-    fmt,
-};
-
-use crate::ProviderCreationTermination;
+use std::error::Error;
+use std::fmt;
 
 use super::ProviderAttemptFailure;
+use crate::ProviderCreationTermination;
 
 /// Nonempty aggregate returned when a resolver cannot create a service.
 #[derive(Clone, Debug)]

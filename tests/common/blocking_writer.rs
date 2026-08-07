@@ -7,10 +7,8 @@
 // =============================================================================
 
 use std::fmt;
-use std::sync::mpsc::{
-    Receiver,
-    Sender,
-};
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 
 /// Formatter sink that pauses once after observing a configured marker.
 pub(crate) struct BlockingWriter {

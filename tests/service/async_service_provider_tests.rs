@@ -8,16 +8,12 @@
 
 use futures::executor::block_on;
 use qubit_spi::AsyncServiceProvider;
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderFailureKind,
-};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
-use crate::common::test_error::{
-    TestError,
-    TestProviderFailure,
-};
+use crate::common::test_error::TestError;
+use crate::common::test_error::TestProviderFailure;
 
 /// Verifies explicit and default asynchronous provider creation.
 #[test]

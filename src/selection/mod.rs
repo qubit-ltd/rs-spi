@@ -14,8 +14,7 @@ mod provider_selection;
 mod provider_selection_target_ref;
 
 pub use fallback_policy::FallbackPolicy;
+pub(crate) use internal::ProviderSelectionRepr;
 pub use missing_provider_policy::MissingProviderPolicy;
 pub use provider_selection::ProviderSelection;
 pub use provider_selection_target_ref::ProviderSelectionTargetRef;
-
-pub(crate) use internal::ProviderSelectionRepr;

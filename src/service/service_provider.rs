@@ -7,10 +7,8 @@
 // =============================================================================
 //! Provider contract for pluggable service implementations.
 
-use crate::{
-    SyncServiceSpec,
-    error::ProviderFailure,
-};
+use crate::SyncServiceSpec;
+use crate::error::ProviderFailure;
 
 /// Factory contract for one pluggable service implementation.
 ///

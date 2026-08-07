@@ -9,11 +9,9 @@
 
 use std::collections::HashSet;
 
+use crate::ProviderId;
+use crate::ProviderSelector;
 use crate::error::ProviderDescriptorError;
-use crate::{
-    ProviderId,
-    ProviderSelector,
-};
 
 /// Immutable metadata that identifies and ranks a registered provider.
 ///

@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-};
+use qubit_spi::ProviderSelection;
+use qubit_spi::ProviderSelectionTargetRef;
 
 /// Verifies that target views are copyable borrowed snapshots.
 #[test]

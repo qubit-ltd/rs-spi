@@ -11,12 +11,10 @@ use std::collections::HashMap;
 
 use qubit_collections::map::OrderedIndexMap;
 
+use crate::ProviderId;
+use crate::ProviderSelection;
+use crate::ProviderSelector;
 use crate::registry::internal::RegistryEntry;
-use crate::{
-    ProviderId,
-    ProviderSelection,
-    ProviderSelector,
-};
 
 /// Mutable provider catalog protected by the registry's synchronization lock.
 ///

@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncServiceSpec,
-    ServiceSpec,
-};
+use qubit_spi::AsyncServiceSpec;
+use qubit_spi::ServiceSpec;
 
 /// Asynchronous service family with a shared unsized configuration.
 struct AsyncByteCountSpec;

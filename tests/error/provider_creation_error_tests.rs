@@ -6,28 +6,22 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    error::Error,
-    fmt::Write,
-};
+use std::error::Error;
+use std::fmt::Write;
 
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderFailure;
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderCreationTermination,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderSelection,
-};
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::failing_writer::FailingWriter;
 use crate::common::string_spec::StringSpec;
-use crate::common::test_error::{
-    TestError,
-    TestProviderFailure,
-};
+use crate::common::test_error::TestError;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies diagnostics for exhaustion after multiple absence failures.

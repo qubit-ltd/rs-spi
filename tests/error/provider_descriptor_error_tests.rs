@@ -8,11 +8,9 @@
 
 use std::error::Error;
 
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
 use qubit_spi::error::ProviderDescriptorError;
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderId,
-};
 
 /// Verifies rejection of an alias equal to the canonical provider ID.
 #[test]

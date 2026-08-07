@@ -8,11 +8,9 @@
 
 use std::error::Error;
 
+use qubit_spi::ProviderSelection;
+use qubit_spi::ProviderSelectionTargetRef;
 use qubit_spi::error::ProviderSelectionBuildError;
-use qubit_spi::{
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-};
 
 /// Verifies automatic defaults and invalid chain construction boundaries.
 #[test]

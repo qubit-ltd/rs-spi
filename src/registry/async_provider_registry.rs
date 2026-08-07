@@ -7,24 +7,18 @@
 // =============================================================================
 //! Asynchronous-provider registry with synchronous catalog operations.
 
-use std::{
-    fmt,
-    sync::Arc,
-};
+use std::fmt;
+use std::sync::Arc;
 
-use crate::error::{
-    ProviderResolutionError,
-    RegistrationError,
-};
+use crate::AsyncProviderDefinition;
+use crate::AsyncResolvingServiceProvider;
+use crate::AsyncServiceSpec;
+use crate::ProviderDescriptor;
+use crate::ProviderId;
+use crate::ProviderSelection;
+use crate::error::ProviderResolutionError;
+use crate::error::RegistrationError;
 use crate::registry::internal::ProviderCatalog;
-use crate::{
-    AsyncProviderDefinition,
-    AsyncResolvingServiceProvider,
-    AsyncServiceSpec,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderSelection,
-};
 
 /// Shared catalog of asynchronous providers for one service family.
 ///

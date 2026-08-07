@@ -8,14 +8,12 @@
 
 use std::error::Error;
 
+use qubit_spi::ProviderCreationTermination;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderFailureKind;
-use qubit_spi::{
-    ProviderCreationTermination,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderSelection,
-};
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;

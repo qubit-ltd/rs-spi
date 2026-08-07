@@ -7,14 +7,11 @@
 // =============================================================================
 //! Diagnostics for one attempted provider creation.
 
-use std::{
-    error::Error,
-    fmt,
-};
-
-use crate::ProviderId;
+use std::error::Error;
+use std::fmt;
 
 use super::ProviderFailure;
+use crate::ProviderId;
 
 /// Diagnostic record for one provider that failed to create a service.
 #[derive(Clone, Debug)]

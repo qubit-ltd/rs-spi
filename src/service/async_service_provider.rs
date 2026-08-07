@@ -7,11 +7,9 @@
 // =============================================================================
 //! Asynchronous provider contract for pluggable service implementations.
 
-use crate::{
-    AsyncServiceSpec,
-    ProviderFuture,
-    error::ProviderFailure,
-};
+use crate::AsyncServiceSpec;
+use crate::ProviderFuture;
+use crate::error::ProviderFailure;
 
 /// Runtime-independent asynchronous factory contract for one provider.
 ///

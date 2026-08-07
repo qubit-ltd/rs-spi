@@ -7,9 +7,8 @@
 // =============================================================================
 //! Owned candidate snapshots returned by the shared provider catalog.
 
-use crate::FallbackPolicy;
-
 use super::RegistryEntry;
+use crate::FallbackPolicy;
 
 /// Resolved provider entries and the fallback policy applied to them.
 ///

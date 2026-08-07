@@ -7,11 +7,9 @@
 // =============================================================================
 //! Metadata-bearing asynchronous provider definitions.
 
-use crate::{
-    AsyncServiceProvider,
-    AsyncServiceSpec,
-    ProviderMetadata,
-};
+use crate::AsyncServiceProvider;
+use crate::AsyncServiceSpec;
+use crate::ProviderMetadata;
 
 /// Marker combining asynchronous creation with registration metadata.
 ///

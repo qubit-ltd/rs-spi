@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderFailureKind;
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderSelection,
-};
 
 /// Verifies that every selection starts with absence-only fallback.
 #[test]

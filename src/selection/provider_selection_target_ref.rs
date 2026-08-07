@@ -7,10 +7,8 @@
 // =============================================================================
 //! Borrowed views of validated provider selection targets.
 
-use crate::{
-    MissingProviderPolicy,
-    ProviderSelector,
-};
+use crate::MissingProviderPolicy;
+use crate::ProviderSelector;
 
 /// Borrowed, lossless view of a provider selection target.
 ///

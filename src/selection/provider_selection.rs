@@ -7,14 +7,12 @@
 // =============================================================================
 //! Validated provider selection inputs.
 
+use crate::FallbackPolicy;
+use crate::MissingProviderPolicy;
+use crate::ProviderSelectionTargetRef;
+use crate::ProviderSelector;
 use crate::error::ProviderSelectionBuildError;
 use crate::selection::ProviderSelectionRepr;
-use crate::{
-    FallbackPolicy,
-    MissingProviderPolicy,
-    ProviderSelectionTargetRef,
-    ProviderSelector,
-};
 
 /// Validated request for the providers a resolver may try.
 ///

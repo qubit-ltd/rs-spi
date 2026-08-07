@@ -7,10 +7,8 @@
 // =============================================================================
 //! Private invariant-safe provider selection storage.
 
-use crate::{
-    MissingProviderPolicy,
-    ProviderSelector,
-};
+use crate::MissingProviderPolicy;
+use crate::ProviderSelector;
 
 /// Validated provider selection representation consumed by the resolver.
 #[derive(Clone, Debug, Eq, PartialEq)]

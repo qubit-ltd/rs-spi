@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    AsyncServiceSpec,
-    ServiceSpec,
-    SyncServiceSpec,
-};
+use qubit_spi::AsyncServiceSpec;
+use qubit_spi::ServiceSpec;
+use qubit_spi::SyncServiceSpec;
 
 use super::test_error::TestError;
 

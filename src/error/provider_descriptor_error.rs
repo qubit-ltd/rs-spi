@@ -7,10 +7,8 @@
 // =============================================================================
 //! Errors raised while constructing provider descriptors.
 
-use std::{
-    error::Error,
-    fmt,
-};
+use std::error::Error;
+use std::fmt;
 
 use super::ProviderSelectorError;
 

@@ -6,27 +6,19 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    fmt::Write,
-    sync::{
-        Arc,
-        mpsc,
-    },
-    thread,
-};
+use std::fmt::Write;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 
-use qubit_spi::error::{
-    ProviderResolutionError,
-    RegistrationError,
-};
-use qubit_spi::{
-    FallbackPolicy,
-    ProviderDefinition,
-    ProviderDescriptor,
-    ProviderId,
-    ProviderRegistry,
-    ProviderSelection,
-};
+use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderDefinition;
+use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderId;
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
+use qubit_spi::error::ProviderResolutionError;
+use qubit_spi::error::RegistrationError;
 
 use crate::common::blocking_writer::BlockingWriter;
 use crate::common::configurable_provider::ConfigurableProvider;

@@ -7,16 +7,12 @@
 // =============================================================================
 
 use qubit_spi::ServiceProvider;
-use qubit_spi::error::{
-    ProviderFailure,
-    ProviderFailureKind,
-};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::configurable_provider::ConfigurableProvider;
-use crate::common::test_error::{
-    TestError,
-    TestProviderFailure,
-};
+use crate::common::test_error::TestError;
+use crate::common::test_error::TestProviderFailure;
 
 /// Verifies that a provider returns the output handle selected by its spec.
 #[test]

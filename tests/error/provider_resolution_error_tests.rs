@@ -6,15 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::fmt::{
-    self,
-    Write,
-};
+use std::fmt;
+use std::fmt::Write;
 
-use qubit_spi::{
-    ProviderRegistry,
-    ProviderSelection,
-};
+use qubit_spi::ProviderRegistry;
+use qubit_spi::ProviderSelection;
 
 use crate::common::failing_writer::FailingWriter;
 use crate::common::string_spec::StringSpec;

@@ -9,16 +9,12 @@
 
 use std::fmt;
 
+use crate::AsyncProviderDefinition;
+use crate::AsyncServiceSpec;
+use crate::FallbackPolicy;
 use crate::error::ProviderCreationError;
-use crate::registry::internal::{
-    FallbackState,
-    RegistryEntry,
-};
-use crate::{
-    AsyncProviderDefinition,
-    AsyncServiceSpec,
-    FallbackPolicy,
-};
+use crate::registry::internal::FallbackState;
+use crate::registry::internal::RegistryEntry;
 
 /// Resolver that awaits a point-in-time snapshot of asynchronous candidates.
 ///

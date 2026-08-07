@@ -6,12 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_spi::{
-    FallbackPolicy,
-    MissingProviderPolicy,
-    ProviderSelection,
-    ProviderSelectionTargetRef,
-};
+use qubit_spi::FallbackPolicy;
+use qubit_spi::MissingProviderPolicy;
+use qubit_spi::ProviderSelection;
+use qubit_spi::ProviderSelectionTargetRef;
 
 /// Verifies normalization and accessors for a named selection.
 #[test]
