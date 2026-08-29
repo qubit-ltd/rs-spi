@@ -34,22 +34,17 @@ const MAX_INPUT_BYTES: usize = 4096;
 fn assert_identity_invariants(input: &str) {
     if let Ok(id) = ProviderId::new(input) {
         assert_eq!(input, id.as_str());
-        let selector = ProviderSelector::parse(id.as_str())
-            .expect("a canonical provider ID must parse as a selector");
+        let selector = ProviderSelector::parse(id.as_str()).expect("a canonical provider ID must parse as a selector");
         assert_eq!(id.as_str(), selector.as_str());
     }
 
     match ProviderSelector::parse(input) {
         Ok(selector) => {
-            let reparsed = ProviderSelector::parse(selector.as_str())
-                .expect("a normalized selector must parse again");
+            let reparsed = ProviderSelector::parse(selector.as_str()).expect("a normalized selector must parse again");
             assert_eq!(selector, reparsed);
-            let id = ProviderId::new(selector.as_str()).expect(
-                "a normalized selector must be a canonical provider ID",
-            );
+            let id = ProviderId::new(selector.as_str()).expect("a normalized selector must be a canonical provider ID");
             assert_eq!(selector.as_str(), id.as_str());
-            let selection = ProviderSelection::named(input)
-                .expect("a valid selector must form a named selection");
+            let selection = ProviderSelection::named(input).expect("a valid selector must form a named selection");
             assert!(matches!(
                 selection.target(),
                 ProviderSelectionTargetRef::Named(actual)
@@ -66,11 +61,8 @@ fn assert_identity_invariants(input: &str) {
 ///
 /// * `inputs` - Bounded raw alias fields in caller-supplied order.
 fn assert_descriptor_invariants(inputs: &[&str]) {
-    let provider_id = ProviderId::new(FUZZ_PROVIDER_ID)
-        .expect("the fixed fuzz provider ID must be canonical");
-    let Ok(descriptor) = ProviderDescriptor::new(provider_id)
-        .with_aliases(inputs.iter().copied())
-    else {
+    let provider_id = ProviderId::new(FUZZ_PROVIDER_ID).expect("the fixed fuzz provider ID must be canonical");
+    let Ok(descriptor) = ProviderDescriptor::new(provider_id).with_aliases(inputs.iter().copied()) else {
         return;
     };
 
@@ -78,8 +70,7 @@ fn assert_descriptor_invariants(inputs: &[&str]) {
     assert_eq!(inputs.len(), descriptor.aliases().len());
     let mut unique_aliases = BTreeSet::new();
     for (input, alias) in inputs.iter().zip(descriptor.aliases()) {
-        let expected = ProviderSelector::parse(input)
-            .expect("a successful descriptor must contain valid aliases");
+        let expected = ProviderSelector::parse(input).expect("a successful descriptor must contain valid aliases");
         assert_eq!(&expected, alias);
         assert_ne!(FUZZ_PROVIDER_ID, alias.as_str());
         assert!(unique_aliases.insert(alias.as_str()));
@@ -106,8 +97,7 @@ fn assert_chain_invariants(inputs: &[&str]) {
         return;
     }
 
-    let selection = selection
-        .expect("a nonempty list of valid selectors must form a chain");
+    let selection = selection.expect("a nonempty list of valid selectors must form a chain");
     match selection.target() {
         ProviderSelectionTargetRef::Chain {
             selectors,

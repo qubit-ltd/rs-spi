@@ -105,10 +105,7 @@ where
     /// Registry remains unchanged because descriptor generation precedes all
     /// mutation.
     #[inline(always)]
-    pub fn register_shared(
-        &self,
-        provider: Arc<dyn AsyncProviderDefinition<S>>,
-    ) -> Result<(), RegistrationError> {
+    pub fn register_shared(&self, provider: Arc<dyn AsyncProviderDefinition<S>>) -> Result<(), RegistrationError> {
         self.providers.register_shared(provider)
     }
 
@@ -169,9 +166,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
-    pub fn resolve(
-        &self,
-    ) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
+    pub fn resolve(&self) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
         let candidates = self.providers.resolve()?;
         Ok(AsyncResolvingServiceProvider::new(
             candidates.entries,
@@ -279,8 +274,7 @@ where
     ///
     /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (descriptors, default_selection) =
-            self.providers.metadata_snapshot();
+        let (descriptors, default_selection) = self.providers.metadata_snapshot();
         formatter
             .debug_struct("AsyncProviderRegistry")
             .field("descriptors", &descriptors)

@@ -16,8 +16,7 @@ use crate::ProviderMetadata;
 /// # Type Parameters
 ///
 /// * `S` - Asynchronous service family implemented by the provider.
-pub trait AsyncProviderDefinition<S>:
-    ProviderMetadata + AsyncServiceProvider<S>
+pub trait AsyncProviderDefinition<S>: ProviderMetadata + AsyncServiceProvider<S>
 where
     S: AsyncServiceSpec,
     S::Config: Sync,

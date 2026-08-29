@@ -22,13 +22,11 @@ fn test_async_provider_creates_with_explicit_and_default_config() {
 
     assert_eq!(
         "explicit",
-        block_on(provider.create_configured(&"explicit".to_owned()))
-            .expect("explicit async creation should succeed"),
+        block_on(provider.create_configured(&"explicit".to_owned())).expect("explicit async creation should succeed"),
     );
     assert_eq!(
         String::default(),
-        block_on(provider.create())
-            .expect("default async creation should succeed"),
+        block_on(provider.create()).expect("default async creation should succeed"),
     );
 }
 
@@ -36,16 +34,13 @@ fn test_async_provider_creates_with_explicit_and_default_config() {
 /// directly.
 #[test]
 fn test_async_leaf_provider_returns_typed_failure_directly() {
-    let provider = AsyncConfigurableProvider::failure(
-        TestProviderFailure::unavailable("offline"),
-    );
+    let provider = AsyncConfigurableProvider::failure(TestProviderFailure::unavailable("offline"));
     let config = String::new();
     let future = provider.create_configured(&config);
 
     fn assert_send<T: Send>(_: &T) {}
     assert_send(&future);
-    let error: ProviderFailure<TestError> =
-        block_on(future).expect_err("async leaf provider should fail");
+    let error: ProviderFailure<TestError> = block_on(future).expect_err("async leaf provider should fail");
     assert_eq!(ProviderFailureKind::Unavailable, error.kind());
 }
 
@@ -55,7 +50,6 @@ fn test_async_provider_returns_stable_output() {
     let provider = AsyncConfigurableProvider::success("stable");
     assert_eq!(
         "stable",
-        block_on(provider.create_configured(&String::new()))
-            .expect("stable async creation should succeed"),
+        block_on(provider.create_configured(&String::new())).expect("stable async creation should succeed"),
     );
 }

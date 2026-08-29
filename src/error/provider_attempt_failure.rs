@@ -35,14 +35,8 @@ impl<E> ProviderAttemptFailure<E> {
     /// A provider attempt retaining its identity and causal error.
     #[inline]
     #[must_use]
-    pub(crate) fn new(
-        provider_id: ProviderId,
-        failure: ProviderFailure<E>,
-    ) -> Self {
-        Self {
-            provider_id,
-            failure,
-        }
+    pub(crate) fn new(provider_id: ProviderId, failure: ProviderFailure<E>) -> Self {
+        Self { provider_id, failure }
     }
 
     /// Returns the canonical ID of the attempted provider.
@@ -97,11 +91,7 @@ where
     ///
     /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "provider {} failed: {}",
-            self.provider_id, self.failure,
-        )
+        write!(formatter, "provider {} failed: {}", self.provider_id, self.failure,)
     }
 }
 

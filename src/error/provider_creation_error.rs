@@ -58,9 +58,7 @@ impl<E> ProviderCreationError<E> {
     /// Panics when `attempts` is empty.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn stopped_by_policy(
-        attempts: Vec<ProviderAttemptFailure<E>>,
-    ) -> Self {
+    pub(crate) fn stopped_by_policy(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
 
@@ -80,10 +78,7 @@ impl<E> ProviderCreationError<E> {
     /// Panics when `attempts` is empty.
     #[inline]
     #[must_use]
-    fn new(
-        attempts: Vec<ProviderAttemptFailure<E>>,
-        termination: ProviderCreationTermination,
-    ) -> Self {
+    fn new(attempts: Vec<ProviderAttemptFailure<E>>, termination: ProviderCreationTermination) -> Self {
         assert!(
             !attempts.is_empty(),
             "provider creation errors require at least one attempt",
@@ -153,12 +148,7 @@ impl<E> ProviderCreationError<E> {
     /// The ordered attempts and the reason traversal ended.
     #[inline(always)]
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (
-        Box<[ProviderAttemptFailure<E>]>,
-        ProviderCreationTermination,
-    ) {
+    pub fn into_parts(self) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
         (self.attempts, self.termination)
     }
 }

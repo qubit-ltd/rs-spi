@@ -20,8 +20,7 @@ use crate::common::string_spec::StringSpec;
 fn test_no_candidates_display_propagates_formatter_failures() {
     let registry = ProviderRegistry::<StringSpec>::default();
     let selection =
-        ProviderSelection::chain_allowing_missing(["first", "second"])
-            .expect("test selectors should be valid");
+        ProviderSelection::chain_allowing_missing(["first", "second"]).expect("test selectors should be valid");
     let error = registry
         .resolve_selected(&selection)
         .expect_err("unmatched chain should fail resolution");
@@ -52,16 +51,10 @@ fn test_unknown_providers_display_preserves_selector_order() {
     let registry = ProviderRegistry::<StringSpec>::default();
 
     let singular = registry
-        .resolve_selected(
-            &ProviderSelection::named("first")
-                .expect("test selector should parse"),
-        )
+        .resolve_selected(&ProviderSelection::named("first").expect("test selector should parse"))
         .expect_err("unknown named selector should fail");
     let plural = registry
-        .resolve_selected(
-            &ProviderSelection::chain(["first", "second"])
-                .expect("test selectors should parse"),
-        )
+        .resolve_selected(&ProviderSelection::chain(["first", "second"]).expect("test selectors should parse"))
         .expect_err("unknown strict chain should fail");
 
     assert_eq!("unknown provider selector; first", singular.to_string());
@@ -69,10 +62,7 @@ fn test_unknown_providers_display_preserves_selector_order() {
     assert!(!singular.is_no_candidates());
     assert!(!singular.is_empty_registry());
     assert_eq!("first", singular.selectors().unwrap()[0].as_str());
-    assert_eq!(
-        "unknown provider selectors; first; second",
-        plural.to_string(),
-    );
+    assert_eq!("unknown provider selectors; first; second", plural.to_string(),);
 
     for remaining_successes in [0, 1, 2] {
         let mut writer = FailingWriter::new(remaining_successes);

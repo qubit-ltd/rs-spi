@@ -102,10 +102,7 @@ where
     /// Registry remains unchanged because descriptor generation precedes all
     /// mutation.
     #[inline(always)]
-    pub fn register_shared(
-        &self,
-        provider: Arc<dyn ProviderDefinition<S>>,
-    ) -> Result<(), RegistrationError> {
+    pub fn register_shared(&self, provider: Arc<dyn ProviderDefinition<S>>) -> Result<(), RegistrationError> {
         self.providers.register_shared(provider)
     }
 
@@ -164,9 +161,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
-    pub fn resolve(
-        &self,
-    ) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
+    pub fn resolve(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let candidates = self.providers.resolve()?;
         Ok(ResolvingServiceProvider::new(
             candidates.entries,
@@ -271,8 +266,7 @@ where
     ///
     /// Returns [`fmt::Error`] when the formatter rejects debug output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (descriptors, default_selection) =
-            self.providers.metadata_snapshot();
+        let (descriptors, default_selection) = self.providers.metadata_snapshot();
         formatter
             .debug_struct("ProviderRegistry")
             .field("descriptors", &descriptors)

@@ -71,8 +71,5 @@ where
     ///
     /// May panic if the provider implementation panics while creating the
     /// requested service.
-    fn create_configured(
-        &self,
-        config: &S::Config,
-    ) -> Result<S::Output, ProviderFailure<S::Error>>;
+    fn create_configured(&self, config: &S::Config) -> Result<S::Output, ProviderFailure<S::Error>>;
 }

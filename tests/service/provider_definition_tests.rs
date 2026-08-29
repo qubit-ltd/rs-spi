@@ -29,10 +29,7 @@ fn test_definition_supplies_registration_descriptor() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(SelfDescribedProvider::new(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             "hello",
         ))
         .expect("self-described provider should register");

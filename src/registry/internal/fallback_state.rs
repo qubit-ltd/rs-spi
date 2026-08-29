@@ -59,17 +59,14 @@ impl<E> FallbackState<E> {
         has_remaining: bool,
     ) -> Option<ProviderCreationError<E>> {
         let kind = failure.kind();
-        self.attempts
-            .push(ProviderAttemptFailure::new(provider_id, failure));
+        self.attempts.push(ProviderAttemptFailure::new(provider_id, failure));
         if !has_remaining {
-            return Some(ProviderCreationError::exhausted(std::mem::take(
-                &mut self.attempts,
-            )));
+            return Some(ProviderCreationError::exhausted(std::mem::take(&mut self.attempts)));
         }
         if !self.policy.should_continue_after(kind) {
-            return Some(ProviderCreationError::stopped_by_policy(
-                std::mem::take(&mut self.attempts),
-            ));
+            return Some(ProviderCreationError::stopped_by_policy(std::mem::take(
+                &mut self.attempts,
+            )));
         }
         None
     }

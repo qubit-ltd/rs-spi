@@ -36,9 +36,7 @@ where
     ///
     /// The returned future may panic if `S::Config::default()` or
     /// [`Self::create_configured`] panics.
-    fn create(
-        &self,
-    ) -> ProviderFuture<'_, Result<S::Output, ProviderFailure<S::Error>>>
+    fn create(&self) -> ProviderFuture<'_, Result<S::Output, ProviderFailure<S::Error>>>
     where
         S::Config: Default + Send,
     {

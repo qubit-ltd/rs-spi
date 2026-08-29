@@ -29,9 +29,7 @@ impl FailingWriter {
     #[inline]
     #[must_use]
     pub(crate) const fn new(remaining_successes: usize) -> Self {
-        Self {
-            remaining_successes,
-        }
+        Self { remaining_successes }
     }
 }
 

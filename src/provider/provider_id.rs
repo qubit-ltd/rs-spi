@@ -121,15 +121,10 @@ impl ProviderId {
         let mut index = 0;
         while index < bytes.len() {
             let byte = bytes[index];
-            if !byte.is_ascii_lowercase()
-                && !byte.is_ascii_digit()
-                && !matches!(byte, b'-' | b'_' | b'.' | b'+')
-            {
+            if !byte.is_ascii_lowercase() && !byte.is_ascii_digit() && !matches!(byte, b'-' | b'_' | b'.' | b'+') {
                 return false;
             }
-            if (index == 0 || index + 1 == bytes.len())
-                && !byte.is_ascii_alphanumeric()
-            {
+            if (index == 0 || index + 1 == bytes.len()) && !byte.is_ascii_alphanumeric() {
                 return false;
             }
             index += 1;

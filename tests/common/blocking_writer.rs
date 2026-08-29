@@ -34,11 +34,7 @@ impl BlockingWriter {
     /// # Returns
     ///
     /// An empty writer ready to coordinate one formatting pause.
-    pub(crate) fn new(
-        marker: &str,
-        entered: Sender<()>,
-        release: Receiver<()>,
-    ) -> Self {
+    pub(crate) fn new(marker: &str, entered: Sender<()>, release: Receiver<()>) -> Self {
         Self {
             output: String::new(),
             marker: marker.into(),
@@ -73,12 +69,8 @@ impl fmt::Write for BlockingWriter {
     /// Returns [`fmt::Error`] when either coordination channel is disconnected.
     fn write_str(&mut self, value: &str) -> fmt::Result {
         self.output.push_str(value);
-        if self.entered.is_some() && self.output.contains(self.marker.as_ref())
-        {
-            let entered = self
-                .entered
-                .take()
-                .expect("blocking writer pauses at most once");
+        if self.entered.is_some() && self.output.contains(self.marker.as_ref()) {
+            let entered = self.entered.take().expect("blocking writer pauses at most once");
             entered.send(()).map_err(|_| fmt::Error)?;
             self.release.recv().map_err(|_| fmt::Error)?;
         }

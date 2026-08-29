@@ -43,8 +43,7 @@ impl ProviderResolutionError {
     #[must_use]
     pub fn selectors(&self) -> Option<&[ProviderSelector]> {
         match self {
-            Self::UnknownProviders { selectors }
-            | Self::NoCandidates { selectors } => Some(selectors),
+            Self::UnknownProviders { selectors } | Self::NoCandidates { selectors } => Some(selectors),
             Self::EmptyRegistry => None,
         }
     }
@@ -178,8 +177,7 @@ impl fmt::Display for ProviderResolutionError {
                 }
                 Ok(())
             }
-            Self::EmptyRegistry => formatter
-                .write_str("cannot select a provider from an empty registry"),
+            Self::EmptyRegistry => formatter.write_str("cannot select a provider from an empty registry"),
         }
     }
 }

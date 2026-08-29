@@ -51,14 +51,8 @@ impl ProviderDescriptorError {
     /// An invalid-alias descriptor error retaining the parse source.
     #[inline]
     #[must_use]
-    pub(crate) fn invalid_alias(
-        alias_index: usize,
-        source: ProviderSelectorError,
-    ) -> Self {
-        Self::InvalidAlias {
-            alias_index,
-            source,
-        }
+    pub(crate) fn invalid_alias(alias_index: usize, source: ProviderSelectorError) -> Self {
+        Self::InvalidAlias { alias_index, source }
     }
 
     /// Creates an error for aliases that normalize to the same selector.
@@ -73,9 +67,7 @@ impl ProviderDescriptorError {
     #[inline]
     #[must_use]
     pub(crate) fn duplicate_alias(alias: &str) -> Self {
-        Self::DuplicateAlias {
-            alias: alias.into(),
-        }
+        Self::DuplicateAlias { alias: alias.into() }
     }
 
     /// Creates an error for an alias matching the canonical provider ID.
@@ -90,9 +82,7 @@ impl ProviderDescriptorError {
     #[inline]
     #[must_use]
     pub(crate) fn alias_matches_id(alias: &str) -> Self {
-        Self::AliasMatchesId {
-            alias: alias.into(),
-        }
+        Self::AliasMatchesId { alias: alias.into() }
     }
 
     /// Returns the alias retained by this error.
@@ -105,9 +95,7 @@ impl ProviderDescriptorError {
     pub fn alias(&self) -> &str {
         match self {
             Self::InvalidAlias { source, .. } => source.input(),
-            Self::DuplicateAlias { alias } | Self::AliasMatchesId { alias } => {
-                alias
-            }
+            Self::DuplicateAlias { alias } | Self::AliasMatchesId { alias } => alias,
         }
     }
 }
@@ -128,10 +116,7 @@ impl fmt::Display for ProviderDescriptorError {
     /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidAlias {
-                alias_index,
-                source,
-            } => write!(
+            Self::InvalidAlias { alias_index, source } => write!(
                 formatter,
                 "invalid provider alias at index {alias_index}: {:?}",
                 source.input(),
@@ -140,10 +125,7 @@ impl fmt::Display for ProviderDescriptorError {
                 write!(formatter, "duplicate provider alias: {alias}")
             }
             Self::AliasMatchesId { alias } => {
-                write!(
-                    formatter,
-                    "provider alias matches canonical ID: {alias}"
-                )
+                write!(formatter, "provider alias matches canonical ID: {alias}")
             }
         }
     }

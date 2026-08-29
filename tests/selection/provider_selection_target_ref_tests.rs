@@ -12,8 +12,7 @@ use qubit_spi::ProviderSelectionTargetRef;
 /// Verifies that target views are copyable borrowed snapshots.
 #[test]
 fn test_provider_selection_target_ref_is_copyable_and_debuggable() {
-    let selection =
-        ProviderSelection::named("memory").expect("test selector should parse");
+    let selection = ProviderSelection::named("memory").expect("test selector should parse");
     let target = selection.target();
     let copied = target;
 

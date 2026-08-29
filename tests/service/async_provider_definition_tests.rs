@@ -33,10 +33,7 @@ impl AsyncServiceProvider<StringSpec> for DescribedAsyncProvider {
     fn create_configured<'a>(
         &'a self,
         config: &'a String,
-    ) -> ProviderFuture<
-        'a,
-        Result<String, ProviderFailure<crate::common::test_error::TestError>>,
-    > {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<crate::common::test_error::TestError>>> {
         self.provider.create_configured(config)
     }
 }
@@ -48,9 +45,7 @@ fn test_metadata_and_async_provider_form_definition_automatically() {
 
     assert_definition::<DescribedAsyncProvider>();
     let provider = DescribedAsyncProvider {
-        descriptor: ProviderDescriptor::new(
-            ProviderId::new("async").expect("test provider ID should be valid"),
-        ),
+        descriptor: ProviderDescriptor::new(ProviderId::new("async").expect("test provider ID should be valid")),
         provider: AsyncConfigurableProvider::success("output"),
     };
     assert_eq!("async", provider.descriptor().id().as_str());

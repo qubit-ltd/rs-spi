@@ -84,14 +84,8 @@ impl ProviderSelectionBuildError {
     /// An invalid-selector selection error retaining its source.
     #[inline]
     #[must_use]
-    pub(crate) fn invalid_selector(
-        selector_index: Option<usize>,
-        source: ProviderSelectorError,
-    ) -> Self {
-        Self::InvalidSelector {
-            selector_index,
-            source,
-        }
+    pub(crate) fn invalid_selector(selector_index: Option<usize>, source: ProviderSelectorError) -> Self {
+        Self::InvalidSelector { selector_index, source }
     }
 
     /// Creates an error for an empty chained selection.
@@ -122,23 +116,15 @@ impl fmt::Display for ProviderSelectionBuildError {
     /// Returns [`fmt::Error`] when the formatter rejects diagnostic output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidSelector {
-                selector_index,
-                source,
-            } => match selector_index {
+            Self::InvalidSelector { selector_index, source } => match selector_index {
                 Some(index) => write!(
                     formatter,
                     "invalid provider selector at selection index {index}: {:?}",
                     source.input(),
                 ),
-                None => write!(
-                    formatter,
-                    "invalid provider selector {:?}",
-                    source.input(),
-                ),
+                None => write!(formatter, "invalid provider selector {:?}", source.input(),),
             },
-            Self::EmptyChain => formatter
-                .write_str("provider selection chain must not be empty"),
+            Self::EmptyChain => formatter.write_str("provider selection chain must not be empty"),
         }
     }
 }

@@ -44,13 +44,7 @@ mod inherent_api_tests {
     #[test]
     fn test_resolving_provider_exposes_inherent_creation_methods() {
         let registry = ProviderRegistry::<StringSpec>::default();
-        register_provider(
-            &registry,
-            "echo",
-            &[],
-            0,
-            ConfigurableProvider::echo(),
-        );
+        register_provider(&registry, "echo", &[], 0, ConfigurableProvider::echo());
         let provider = registry
             .resolve_selected(&ProviderSelection::auto())
             .expect("automatic selection should resolve");
@@ -72,13 +66,7 @@ mod inherent_api_tests {
 #[test]
 fn test_resolving_provider_returns_service_output_directly() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "memory",
-        &[],
-        0,
-        ConfigurableProvider::success("service"),
-    );
+    register_provider(&registry, "memory", &[], 0, ConfigurableProvider::success("service"));
 
     let provider: ResolvingServiceProvider<StringSpec> = registry
         .resolve_selected(&ProviderSelection::auto())
@@ -117,9 +105,7 @@ fn test_resolving_provider_passes_explicit_config_unchanged() {
         .expect("echo provider should succeed");
 
     assert_eq!("explicit", output);
-    let seen_config = seen_config
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let seen_config = seen_config.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     assert_eq!(Some("explicit"), seen_config.as_deref());
 }
 
@@ -149,14 +135,10 @@ fn test_resolver_propagates_provider_panic_without_trying_fallback() {
         "fallback",
         &[],
         10,
-        ConfigurableProvider::success("fallback")
-            .with_calls(Arc::clone(&fallback_calls)),
+        ConfigurableProvider::success("fallback").with_calls(Arc::clone(&fallback_calls)),
     );
     let resolver = registry
-        .resolve_selected(
-            &ProviderSelection::auto()
-                .with_fallback_policy(FallbackPolicy::OnAnyError),
-        )
+        .resolve_selected(&ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError))
         .expect("automatic selection should resolve");
 
     let result = catch_unwind(AssertUnwindSafe(|| resolver.create()));
@@ -170,23 +152,15 @@ fn test_resolver_propagates_provider_panic_without_trying_fallback() {
 fn test_registry_resolves_named_alias_to_one_candidate() {
     let unrelated_calls = Arc::new(AtomicUsize::new(0));
     let registry = ProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "english",
-        &["en"],
-        0,
-        ConfigurableProvider::success("hello"),
-    );
+    register_provider(&registry, "english", &["en"], 0, ConfigurableProvider::success("hello"));
     register_provider(
         &registry,
         "unrelated",
         &[],
         100,
-        ConfigurableProvider::success("other")
-            .with_calls(Arc::clone(&unrelated_calls)),
+        ConfigurableProvider::success("other").with_calls(Arc::clone(&unrelated_calls)),
     );
-    let selection =
-        ProviderSelection::named("EN").expect("test selector should be valid");
+    let selection = ProviderSelection::named("EN").expect("test selector should be valid");
 
     let output = registry
         .resolve_selected(&selection)
@@ -210,8 +184,7 @@ fn test_registry_rejects_partially_unknown_strict_chain() {
         0,
         ConfigurableProvider::success("known").with_calls(Arc::clone(&calls)),
     );
-    let selection = ProviderSelection::chain(["missing", "known"])
-        .expect("strict chain should parse");
+    let selection = ProviderSelection::chain(["missing", "known"]).expect("strict chain should parse");
 
     let error = registry
         .resolve_selected(&selection)
@@ -239,23 +212,12 @@ fn test_registry_allows_explicitly_missing_chain_entries_and_deduplicates() {
         "first",
         &["one"],
         0,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable(
-            "offline",
-        ))
-        .with_calls(Arc::clone(&first_calls)),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")).with_calls(Arc::clone(&first_calls)),
     );
-    register_provider(
-        &registry,
-        "second",
-        &[],
-        0,
-        ConfigurableProvider::success("second"),
-    );
-    let selection = ProviderSelection::chain_allowing_missing([
-        "missing", "one", "first", "second",
-    ])
-    .expect("optional chain should parse")
-    .with_fallback_policy(FallbackPolicy::OnAnyError);
+    register_provider(&registry, "second", &[], 0, ConfigurableProvider::success("second"));
+    let selection = ProviderSelection::chain_allowing_missing(["missing", "one", "first", "second"])
+        .expect("optional chain should parse")
+        .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let output = registry
         .resolve_selected(&selection)
@@ -272,13 +234,7 @@ fn test_registry_allows_explicitly_missing_chain_entries_and_deduplicates() {
 fn test_registry_resolves_auto_by_priority_then_id() {
     let registry = ProviderRegistry::<StringSpec>::default();
     for (id, priority) in [("zulu", 10), ("beta", 20), ("alpha", 20)] {
-        register_provider(
-            &registry,
-            id,
-            &[],
-            priority,
-            ConfigurableProvider::success(id),
-        );
+        register_provider(&registry, id, &[], priority, ConfigurableProvider::success(id));
     }
 
     let output = registry
@@ -300,13 +256,10 @@ fn test_registry_auto_fallback_attempts_follow_ranked_order() {
             id,
             &[],
             priority,
-            ConfigurableProvider::failure(TestProviderFailure::unavailable(
-                format!("{id} unavailable"),
-            )),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable(format!("{id} unavailable"))),
         );
     }
-    let selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = registry
         .resolve_selected(&selection)
@@ -336,16 +289,14 @@ fn test_registry_reports_named_unknown_before_creation() {
         0,
         ConfigurableProvider::success("known").with_calls(Arc::clone(&calls)),
     );
-    let selection = ProviderSelection::named("missing")
-        .expect("test selector should be valid");
+    let selection = ProviderSelection::named("missing").expect("test selector should be valid");
 
     let error = registry
         .resolve_selected(&selection)
         .expect_err("unknown selection should fail");
     let message = error.to_string();
 
-    let ProviderResolutionError::UnknownProviders { selectors, .. } = error
-    else {
+    let ProviderResolutionError::UnknownProviders { selectors, .. } = error else {
         panic!("named selection should retain its unknown selector");
     };
     assert_eq!(1, selectors.len());
@@ -366,9 +317,7 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
         0,
         ConfigurableProvider::success("known").with_calls(Arc::clone(&calls)),
     );
-    let selection =
-        ProviderSelection::chain_allowing_missing(["first", "second"])
-            .expect("test chain should be valid");
+    let selection = ProviderSelection::chain_allowing_missing(["first", "second"]).expect("test chain should be valid");
 
     let error = registry
         .resolve_selected(&selection)
@@ -380,10 +329,7 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
     };
     assert_eq!(
         vec!["first", "second"],
-        selectors
-            .iter()
-            .map(|selector| selector.as_str())
-            .collect::<Vec<_>>(),
+        selectors.iter().map(|selector| selector.as_str()).collect::<Vec<_>>(),
     );
     assert_eq!("no provider candidates matched; first; second", message,);
     assert_eq!(0, calls.load(Ordering::SeqCst));
@@ -393,22 +339,14 @@ fn test_registry_reports_chain_without_candidates_before_creation() {
 #[test]
 fn test_registry_preserves_ordered_duplicate_unknown_selectors() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "known",
-        &[],
-        0,
-        ConfigurableProvider::success("known"),
-    );
-    let selection = ProviderSelection::chain(["missing", "known", "missing"])
-        .expect("strict chain should parse");
+    register_provider(&registry, "known", &[], 0, ConfigurableProvider::success("known"));
+    let selection = ProviderSelection::chain(["missing", "known", "missing"]).expect("strict chain should parse");
 
     let error = registry
         .resolve_selected(&selection)
         .expect_err("strict chain should reject unknown selectors");
 
-    let ProviderResolutionError::UnknownProviders { selectors, .. } = error
-    else {
+    let ProviderResolutionError::UnknownProviders { selectors, .. } = error else {
         panic!("strict chain should report unknown selectors");
     };
     assert_eq!(
@@ -431,10 +369,7 @@ fn test_registry_reports_empty_auto_selection_before_creation() {
         .expect_err("empty automatic selection should fail");
 
     assert!(matches!(&error, ProviderResolutionError::EmptyRegistry));
-    assert_eq!(
-        "cannot select a provider from an empty registry",
-        error.to_string(),
-    );
+    assert_eq!("cannot select a provider from an empty registry", error.to_string(),);
 }
 
 /// Verifies that the never policy stops after the first leaf failure.
@@ -447,20 +382,16 @@ fn test_never_stops_after_first_failure() {
         "first",
         &[],
         20,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable(
-            "offline",
-        )),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     register_provider(
         &registry,
         "fallback",
         &[],
         10,
-        ConfigurableProvider::success("fallback")
-            .with_calls(Arc::clone(&fallback_calls)),
+        ConfigurableProvider::success("fallback").with_calls(Arc::clone(&fallback_calls)),
     );
-    let selection =
-        ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never);
+    let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never);
 
     let error = registry
         .resolve_selected(&selection)
@@ -468,10 +399,7 @@ fn test_never_stops_after_first_failure() {
         .create()
         .expect_err("never policy should stop after one failure");
 
-    assert_eq!(
-        ProviderCreationTermination::StoppedByPolicy,
-        error.termination(),
-    );
+    assert_eq!(ProviderCreationTermination::StoppedByPolicy, error.termination(),);
     assert_eq!(1, error.attempts().len());
     assert_eq!(0, fallback_calls.load(Ordering::SeqCst));
 }
@@ -485,18 +413,14 @@ fn test_on_absence_continues_after_unsupported_and_unavailable() {
         "unsupported",
         &[],
         30,
-        ConfigurableProvider::failure(TestProviderFailure::unsupported(
-            "no format",
-        )),
+        ConfigurableProvider::failure(TestProviderFailure::unsupported("no format")),
     );
     register_provider(
         &registry,
         "unavailable",
         &[],
         20,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable(
-            "offline",
-        )),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     register_provider(
         &registry,
@@ -523,13 +447,7 @@ fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
         TestProviderFailure::initialization_failed("broken"),
     ] {
         let registry = ProviderRegistry::<StringSpec>::default();
-        register_provider(
-            &registry,
-            "first",
-            &[],
-            20,
-            ConfigurableProvider::failure(error),
-        );
+        register_provider(&registry, "first", &[], 20, ConfigurableProvider::failure(error));
         register_provider(
             &registry,
             "fallback",
@@ -544,10 +462,7 @@ fn test_on_absence_stops_after_invalid_config_and_initialization_failure() {
             .create()
             .expect_err("absence policy should stop");
 
-        assert_eq!(
-            ProviderCreationTermination::StoppedByPolicy,
-            error.termination(),
-        );
+        assert_eq!(ProviderCreationTermination::StoppedByPolicy, error.termination(),);
         assert_eq!(1, error.attempts().len());
     }
 }
@@ -562,13 +477,7 @@ fn test_on_any_error_continues_after_every_leaf_failure_kind() {
         TestProviderFailure::initialization_failed("broken"),
     ] {
         let registry = ProviderRegistry::<StringSpec>::default();
-        register_provider(
-            &registry,
-            "first",
-            &[],
-            20,
-            ConfigurableProvider::failure(error),
-        );
+        register_provider(&registry, "first", &[], 20, ConfigurableProvider::failure(error));
         register_provider(
             &registry,
             "fallback",
@@ -576,8 +485,7 @@ fn test_on_any_error_continues_after_every_leaf_failure_kind() {
             10,
             ConfigurableProvider::success("fallback"),
         );
-        let selection = ProviderSelection::auto()
-            .with_fallback_policy(FallbackPolicy::OnAnyError);
+        let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
 
         let output = registry
             .resolve_selected(&selection)
@@ -599,16 +507,13 @@ fn test_creation_error_preserves_ordered_provider_ids_and_sources() {
             id,
             &[],
             priority,
-            ConfigurableProvider::failure(
-                TestProviderFailure::unavailable_with_source(
-                    format!("{id} unavailable"),
-                    std::io::Error::other(format!("{id} source")),
-                ),
-            ),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable_with_source(
+                format!("{id} unavailable"),
+                std::io::Error::other(format!("{id} source")),
+            )),
         );
     }
-    let selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = registry
         .resolve_selected(&selection)
@@ -640,12 +545,9 @@ fn test_named_selection_failure_contains_exact_provider_id() {
         "remote",
         &["cloud"],
         0,
-        ConfigurableProvider::failure(TestProviderFailure::unavailable(
-            "offline",
-        )),
+        ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
-    let selection = ProviderSelection::named("cloud")
-        .expect("test selector should be valid");
+    let selection = ProviderSelection::named("cloud").expect("test selector should be valid");
 
     let error = registry
         .resolve_selected(&selection)
@@ -661,29 +563,14 @@ fn test_named_selection_failure_contains_exact_provider_id() {
 #[test]
 fn test_resolved_candidate_snapshot_ignores_later_registration() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "initial",
-        &[],
-        10,
-        ConfigurableProvider::success("initial"),
-    );
+    register_provider(&registry, "initial", &[], 10, ConfigurableProvider::success("initial"));
     let snapshot = registry
         .resolve_selected(&ProviderSelection::auto())
         .expect("initial selection should resolve");
 
-    register_provider(
-        &registry,
-        "later",
-        &[],
-        20,
-        ConfigurableProvider::success("later"),
-    );
+    register_provider(&registry, "later", &[], 20, ConfigurableProvider::success("later"));
 
-    assert_eq!(
-        "initial",
-        snapshot.create().expect("snapshot provider should succeed"),
-    );
+    assert_eq!("initial", snapshot.create().expect("snapshot provider should succeed"),);
     assert_eq!(
         "later",
         registry
@@ -732,21 +619,14 @@ fn test_cloned_resolving_provider_supports_concurrent_creation() {
 /// * `aliases` - Alternative selectors owned by the provider.
 /// * `priority` - Descending automatic-selection priority.
 /// * `provider` - Service provider fixture or composing provider.
-fn register_provider<P>(
-    registry: &ProviderRegistry<StringSpec>,
-    id: &str,
-    aliases: &[&str],
-    priority: i32,
-    provider: P,
-) where
+fn register_provider<P>(registry: &ProviderRegistry<StringSpec>, id: &str, aliases: &[&str], priority: i32, provider: P)
+where
     P: ServiceProvider<StringSpec>,
 {
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new(id).expect("test provider ID should be valid"),
-    )
-    .with_aliases(aliases.iter().copied())
-    .expect("test aliases should be valid")
-    .with_priority(priority);
+    let descriptor = ProviderDescriptor::new(ProviderId::new(id).expect("test provider ID should be valid"))
+        .with_aliases(aliases.iter().copied())
+        .expect("test aliases should be valid")
+        .with_priority(priority);
     registry
         .register(define_provider(descriptor, provider))
         .expect("unique test provider should register");
@@ -757,10 +637,7 @@ struct PanickingProvider;
 
 impl ServiceProvider<StringSpec> for PanickingProvider {
     /// Panics to verify resolver propagation semantics.
-    fn create_configured(
-        &self,
-        _config: &String,
-    ) -> Result<String, ProviderFailure<TestError>> {
+    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<TestError>> {
         panic!("test provider panic");
     }
 }

@@ -11,10 +11,7 @@ use qubit_spi::MissingProviderPolicy;
 /// Verifies that chained selection rejects missing providers by default.
 #[test]
 fn test_missing_provider_policy_defaults_to_reject() {
-    assert_eq!(
-        MissingProviderPolicy::Reject,
-        MissingProviderPolicy::default(),
-    );
+    assert_eq!(MissingProviderPolicy::Reject, MissingProviderPolicy::default(),);
 }
 
 /// Verifies that the missing-provider policies remain distinct value types.

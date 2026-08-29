@@ -16,10 +16,7 @@ fn test_selector_errors_preserve_raw_and_normalized_input() {
     assert_eq!("  ", empty.input());
     assert!(matches!(empty, ProviderSelectorError::Empty { .. }));
     let invalid = ProviderSelector::parse(" Bad Selector ").unwrap_err();
-    let ProviderSelectorError::Invalid {
-        input, normalized, ..
-    } = invalid
-    else {
+    let ProviderSelectorError::Invalid { input, normalized, .. } = invalid else {
         panic!("invalid selector should retain both representations");
     };
     assert_eq!(" Bad Selector ", input.as_ref());

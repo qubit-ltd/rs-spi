@@ -38,9 +38,7 @@ fn test_provider_create_uses_config_default() {
 /// Verifies that a leaf provider returns its classified error directly.
 #[test]
 fn test_leaf_provider_returns_typed_failure_directly() {
-    let provider = ConfigurableProvider::failure(
-        TestProviderFailure::unavailable("offline"),
-    );
+    let provider = ConfigurableProvider::failure(TestProviderFailure::unavailable("offline"));
 
     let error: ProviderFailure<TestError> = provider
         .create_configured(&String::new())

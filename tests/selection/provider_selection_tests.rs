@@ -14,8 +14,7 @@ use qubit_spi::ProviderSelectionTargetRef;
 /// Verifies normalization and accessors for a named selection.
 #[test]
 fn test_named_selection_normalizes_its_selector() {
-    let selection = ProviderSelection::named(" File+Command ")
-        .expect("valid named selector should parse");
+    let selection = ProviderSelection::named(" File+Command ").expect("valid named selector should parse");
 
     assert!(matches!(
         selection.target(),
@@ -27,8 +26,7 @@ fn test_named_selection_normalizes_its_selector() {
 /// Verifies that chained selection preserves caller-supplied ordering.
 #[test]
 fn test_chain_selection_preserves_candidate_order() {
-    let selection = ProviderSelection::chain(["remote", "memory"])
-        .expect("valid selector chain should parse");
+    let selection = ProviderSelection::chain(["remote", "memory"]).expect("valid selector chain should parse");
 
     assert!(matches!(
         selection.target(),
@@ -45,10 +43,8 @@ fn test_chain_selection_preserves_candidate_order() {
 /// Verifies that the public target view preserves every selection shape.
 #[test]
 fn test_selection_target_preserves_named_and_chain_shape() {
-    let named = ProviderSelection::named(" File ")
-        .expect("named selector should parse");
-    let chain = ProviderSelection::chain(["file"])
-        .expect("chain selector should parse");
+    let named = ProviderSelection::named(" File ").expect("named selector should parse");
+    let chain = ProviderSelection::chain(["file"]).expect("chain selector should parse");
 
     assert!(matches!(
         named.target(),
@@ -68,8 +64,7 @@ fn test_selection_target_preserves_named_and_chain_shape() {
 #[test]
 fn test_chain_allowing_missing_exposes_ignore_policy() {
     let selection =
-        ProviderSelection::chain_allowing_missing(["optional", "fallback"])
-            .expect("optional chain should parse");
+        ProviderSelection::chain_allowing_missing(["optional", "fallback"]).expect("optional chain should parse");
 
     assert!(matches!(
         selection.target(),
@@ -92,8 +87,7 @@ fn test_auto_selection_exposes_auto_target() {
 /// Verifies immutable fallback-policy replacement without changing the target.
 #[test]
 fn test_selection_replaces_its_fallback_policy_immutably() {
-    let original = ProviderSelection::named("memory")
-        .expect("test selector should be valid");
+    let original = ProviderSelection::named("memory").expect("test selector should be valid");
     let replaced = original.clone().with_fallback_policy(FallbackPolicy::Never);
 
     assert_eq!(FallbackPolicy::OnAbsence, original.fallback_policy());

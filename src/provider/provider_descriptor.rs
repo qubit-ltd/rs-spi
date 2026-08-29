@@ -89,10 +89,7 @@ impl ProviderDescriptor {
     ///
     /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
     /// another alias, or duplicates the canonical provider ID.
-    pub fn with_aliases<I, T>(
-        mut self,
-        aliases: I,
-    ) -> Result<Self, ProviderDescriptorError>
+    pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -150,19 +147,14 @@ impl ProviderDescriptor {
     /// aliases duplicate one another.
     #[doc(hidden)]
     #[must_use]
-    pub const fn __are_valid_static_literals(
-        id: &str,
-        aliases: &[&str],
-    ) -> bool {
+    pub const fn __are_valid_static_literals(id: &str, aliases: &[&str]) -> bool {
         if !ProviderId::is_canonical_token(id) {
             return false;
         }
         let mut alias_index = 0;
         while alias_index < aliases.len() {
             let alias = aliases[alias_index];
-            if !ProviderId::is_canonical_token(alias)
-                || static_tokens_equal(alias, id)
-            {
+            if !ProviderId::is_canonical_token(alias) || static_tokens_equal(alias, id) {
                 return false;
             }
             let mut previous_index = 0;
@@ -191,19 +183,11 @@ impl ProviderDescriptor {
     /// The descriptor represented by the validated static metadata.
     #[doc(hidden)]
     #[must_use]
-    pub fn __from_static_literals(
-        id: &str,
-        aliases: &[&str],
-        priority: i32,
-    ) -> Self {
-        Self::new(ProviderId::new(id).expect(
-            "provider_descriptor! validates static literals at compile time",
-        ))
-        .with_aliases(aliases.iter().copied())
-        .expect(
-            "provider_descriptor! validates static literals at compile time",
-        )
-        .with_priority(priority)
+    pub fn __from_static_literals(id: &str, aliases: &[&str], priority: i32) -> Self {
+        Self::new(ProviderId::new(id).expect("provider_descriptor! validates static literals at compile time"))
+            .with_aliases(aliases.iter().copied())
+            .expect("provider_descriptor! validates static literals at compile time")
+            .with_priority(priority)
     }
 }
 
@@ -262,21 +246,14 @@ fn normalize_aliases(
         let alias = match ProviderSelector::parse(&input) {
             Ok(alias) => alias,
             Err(source) => {
-                return Err(ProviderDescriptorError::invalid_alias(
-                    alias_index,
-                    source,
-                ));
+                return Err(ProviderDescriptorError::invalid_alias(alias_index, source));
             }
         };
         if alias == canonical_selector {
-            return Err(ProviderDescriptorError::alias_matches_id(
-                alias.as_str(),
-            ));
+            return Err(ProviderDescriptorError::alias_matches_id(alias.as_str()));
         }
         if !seen.insert(alias.clone()) {
-            return Err(ProviderDescriptorError::duplicate_alias(
-                alias.as_str(),
-            ));
+            return Err(ProviderDescriptorError::duplicate_alias(alias.as_str()));
         }
         normalized.push(alias);
     }

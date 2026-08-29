@@ -16,8 +16,7 @@ use crate::common::string_spec::StringSpec;
 #[test]
 fn test_provider_selection_repr_rejects_unknown_chain_entries() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    let selection = ProviderSelection::chain(["unknown"])
-        .expect("static chain should be valid");
+    let selection = ProviderSelection::chain(["unknown"]).expect("static chain should be valid");
 
     assert!(matches!(
         registry.resolve_selected(&selection),

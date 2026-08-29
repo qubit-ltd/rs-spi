@@ -19,9 +19,7 @@ fn test_resolved_candidates_do_not_observe_later_registrations() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(SelfDescribedProvider::new(
-            ProviderDescriptor::new(
-                ProviderId::new("first").expect("static ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("first").expect("static ID should be valid")),
             "first",
         ))
         .expect("first provider should register");
@@ -29,10 +27,7 @@ fn test_resolved_candidates_do_not_observe_later_registrations() {
 
     registry
         .register(SelfDescribedProvider::new(
-            ProviderDescriptor::new(
-                ProviderId::new("second").expect("static ID should be valid"),
-            )
-            .with_priority(100),
+            ProviderDescriptor::new(ProviderId::new("second").expect("static ID should be valid")).with_priority(100),
             "second",
         ))
         .expect("second provider should register");

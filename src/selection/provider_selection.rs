@@ -81,9 +81,8 @@ impl ProviderSelection {
     /// valid selector.
     #[inline]
     pub fn named(value: &str) -> Result<Self, ProviderSelectionBuildError> {
-        let selector = ProviderSelector::parse(value).map_err(|source| {
-            ProviderSelectionBuildError::invalid_selector(None, source)
-        })?;
+        let selector = ProviderSelector::parse(value)
+            .map_err(|source| ProviderSelectionBuildError::invalid_selector(None, source))?;
         Ok(Self {
             target: ProviderSelectionRepr::Named(selector),
             fallback_policy: FallbackPolicy::OnAbsence,
@@ -139,9 +138,7 @@ impl ProviderSelection {
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
     #[inline(always)]
-    pub fn chain_allowing_missing<I, T>(
-        values: I,
-    ) -> Result<Self, ProviderSelectionBuildError>
+    pub fn chain_allowing_missing<I, T>(values: I) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -169,10 +166,7 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
-    fn build_chain<I, T>(
-        values: I,
-        missing_policy: MissingProviderPolicy,
-    ) -> Result<Self, ProviderSelectionBuildError>
+    fn build_chain<I, T>(values: I, missing_policy: MissingProviderPolicy) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -180,13 +174,8 @@ impl ProviderSelection {
         let mut selectors = Vec::new();
         for (selector_index, value) in values.into_iter().enumerate() {
             let input = value.as_ref();
-            let selector =
-                ProviderSelector::parse(input).map_err(|source| {
-                    ProviderSelectionBuildError::invalid_selector(
-                        Some(selector_index),
-                        source,
-                    )
-                })?;
+            let selector = ProviderSelector::parse(input)
+                .map_err(|source| ProviderSelectionBuildError::invalid_selector(Some(selector_index), source))?;
             selectors.push(selector);
         }
         if selectors.is_empty() {
@@ -212,9 +201,7 @@ impl ProviderSelection {
     pub const fn target(&self) -> ProviderSelectionTargetRef<'_> {
         match &self.target {
             ProviderSelectionRepr::Auto => ProviderSelectionTargetRef::Auto,
-            ProviderSelectionRepr::Named(selector) => {
-                ProviderSelectionTargetRef::Named(selector)
-            }
+            ProviderSelectionRepr::Named(selector) => ProviderSelectionTargetRef::Named(selector),
             ProviderSelectionRepr::Chain {
                 selectors,
                 missing_policy,
@@ -247,10 +234,7 @@ impl ProviderSelection {
     /// This selection with its target unchanged and policy replaced.
     #[inline(always)]
     #[must_use]
-    pub const fn with_fallback_policy(
-        mut self,
-        fallback_policy: FallbackPolicy,
-    ) -> Self {
+    pub const fn with_fallback_policy(mut self, fallback_policy: FallbackPolicy) -> Self {
         self.fallback_policy = fallback_policy;
         self
     }

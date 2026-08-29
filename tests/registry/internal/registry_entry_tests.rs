@@ -19,10 +19,7 @@ fn test_registry_entry_retains_provider_descriptor() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(SelfDescribedProvider::new(
-            ProviderDescriptor::new(
-                ProviderId::new("entry").expect("static ID should be valid"),
-            )
-            .with_priority(41),
+            ProviderDescriptor::new(ProviderId::new("entry").expect("static ID should be valid")).with_priority(41),
             "value",
         ))
         .expect("provider should register");

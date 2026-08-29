@@ -23,19 +23,13 @@ fn test_fallback_state_advances_to_the_next_candidate() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("missing").expect("static ID should be valid"),
-            ),
-            ConfigurableProvider::failure(TestProviderFailure::unavailable(
-                "provider is absent",
-            )),
+            ProviderDescriptor::new(ProviderId::new("missing").expect("static ID should be valid")),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable("provider is absent")),
         ))
         .expect("first provider should register");
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("ready").expect("static ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("ready").expect("static ID should be valid")),
             ConfigurableProvider::success("ready"),
         ))
         .expect("second provider should register");

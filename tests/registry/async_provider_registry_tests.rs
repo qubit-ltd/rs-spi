@@ -31,25 +31,15 @@ use crate::common::test_provider_definition::define_provider;
 #[test]
 fn test_async_registry_registers_and_resolves_without_await() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "async",
-        &[],
-        0,
-        AsyncConfigurableProvider::echo(),
-    );
+    register_provider(&registry, "async", &[], 0, AsyncConfigurableProvider::echo());
 
     let resolver = registry
-        .resolve_selected(
-            &ProviderSelection::named("async")
-                .expect("test selection should parse"),
-        )
+        .resolve_selected(&ProviderSelection::named("async").expect("test selection should parse"))
         .expect("selection should resolve synchronously");
 
     assert_eq!(
         "config",
-        block_on(resolver.create_configured(&"config".to_owned()))
-            .expect("async creation should succeed"),
+        block_on(resolver.create_configured(&"config".to_owned())).expect("async creation should succeed"),
     );
     assert_eq!(
         ["async"],
@@ -66,19 +56,10 @@ fn test_async_registry_registers_and_resolves_without_await() {
 #[test]
 fn test_async_registry_uses_strict_chain_semantics() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
-    register_provider(
-        &registry,
-        "known",
-        &[],
-        0,
-        AsyncConfigurableProvider::success("known"),
-    );
+    register_provider(&registry, "known", &[], 0, AsyncConfigurableProvider::success("known"));
 
     let error = registry
-        .resolve_selected(
-            &ProviderSelection::chain(["missing", "known"])
-                .expect("strict chain should parse"),
-        )
+        .resolve_selected(&ProviderSelection::chain(["missing", "known"]).expect("strict chain should parse"))
         .expect_err("strict chain should fail before returning a future");
 
     assert!(matches!(
@@ -97,9 +78,7 @@ fn test_async_registry_allows_explicit_missing_chain_entries() {
         "first",
         &["one"],
         0,
-        AsyncConfigurableProvider::failure(TestProviderFailure::unavailable(
-            "offline",
-        )),
+        AsyncConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
     );
     register_provider(
         &registry,
@@ -108,19 +87,14 @@ fn test_async_registry_allows_explicit_missing_chain_entries() {
         0,
         AsyncConfigurableProvider::success("second"),
     );
-    let selection = ProviderSelection::chain_allowing_missing([
-        "missing", "one", "first", "second",
-    ])
-    .expect("lenient chain should parse")
-    .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let selection = ProviderSelection::chain_allowing_missing(["missing", "one", "first", "second"])
+        .expect("lenient chain should parse")
+        .with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let resolver = registry
         .resolve_selected(&selection)
         .expect("known candidates should resolve");
-    assert_eq!(
-        "second",
-        block_on(resolver.create()).expect("fallback should succeed"),
-    );
+    assert_eq!("second", block_on(resolver.create()).expect("fallback should succeed"),);
 }
 
 /// Verifies all synchronous catalog facade operations and shared registration.
@@ -130,20 +104,16 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
     assert!(registry.is_empty());
     assert_eq!(ProviderSelection::auto(), registry.default_selection());
 
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new("shared").expect("static ID should be valid"),
-    );
-    let provider: Arc<dyn AsyncProviderDefinition<StringSpec>> =
-        Arc::new(define_provider(
-            descriptor.clone(),
-            AsyncConfigurableProvider::success("shared"),
-        ));
+    let descriptor = ProviderDescriptor::new(ProviderId::new("shared").expect("static ID should be valid"));
+    let provider: Arc<dyn AsyncProviderDefinition<StringSpec>> = Arc::new(define_provider(
+        descriptor.clone(),
+        AsyncConfigurableProvider::success("shared"),
+    ));
     registry
         .register_shared(provider)
         .expect("shared provider should register");
     let clone = registry.clone();
-    let selection = ProviderSelection::named("shared")
-        .expect("static selection should be valid");
+    let selection = ProviderSelection::named("shared").expect("static selection should be valid");
     clone.set_default_selection(selection.clone());
 
     assert!(!registry.is_empty());
@@ -152,13 +122,8 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
     assert_eq!(selection, registry.default_selection());
     assert_eq!(
         "shared",
-        block_on(
-            registry
-                .resolve()
-                .expect("default selection should resolve")
-                .create(),
-        )
-        .expect("shared provider should create"),
+        block_on(registry.resolve().expect("default selection should resolve").create(),)
+            .expect("shared provider should create"),
     );
     assert!(format!("{registry:?}").contains("shared"));
 }
@@ -167,28 +132,18 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
 #[test]
 fn test_async_registry_debug_uses_one_metadata_snapshot() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(
-        ProviderSelection::named("before")
-            .expect("static selection should be valid"),
-    );
+    registry.set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"));
     let formatting_registry = registry.clone();
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let formatter = thread::spawn(move || {
-        let mut writer =
-            BlockingWriter::new("descriptors", entered_tx, release_rx);
-        write!(&mut writer, "{formatting_registry:?}")
-            .expect("coordinated formatting should succeed");
+        let mut writer = BlockingWriter::new("descriptors", entered_tx, release_rx);
+        write!(&mut writer, "{formatting_registry:?}").expect("coordinated formatting should succeed");
         writer.into_output()
     });
 
-    entered_rx
-        .recv()
-        .expect("formatter should reach the descriptors field");
-    registry.set_default_selection(
-        ProviderSelection::named("after")
-            .expect("static selection should be valid"),
-    );
+    entered_rx.recv().expect("formatter should reach the descriptors field");
+    registry.set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"));
     release_tx
         .send(())
         .expect("formatter should remain blocked until released");
@@ -208,12 +163,10 @@ pub(crate) fn register_provider<P>(
 ) where
     P: AsyncServiceProvider<StringSpec>,
 {
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new(id).expect("test provider ID should be valid"),
-    )
-    .with_aliases(aliases.iter().copied())
-    .expect("test aliases should be valid")
-    .with_priority(priority);
+    let descriptor = ProviderDescriptor::new(ProviderId::new(id).expect("test provider ID should be valid"))
+        .with_aliases(aliases.iter().copied())
+        .expect("test aliases should be valid")
+        .with_priority(priority);
     registry
         .register(define_provider(descriptor, provider))
         .expect("unique async provider should register");

@@ -83,13 +83,7 @@ fn test_async_resolver_applies_all_fallback_policies() {
         ),
     ] {
         let registry = AsyncProviderRegistry::<StringSpec>::default();
-        register_provider(
-            &registry,
-            "first",
-            &[],
-            20,
-            AsyncConfigurableProvider::failure(error),
-        );
+        register_provider(&registry, "first", &[], 20, AsyncConfigurableProvider::failure(error));
         register_provider(
             &registry,
             "fallback",
@@ -98,9 +92,7 @@ fn test_async_resolver_applies_all_fallback_policies() {
             AsyncConfigurableProvider::success("fallback"),
         );
         let resolver = registry
-            .resolve_selected(
-                &ProviderSelection::auto().with_fallback_policy(policy),
-            )
+            .resolve_selected(&ProviderSelection::auto().with_fallback_policy(policy))
             .expect("automatic selection should resolve");
         let result = block_on(resolver.create());
 
@@ -131,10 +123,7 @@ fn test_async_resolver_propagates_provider_panic_without_trying_fallback() {
         },
     );
     let resolver = registry
-        .resolve_selected(
-            &ProviderSelection::auto()
-                .with_fallback_policy(FallbackPolicy::OnAnyError),
-        )
+        .resolve_selected(&ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError))
         .expect("automatic selection should resolve");
 
     let result = catch_unwind(AssertUnwindSafe(|| block_on(resolver.create())));
@@ -153,23 +142,17 @@ fn test_async_resolver_retains_attempt_order_and_sources() {
             id,
             &[],
             priority,
-            AsyncConfigurableProvider::failure(
-                TestProviderFailure::unavailable_with_source(
-                    format!("{id} unavailable"),
-                    std::io::Error::other(format!("{id} source")),
-                ),
-            ),
+            AsyncConfigurableProvider::failure(TestProviderFailure::unavailable_with_source(
+                format!("{id} unavailable"),
+                std::io::Error::other(format!("{id} source")),
+            )),
         );
     }
     let resolver = registry
-        .resolve_selected(
-            &ProviderSelection::auto()
-                .with_fallback_policy(FallbackPolicy::OnAnyError),
-        )
+        .resolve_selected(&ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError))
         .expect("automatic selection should resolve");
 
-    let error =
-        block_on(resolver.create()).expect_err("every provider should fail");
+    let error = block_on(resolver.create()).expect_err("every provider should fail");
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination());
     assert_eq!(
@@ -196,27 +179,13 @@ fn test_async_resolver_snapshot_ignores_later_registration() {
         AsyncConfigurableProvider::success("initial"),
     );
     let snapshot = registry.resolve().expect("initial provider should resolve");
-    register_provider(
-        &registry,
-        "later",
-        &[],
-        20,
-        AsyncConfigurableProvider::success("later"),
-    );
+    register_provider(&registry, "later", &[], 20, AsyncConfigurableProvider::success("later"));
 
-    assert_eq!(
-        "initial",
-        block_on(snapshot.create()).expect("snapshot should succeed")
-    );
+    assert_eq!("initial", block_on(snapshot.create()).expect("snapshot should succeed"));
     assert_eq!(
         "later",
-        block_on(
-            registry
-                .resolve()
-                .expect("updated selection should resolve")
-                .create()
-        )
-        .expect("updated resolver should succeed"),
+        block_on(registry.resolve().expect("updated selection should resolve").create())
+            .expect("updated resolver should succeed"),
     );
 }
 
@@ -272,14 +241,9 @@ impl AsyncServiceProvider<StringSpec> for PendingProvider {
             .take()
             .expect("pending provider should be called once");
         Box::pin(async move {
-            entered
-                .send(())
-                .expect("entry receiver should remain alive");
+            entered.send(()).expect("entry receiver should remain alive");
             release.await.map_err(|error| {
-                TestProviderFailure::initialization_failed_with_source(
-                    "release signal was canceled",
-                    error,
-                )
+                TestProviderFailure::initialization_failed_with_source("release signal was canceled", error)
             })?;
             Ok("released".to_owned())
         })
@@ -294,10 +258,7 @@ fn test_async_provider_pending_does_not_hold_registry_lock() {
     let (release_tx, release_rx) = oneshot::channel();
     registry
         .register(PendingProvider {
-            descriptor: ProviderDescriptor::new(
-                ProviderId::new("pending")
-                    .expect("test provider ID should be valid"),
-            ),
+            descriptor: ProviderDescriptor::new(ProviderId::new("pending").expect("test provider ID should be valid")),
             entered: Mutex::new(Some(entered_tx)),
             release: Mutex::new(Some(release_rx)),
         })
@@ -306,17 +267,9 @@ fn test_async_provider_pending_does_not_hold_registry_lock() {
     let creation = thread::spawn(move || block_on(resolver.create()));
 
     entered_rx.recv().expect("provider should announce entry");
-    register_provider(
-        &registry,
-        "later",
-        &[],
-        0,
-        AsyncConfigurableProvider::success("later"),
-    );
+    register_provider(&registry, "later", &[], 0, AsyncConfigurableProvider::success("later"));
     assert_eq!(2, registry.provider_ids().len());
-    release_tx
-        .send(())
-        .expect("pending provider should remain alive");
+    release_tx.send(()).expect("pending provider should remain alive");
 
     assert_eq!(
         "released",
@@ -336,18 +289,11 @@ fn test_async_final_failure_is_exhausted() {
         "only",
         &[],
         0,
-        AsyncConfigurableProvider::failure(
-            TestProviderFailure::invalid_configuration("invalid"),
-        ),
+        AsyncConfigurableProvider::failure(TestProviderFailure::invalid_configuration("invalid")),
     );
 
-    let error = block_on(
-        registry
-            .resolve()
-            .expect("provider should resolve")
-            .create(),
-    )
-    .expect_err("only provider should fail");
+    let error =
+        block_on(registry.resolve().expect("provider should resolve").create()).expect_err("only provider should fail");
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination());
     assert_eq!(
         ProviderFailureKind::InvalidConfiguration,

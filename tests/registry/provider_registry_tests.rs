@@ -32,10 +32,7 @@ fn test_registry_registers_a_self_described_provider_at_runtime() {
 
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             ConfigurableProvider::success("hello"),
         ))
         .expect("runtime registration should succeed");
@@ -48,14 +45,10 @@ fn test_registry_registers_a_self_described_provider_at_runtime() {
 #[test]
 fn test_registry_registers_an_existing_shared_provider() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    let provider: Arc<dyn ProviderDefinition<StringSpec>> =
-        Arc::new(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("shared")
-                    .expect("test provider ID should be valid"),
-            ),
-            ConfigurableProvider::success("shared"),
-        ));
+    let provider: Arc<dyn ProviderDefinition<StringSpec>> = Arc::new(define_provider(
+        ProviderDescriptor::new(ProviderId::new("shared").expect("test provider ID should be valid")),
+        ConfigurableProvider::success("shared"),
+    ));
 
     registry
         .register_shared(provider)
@@ -70,24 +63,18 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            )
-            .with_aliases(["en"])
-            .expect("test alias should be valid"),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid"))
+                .with_aliases(["en"])
+                .expect("test alias should be valid"),
             ConfigurableProvider::success("hello"),
         ))
         .expect("first provider should register");
 
     let error = registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("spanish")
-                    .expect("test provider ID should be valid"),
-            )
-            .with_aliases(["es", "en"])
-            .expect("test aliases should be valid"),
+            ProviderDescriptor::new(ProviderId::new("spanish").expect("test provider ID should be valid"))
+                .with_aliases(["es", "en"])
+                .expect("test aliases should be valid"),
             ConfigurableProvider::success("hola"),
         ))
         .expect_err("duplicate alias should be rejected");
@@ -101,8 +88,7 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
             .map(ProviderId::as_str)
             .collect::<Vec<_>>()
     );
-    let selection =
-        ProviderSelection::named("es").expect("test selector should be valid");
+    let selection = ProviderSelection::named("es").expect("test selector should be valid");
     assert!(matches!(
         registry.resolve_selected(&selection),
         Err(ProviderResolutionError::UnknownProviders { .. }),
@@ -115,20 +101,14 @@ fn test_registry_rejects_duplicate_canonical_id_without_partial_mutation() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             ConfigurableProvider::success("hello"),
         ))
         .expect("first provider should register");
 
     let error = registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             ConfigurableProvider::success("bonjour"),
         ))
         .expect_err("duplicate canonical ID should be rejected");
@@ -152,21 +132,14 @@ fn test_registry_clones_share_later_registrations() {
 
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             ConfigurableProvider::success("hello"),
         ))
         .expect("runtime registration should succeed");
 
     assert_eq!(
         vec!["english"],
-        clone
-            .provider_ids()
-            .iter()
-            .map(ProviderId::as_str)
-            .collect::<Vec<_>>()
+        clone.provider_ids().iter().map(ProviderId::as_str).collect::<Vec<_>>()
     );
 }
 
@@ -190,17 +163,11 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english")
-                    .expect("test provider ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("test provider ID should be valid")),
             ConfigurableProvider::success("hello"),
         ))
         .expect("test provider should register");
-    registry.set_default_selection(
-        ProviderSelection::named("english")
-            .expect("test selector should be valid"),
-    );
+    registry.set_default_selection(ProviderSelection::named("english").expect("test selector should be valid"));
 
     let output = registry
         .resolve()
@@ -219,28 +186,18 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
 #[test]
 fn test_registry_debug_uses_one_metadata_snapshot() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(
-        ProviderSelection::named("before")
-            .expect("static selection should be valid"),
-    );
+    registry.set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"));
     let formatting_registry = registry.clone();
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let formatter = thread::spawn(move || {
-        let mut writer =
-            BlockingWriter::new("descriptors", entered_tx, release_rx);
-        write!(&mut writer, "{formatting_registry:?}")
-            .expect("coordinated formatting should succeed");
+        let mut writer = BlockingWriter::new("descriptors", entered_tx, release_rx);
+        write!(&mut writer, "{formatting_registry:?}").expect("coordinated formatting should succeed");
         writer.into_output()
     });
 
-    entered_rx
-        .recv()
-        .expect("formatter should reach the descriptors field");
-    registry.set_default_selection(
-        ProviderSelection::named("after")
-            .expect("static selection should be valid"),
-    );
+    entered_rx.recv().expect("formatter should reach the descriptors field");
+    registry.set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"));
     release_tx
         .send(())
         .expect("formatter should remain blocked until released");
@@ -257,10 +214,7 @@ fn test_registry_preserves_registration_order_in_descriptor_snapshots() {
     for id in ["third", "first", "second"] {
         registry
             .register(define_provider(
-                ProviderDescriptor::new(
-                    ProviderId::new(id)
-                        .expect("test provider ID should be valid"),
-                ),
+                ProviderDescriptor::new(ProviderId::new(id).expect("test provider ID should be valid")),
                 ConfigurableProvider::success("hello"),
             ))
             .expect("unique provider should register");
@@ -287,10 +241,7 @@ fn test_registry_supports_concurrent_registration_and_snapshot_reads() {
                 let id = format!("provider-{index}");
                 registry
                     .register(define_provider(
-                        ProviderDescriptor::new(
-                            ProviderId::new(&id)
-                                .expect("test provider ID should be valid"),
-                        ),
+                        ProviderDescriptor::new(ProviderId::new(&id).expect("test provider ID should be valid")),
                         ConfigurableProvider::success("hello"),
                     ))
                     .expect("unique provider should register");
@@ -300,12 +251,7 @@ fn test_registry_supports_concurrent_registration_and_snapshot_reads() {
         .collect::<Vec<_>>();
 
     for thread in threads {
-        assert!(
-            !thread
-                .join()
-                .expect("registration thread should not panic")
-                .is_empty()
-        );
+        assert!(!thread.join().expect("registration thread should not panic").is_empty());
     }
     let mut ids = registry
         .provider_ids()
@@ -313,12 +259,7 @@ fn test_registry_supports_concurrent_registration_and_snapshot_reads() {
         .map(|id| id.as_str().to_owned())
         .collect::<Vec<_>>();
     ids.sort_unstable();
-    assert_eq!(
-        (0..8)
-            .map(|index| format!("provider-{index}"))
-            .collect::<Vec<_>>(),
-        ids,
-    );
+    assert_eq!((0..8).map(|index| format!("provider-{index}")).collect::<Vec<_>>(), ids,);
 }
 
 /// Verifies registry size and emptiness before and after registration.
@@ -331,9 +272,7 @@ fn test_registry_length_matches_emptiness_and_registration_count() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("english").expect("valid ID"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("english").expect("valid ID")),
             ConfigurableProvider::success("hello"),
         ))
         .expect("unique provider should register");

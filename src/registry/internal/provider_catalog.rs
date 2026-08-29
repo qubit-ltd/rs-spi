@@ -59,31 +59,20 @@ where
     ///
     /// Returns [`RegistrationError`] without mutation when any selector is
     /// already registered.
-    pub(crate) fn register_shared(
-        &self,
-        provider: Arc<P>,
-    ) -> Result<(), RegistrationError> {
+    pub(crate) fn register_shared(&self, provider: Arc<P>) -> Result<(), RegistrationError> {
         let descriptor = provider.descriptor();
         let canonical_selector = ProviderSelector::from(descriptor.id());
         let mut inner = self.write_inner();
 
-        Self::validate_selector(
-            &inner,
-            &canonical_selector,
-            descriptor.id().as_str(),
-        )?;
+        Self::validate_selector(&inner, &canonical_selector, descriptor.id().as_str())?;
         for alias in descriptor.aliases() {
             Self::validate_selector(&inner, alias, descriptor.id().as_str())?;
         }
 
         let provider_id = descriptor.id().clone();
-        inner
-            .selector_ids
-            .insert(canonical_selector, provider_id.clone());
+        inner.selector_ids.insert(canonical_selector, provider_id.clone());
         for alias in descriptor.aliases() {
-            inner
-                .selector_ids
-                .insert(alias.clone(), provider_id.clone());
+            inner.selector_ids.insert(alias.clone(), provider_id.clone());
         }
         let priority = descriptor.priority();
         let inserted = inner.entries.try_insert(
@@ -106,9 +95,7 @@ where
     /// Owned provider descriptors and default selection cloned while one read
     /// lock represents the catalog state.
     #[must_use]
-    pub(crate) fn metadata_snapshot(
-        &self,
-    ) -> (Vec<ProviderDescriptor>, ProviderSelection) {
+    pub(crate) fn metadata_snapshot(&self) -> (Vec<ProviderDescriptor>, ProviderSelection) {
         let inner = self.read_inner();
         let descriptors = inner
             .registration_ids
@@ -178,9 +165,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
-    pub(crate) fn resolve(
-        &self,
-    ) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
+    pub(crate) fn resolve(&self) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
         let inner = self.read_inner();
         Self::resolve_from_inner(&inner, &inner.default_selection)
     }
@@ -262,12 +247,10 @@ where
     ) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
         let entries = match selection.repr() {
             ProviderSelectionRepr::Named(selector) => {
-                let provider_id =
-                    inner.selector_ids.get(selector).ok_or_else(|| {
-                        ProviderResolutionError::unknown_providers(vec![
-                            selector.clone(),
-                        ])
-                    })?;
+                let provider_id = inner
+                    .selector_ids
+                    .get(selector)
+                    .ok_or_else(|| ProviderResolutionError::unknown_providers(vec![selector.clone()]))?;
                 vec![
                     inner
                         .entries
@@ -284,8 +267,7 @@ where
                 let mut candidates = Vec::with_capacity(selectors.len());
                 let mut missing = Vec::new();
                 for selector in selectors {
-                    let Some(provider_id) = inner.selector_ids.get(selector)
-                    else {
+                    let Some(provider_id) = inner.selector_ids.get(selector) else {
                         missing.push(selector.clone());
                         continue;
                     };
@@ -294,24 +276,16 @@ where
                             inner
                                 .entries
                                 .get(provider_id)
-                                .expect(
-                                    "registered selector must have an entry",
-                                )
+                                .expect("registered selector must have an entry")
                                 .clone(),
                         );
                     }
                 }
-                if *missing_policy == MissingProviderPolicy::Reject
-                    && !missing.is_empty()
-                {
-                    return Err(ProviderResolutionError::unknown_providers(
-                        missing,
-                    ));
+                if *missing_policy == MissingProviderPolicy::Reject && !missing.is_empty() {
+                    return Err(ProviderResolutionError::unknown_providers(missing));
                 }
                 if candidates.is_empty() {
-                    return Err(ProviderResolutionError::no_candidates(
-                        selectors.to_vec(),
-                    ));
+                    return Err(ProviderResolutionError::no_candidates(selectors.to_vec()));
                 }
                 candidates
             }

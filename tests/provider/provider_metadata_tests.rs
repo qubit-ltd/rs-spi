@@ -16,10 +16,7 @@ use crate::common::self_described_provider::SelfDescribedProvider;
 #[test]
 fn test_provider_metadata_exposes_registration_descriptor() {
     let provider = SelfDescribedProvider::new(
-        ProviderDescriptor::new(
-            ProviderId::new("metadata")
-                .expect("test provider ID should be valid"),
-        ),
+        ProviderDescriptor::new(ProviderId::new("metadata").expect("test provider ID should be valid")),
         "output",
     );
 

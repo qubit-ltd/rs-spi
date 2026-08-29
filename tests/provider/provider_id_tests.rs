@@ -11,18 +11,8 @@ use qubit_spi::ProviderId;
 /// Verifies the complete accepted canonical-token boundary.
 #[test]
 fn test_provider_id_accepts_canonical_token_boundaries() {
-    for input in [
-        "a",
-        "0",
-        "a0",
-        "a_b",
-        "a--b",
-        "a..b",
-        "git+ssh",
-        "vendor.v2",
-    ] {
-        let id = ProviderId::new(input)
-            .expect("canonical test input should be valid");
+    for input in ["a", "0", "a0", "a_b", "a--b", "a..b", "git+ssh", "vendor.v2"] {
+        let id = ProviderId::new(input).expect("canonical test input should be valid");
         assert_eq!(input, id.as_str());
     }
 }

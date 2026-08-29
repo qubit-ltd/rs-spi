@@ -33,16 +33,14 @@ use crate::common::test_provider_definition::TestProviderDefinition;
 /// Verifies the crate root re-exports core selection types.
 #[test]
 fn test_crate_root_reexports_core_selection_types() {
-    let selection =
-        ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never);
+    let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never);
     assert_eq!(FallbackPolicy::Never, selection.fallback_policy());
 }
 
 /// Verifies the crate root exposes strict and lenient chain target policies.
 #[test]
 fn test_crate_root_reexports_selection_policy_types() {
-    let selection = ProviderSelection::chain_allowing_missing(["optional"])
-        .expect("static selector should be valid");
+    let selection = ProviderSelection::chain_allowing_missing(["optional"]).expect("static selector should be valid");
 
     assert!(matches!(
         selection.target(),
@@ -58,9 +56,7 @@ fn test_crate_root_reexports_selection_policy_types() {
 fn test_crate_root_reexports_async_provider_types() {
     fn assert_async_provider<P>()
     where
-        P: AsyncServiceProvider<StringSpec>
-            + AsyncProviderDefinition<StringSpec>
-            + ProviderMetadata,
+        P: AsyncServiceProvider<StringSpec> + AsyncProviderDefinition<StringSpec> + ProviderMetadata,
     {
     }
 
@@ -73,9 +69,7 @@ fn test_crate_root_reexports_async_provider_types() {
     accept_future(Box::pin(async {}));
     assert!(registry.is_empty());
 
-    let _ = assert_async_provider::<
-        TestProviderDefinition<AsyncConfigurableProvider>,
-    >;
+    let _ = assert_async_provider::<TestProviderDefinition<AsyncConfigurableProvider>>;
 }
 
 /// Verifies every remaining root re-export used by the synchronous SPI API.
@@ -83,19 +77,14 @@ fn test_crate_root_reexports_async_provider_types() {
 fn test_crate_root_reexports_sync_provider_types() {
     fn assert_sync_provider<P>()
     where
-        P: ServiceProvider<StringSpec>
-            + ProviderDefinition<StringSpec>
-            + ProviderMetadata,
+        P: ServiceProvider<StringSpec> + ProviderDefinition<StringSpec> + ProviderMetadata,
     {
     }
 
     let _: Option<ResolvingServiceProvider<StringSpec>> = None;
     let registry = ProviderRegistry::<StringSpec>::default();
-    let selector = ProviderSelector::parse("sync")
-        .expect("static selector should be valid");
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new("sync").expect("static ID should be valid"),
-    );
+    let selector = ProviderSelector::parse("sync").expect("static selector should be valid");
+    let descriptor = ProviderDescriptor::new(ProviderId::new("sync").expect("static ID should be valid"));
 
     assert!(registry.is_empty());
     assert_eq!("sync", selector.as_str());
@@ -105,6 +94,5 @@ fn test_crate_root_reexports_sync_provider_types() {
         ProviderCreationTermination::Exhausted
     ));
 
-    let _ =
-        assert_sync_provider::<TestProviderDefinition<ConfigurableProvider>>;
+    let _ = assert_sync_provider::<TestProviderDefinition<ConfigurableProvider>>;
 }

@@ -57,9 +57,7 @@ impl Error for TestError {
     ///
     /// The causal error configured by the fixture, when present.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn Error + 'static))
+        self.source.as_deref().map(|source| source as &(dyn Error + 'static))
     }
 }
 
@@ -97,9 +95,7 @@ impl TestProviderFailure {
     ///
     /// A failure classified as unsupported.
     #[must_use]
-    pub(crate) fn unsupported(
-        reason: impl Into<Box<str>>,
-    ) -> ProviderFailure<TestError> {
+    pub(crate) fn unsupported(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::unsupported(TestError {
             reason: reason.into(),
             source: None,
@@ -116,9 +112,7 @@ impl TestProviderFailure {
     ///
     /// A failure classified as unavailable.
     #[must_use]
-    pub(crate) fn unavailable(
-        reason: impl Into<Box<str>>,
-    ) -> ProviderFailure<TestError> {
+    pub(crate) fn unavailable(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::unavailable(TestError {
             reason: reason.into(),
             source: None,
@@ -135,9 +129,7 @@ impl TestProviderFailure {
     ///
     /// A failure classified as invalid configuration.
     #[must_use]
-    pub(crate) fn invalid_configuration(
-        reason: impl Into<Box<str>>,
-    ) -> ProviderFailure<TestError> {
+    pub(crate) fn invalid_configuration(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::invalid_configuration(TestError {
             reason: reason.into(),
             source: None,
@@ -154,9 +146,7 @@ impl TestProviderFailure {
     ///
     /// A failure classified as initialization failed.
     #[must_use]
-    pub(crate) fn initialization_failed(
-        reason: impl Into<Box<str>>,
-    ) -> ProviderFailure<TestError> {
+    pub(crate) fn initialization_failed(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::initialization_failed(TestError {
             reason: reason.into(),
             source: None,
@@ -196,11 +186,7 @@ impl TestProviderFailure {
         reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
     ) -> ProviderFailure<TestError> {
-        Self::with_source(
-            ProviderFailureKind::InitializationFailed,
-            reason,
-            source,
-        )
+        Self::with_source(ProviderFailureKind::InitializationFailed, reason, source)
     }
 
     /// Builds a typed failure with optional source storage.
@@ -211,18 +197,10 @@ impl TestProviderFailure {
     ) -> ProviderFailure<TestError> {
         let error = TestError { reason, source };
         match kind {
-            ProviderFailureKind::Unsupported => {
-                ProviderFailure::unsupported(error)
-            }
-            ProviderFailureKind::Unavailable => {
-                ProviderFailure::unavailable(error)
-            }
-            ProviderFailureKind::InvalidConfiguration => {
-                ProviderFailure::invalid_configuration(error)
-            }
-            ProviderFailureKind::InitializationFailed => {
-                ProviderFailure::initialization_failed(error)
-            }
+            ProviderFailureKind::Unsupported => ProviderFailure::unsupported(error),
+            ProviderFailureKind::Unavailable => ProviderFailure::unavailable(error),
+            ProviderFailureKind::InvalidConfiguration => ProviderFailure::invalid_configuration(error),
+            ProviderFailureKind::InitializationFailed => ProviderFailure::initialization_failed(error),
             _ => ProviderFailure::initialization_failed(error),
         }
     }

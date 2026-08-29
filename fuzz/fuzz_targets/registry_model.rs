@@ -71,10 +71,7 @@ impl ServiceProvider<FuzzSpec> for FuzzProvider {
     /// # Errors
     ///
     /// This fixture never returns a provider creation error.
-    fn create_configured(
-        &self,
-        _config: &(),
-    ) -> Result<String, ProviderFailure<std::io::Error>> {
+    fn create_configured(&self, _config: &()) -> Result<String, ProviderFailure<std::io::Error>> {
         Ok(self.descriptor.id().as_str().to_owned())
     }
 }
@@ -102,8 +99,7 @@ impl RegistryModel {
     ///
     /// `true` when neither selector is already owned.
     fn can_register(&self, provider_id: &str, alias: Option<&str>) -> bool {
-        !self.selector_ids.contains_key(provider_id)
-            && alias.is_none_or(|alias| !self.selector_ids.contains_key(alias))
+        !self.selector_ids.contains_key(provider_id) && alias.is_none_or(|alias| !self.selector_ids.contains_key(alias))
     }
 
     /// Records one registration previously accepted by the concrete Registry.
@@ -113,14 +109,8 @@ impl RegistryModel {
     /// * `provider_id` - Newly registered canonical provider identifier.
     /// * `alias` - Optional registered selector alias.
     /// * `priority` - Automatic-selection priority.
-    fn register(
-        &mut self,
-        provider_id: String,
-        alias: Option<String>,
-        priority: i32,
-    ) {
-        self.selector_ids
-            .insert(provider_id.clone(), provider_id.clone());
+    fn register(&mut self, provider_id: String, alias: Option<String>, priority: i32) {
+        self.selector_ids.insert(provider_id.clone(), provider_id.clone());
         if let Some(alias) = alias {
             self.selector_ids.insert(alias, provider_id.clone());
         }
@@ -138,9 +128,7 @@ impl RegistryModel {
         self.priorities
             .iter()
             .min_by(|(left_id, left_priority), (right_id, right_priority)| {
-                right_priority
-                    .cmp(left_priority)
-                    .then_with(|| left_id.cmp(right_id))
+                right_priority.cmp(left_priority).then_with(|| left_id.cmp(right_id))
             })
             .map(|(provider_id, _)| provider_id.as_str())
     }
@@ -206,15 +194,9 @@ fn alias(value: u8) -> String {
 /// # Returns
 ///
 /// A provider fixture with the requested descriptor.
-fn provider(
-    provider_id: &str,
-    alias: Option<&str>,
-    priority: i32,
-) -> FuzzProvider {
-    let provider_id = ProviderId::new(provider_id)
-        .expect("bounded fuzz provider IDs must be canonical");
-    let descriptor =
-        ProviderDescriptor::new(provider_id).with_priority(priority);
+fn provider(provider_id: &str, alias: Option<&str>, priority: i32) -> FuzzProvider {
+    let provider_id = ProviderId::new(provider_id).expect("bounded fuzz provider IDs must be canonical");
+    let descriptor = ProviderDescriptor::new(provider_id).with_priority(priority);
     let descriptor = match alias {
         Some(alias) => descriptor
             .with_aliases([alias])
@@ -230,15 +212,9 @@ fn provider(
 ///
 /// * `registry` - Concrete Registry under fuzzing.
 /// * `model` - Reference model built from accepted registrations.
-fn assert_registration_model(
-    registry: &ProviderRegistry<FuzzSpec>,
-    model: &RegistryModel,
-) {
+fn assert_registration_model(registry: &ProviderRegistry<FuzzSpec>, model: &RegistryModel) {
     let registered_ids = registry.provider_ids();
-    let actual_ids = registered_ids
-        .iter()
-        .map(ProviderId::as_str)
-        .collect::<Vec<_>>();
+    let actual_ids = registered_ids.iter().map(ProviderId::as_str).collect::<Vec<_>>();
     assert_eq!(model.registration_ids, actual_ids);
     assert_eq!(model.registration_ids.len(), registry.len());
 }
@@ -250,15 +226,9 @@ fn assert_registration_model(
 /// * `registry` - Concrete Registry under fuzzing.
 /// * `model` - Reference model built from accepted registrations.
 /// * `selectors` - Valid selectors chosen from the fuzzer input.
-fn assert_resolution_model(
-    registry: &ProviderRegistry<FuzzSpec>,
-    model: &RegistryModel,
-    selectors: &[String],
-) {
-    let lenient_selection = ProviderSelection::chain_allowing_missing(
-        selectors.iter().map(String::as_str),
-    )
-    .expect("the fuzzer always creates a nonempty selector chain");
+fn assert_resolution_model(registry: &ProviderRegistry<FuzzSpec>, model: &RegistryModel, selectors: &[String]) {
+    let lenient_selection = ProviderSelection::chain_allowing_missing(selectors.iter().map(String::as_str))
+        .expect("the fuzzer always creates a nonempty selector chain");
     let expected_chain = model.resolve_lenient_chain(selectors);
     match registry.resolve_selected(&lenient_selection) {
         Ok(resolver) => {
@@ -270,9 +240,8 @@ fn assert_resolution_model(
         Err(_) => assert!(expected_chain.is_empty()),
     }
 
-    let strict_selection =
-        ProviderSelection::chain(selectors.iter().map(String::as_str))
-            .expect("the fuzzer always creates a nonempty selector chain");
+    let strict_selection = ProviderSelection::chain(selectors.iter().map(String::as_str))
+        .expect("the fuzzer always creates a nonempty selector chain");
     let has_missing = selectors
         .iter()
         .any(|selector| !model.selector_ids.contains_key(selector));
@@ -287,8 +256,7 @@ fn assert_resolution_model(
         Err(_) => assert!(has_missing || expected_chain.is_empty()),
     }
 
-    let auto_selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let auto_selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
     match registry.resolve_selected(&auto_selection) {
         Ok(resolver) => {
             let actual = resolver
@@ -309,11 +277,7 @@ fuzz_target!(|data: &[u8]| {
         let alias = (fields[1] & 1 == 0).then(|| alias(fields[1]));
         let priority = i32::from(fields[2] as i8);
         let expected = model.can_register(&provider_id, alias.as_deref());
-        let actual = registry.register(provider(
-            &provider_id,
-            alias.as_deref(),
-            priority,
-        ));
+        let actual = registry.register(provider(&provider_id, alias.as_deref(), priority));
         assert_eq!(expected, actual.is_ok());
         if expected {
             model.register(provider_id, alias, priority);

@@ -90,10 +90,7 @@ where
     /// future panics, or if the resolver's internal nonempty-candidate
     /// invariant is violated. Provider panics propagate directly and do not
     /// trigger fallback.
-    pub async fn create_configured(
-        &self,
-        config: &S::Config,
-    ) -> Result<S::Output, ProviderCreationError<S::Error>> {
+    pub async fn create_configured(&self, config: &S::Config) -> Result<S::Output, ProviderCreationError<S::Error>> {
         let mut fallback = FallbackState::<S::Error>::new(self.fallback_policy);
         let candidate_count = self.candidates.len();
         for (index, candidate) in self.candidates.iter().enumerate() {
@@ -101,11 +98,9 @@ where
                 Ok(output) => return Ok(output),
                 Err(error) => {
                     let has_remaining = index + 1 < candidate_count;
-                    if let Some(error) = fallback.record_failure(
-                        candidate.descriptor.id().clone(),
-                        error,
-                        has_remaining,
-                    ) {
+                    if let Some(error) =
+                        fallback.record_failure(candidate.descriptor.id().clone(), error, has_remaining)
+                    {
                         return Err(error);
                     }
                 }
@@ -130,9 +125,7 @@ where
     /// The returned future panics if `S::Config::default()` or a candidate
     /// provider panics. Provider panics propagate directly and do not trigger
     /// fallback.
-    pub async fn create(
-        &self,
-    ) -> Result<S::Output, ProviderCreationError<S::Error>>
+    pub async fn create(&self) -> Result<S::Output, ProviderCreationError<S::Error>>
     where
         S::Config: Default + Send,
     {

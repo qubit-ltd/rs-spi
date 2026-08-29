@@ -103,10 +103,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// This provider fixture with configuration recording enabled.
-    pub(crate) fn with_seen_config(
-        mut self,
-        seen_config: Arc<Mutex<Option<String>>>,
-    ) -> Self {
+    pub(crate) fn with_seen_config(mut self, seen_config: Arc<Mutex<Option<String>>>) -> Self {
         self.seen_config = Some(seen_config);
         self
     }
@@ -126,10 +123,7 @@ impl ServiceProvider<StringSpec> for ConfigurableProvider {
     /// # Errors
     ///
     /// Returns the configured leaf provider failure.
-    fn create_configured(
-        &self,
-        config: &String,
-    ) -> Result<String, ProviderFailure<TestError>> {
+    fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<TestError>> {
         if let Some(calls) = &self.calls {
             calls.fetch_add(1, Ordering::SeqCst);
         }

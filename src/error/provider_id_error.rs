@@ -42,9 +42,7 @@ impl ProviderIdError {
     #[inline]
     #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
-        Self::Empty {
-            input: input.into(),
-        }
+        Self::Empty { input: input.into() }
     }
 
     /// Creates an error for a noncanonical provider ID.
@@ -59,9 +57,7 @@ impl ProviderIdError {
     #[inline]
     #[must_use]
     pub(crate) fn noncanonical(input: &str) -> Self {
-        Self::NonCanonical {
-            input: input.into(),
-        }
+        Self::NonCanonical { input: input.into() }
     }
 
     /// Returns the verbatim provider ID input.

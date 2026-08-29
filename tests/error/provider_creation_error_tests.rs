@@ -40,8 +40,7 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         10,
         TestProviderFailure::unsupported("second unsupported"),
     );
-    let selection = ProviderSelection::auto()
-        .with_fallback_policy(FallbackPolicy::OnAnyError);
+    let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
 
     let error = registry
         .resolve_selected(&selection)
@@ -61,10 +60,7 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
             .as_str()
     );
     assert!(std::ptr::eq(
-        error
-            .attempts()
-            .last()
-            .expect("aggregate should have a final attempt"),
+        error.attempts().last().expect("aggregate should have a final attempt"),
         error.decisive_attempt(),
     ));
     assert!(Error::source(&error).is_some());
@@ -86,11 +82,8 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
     );
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("fallback")
-                    .expect("test provider ID should be valid"),
-            )
-            .with_priority(10),
+            ProviderDescriptor::new(ProviderId::new("fallback").expect("test provider ID should be valid"))
+                .with_priority(10),
             ConfigurableProvider::success("fallback"),
         ))
         .expect("fallback provider should register");
@@ -101,32 +94,21 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         .create()
         .expect_err("invalid configuration should stop absence fallback");
 
-    assert_eq!(
-        ProviderCreationTermination::StoppedByPolicy,
-        error.termination(),
-    );
+    assert_eq!(ProviderCreationTermination::StoppedByPolicy, error.termination(),);
     assert!(!error.is_absence());
     assert_eq!("invalid", error.decisive_attempt().provider_id().as_str());
     assert!(Error::source(&error).is_some());
     let mut display = String::new();
     write!(&mut display, "{error}").expect("display formatting should succeed");
-    assert!(display.contains(
-        "provider creation stopped by fallback policy after 1 attempt(s)"
-    ));
+    assert!(display.contains("provider creation stopped by fallback policy after 1 attempt(s)"));
 }
 
 /// Verifies that singleton exhaustion has one unambiguous source.
 #[test]
 fn test_singleton_exhaustion_exposes_decisive_source() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    register_failure(
-        &registry,
-        "remote",
-        0,
-        TestProviderFailure::unavailable("offline"),
-    );
-    let selection = ProviderSelection::named("remote")
-        .expect("test selector should be valid");
+    register_failure(&registry, "remote", 0, TestProviderFailure::unavailable("offline"));
+    let selection = ProviderSelection::named("remote").expect("test selector should be valid");
 
     let error = registry
         .resolve_selected(&selection)
@@ -136,10 +118,7 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
     assert!(std::ptr::eq(
-        error
-            .attempts()
-            .last()
-            .expect("aggregate should have a final attempt"),
+        error.attempts().last().expect("aggregate should have a final attempt"),
         error.decisive_attempt(),
     ));
     assert!(Error::source(&error).is_some());
@@ -193,10 +172,8 @@ fn register_failure(
 ) {
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new(id).expect("test provider ID should be valid"),
-            )
-            .with_priority(priority),
+            ProviderDescriptor::new(ProviderId::new(id).expect("test provider ID should be valid"))
+                .with_priority(priority),
             ConfigurableProvider::failure(error),
         ))
         .expect("unique test provider should register");

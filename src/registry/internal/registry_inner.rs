@@ -23,11 +23,7 @@ use crate::registry::internal::RegistryEntry;
 /// * `P` - Possibly unsized provider definition stored by the catalog.
 pub(crate) struct RegistryInner<P: ?Sized> {
     /// Entries indexed by canonical ID and automatic-selection order.
-    pub(crate) entries: OrderedIndexMap<
-        ProviderId,
-        (std::cmp::Reverse<i32>, ProviderId),
-        RegistryEntry<P>,
-    >,
+    pub(crate) entries: OrderedIndexMap<ProviderId, (std::cmp::Reverse<i32>, ProviderId), RegistryEntry<P>>,
     /// Mapping from canonical IDs and aliases to canonical provider IDs.
     pub(crate) selector_ids: HashMap<ProviderSelector, ProviderId>,
     /// Canonical IDs retained in successful registration order.

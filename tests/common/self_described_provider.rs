@@ -31,10 +31,7 @@ impl SelfDescribedProvider {
     /// # Returns
     ///
     /// A provider containing both registration and creation state.
-    pub(crate) fn new(
-        descriptor: ProviderDescriptor,
-        output: impl Into<Box<str>>,
-    ) -> Self {
+    pub(crate) fn new(descriptor: ProviderDescriptor, output: impl Into<Box<str>>) -> Self {
         Self {
             descriptor,
             output: output.into(),
@@ -52,10 +49,7 @@ impl ServiceProvider<StringSpec> for SelfDescribedProvider {
     /// # Returns
     ///
     /// An owned copy of the configured output.
-    fn create_configured(
-        &self,
-        _config: &String,
-    ) -> Result<String, ProviderFailure<TestError>> {
+    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<TestError>> {
         Ok(self.output.to_string())
     }
 }

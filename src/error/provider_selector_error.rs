@@ -22,9 +22,7 @@ pub enum ProviderSelectorError {
     },
     /// The normalized selector violated selector syntax.
     #[non_exhaustive]
-    #[error(
-        "invalid provider selector {input:?} (normalized as {normalized:?})"
-    )]
+    #[error("invalid provider selector {input:?} (normalized as {normalized:?})")]
     Invalid {
         /// Verbatim selector input.
         input: Box<str>,
@@ -46,9 +44,7 @@ impl ProviderSelectorError {
     #[inline]
     #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
-        Self::Empty {
-            input: input.into(),
-        }
+        Self::Empty { input: input.into() }
     }
 
     /// Creates an error for invalid normalized selector input.

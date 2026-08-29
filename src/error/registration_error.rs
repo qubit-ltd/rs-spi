@@ -15,9 +15,7 @@ use thiserror::Error;
 pub enum RegistrationError {
     /// A selector is already owned by a registered provider.
     #[non_exhaustive]
-    #[error(
-        "provider selector {selector} claimed by {provider} is already owned by {existing_provider}"
-    )]
+    #[error("provider selector {selector} claimed by {provider} is already owned by {existing_provider}")]
     DuplicateSelector {
         /// Conflicting canonical ID or alias.
         selector: Box<str>,
@@ -43,11 +41,7 @@ impl RegistrationError {
     /// A registry-owned duplicate-selector error.
     #[inline]
     #[must_use]
-    pub(crate) fn duplicate_selector(
-        selector: &str,
-        existing_provider: &str,
-        provider: &str,
-    ) -> Self {
+    pub(crate) fn duplicate_selector(selector: &str, existing_provider: &str, provider: &str) -> Self {
         Self::DuplicateSelector {
             selector: selector.into(),
             existing_provider: existing_provider.into(),
@@ -77,9 +71,7 @@ impl RegistrationError {
     #[must_use]
     pub fn existing_provider(&self) -> &str {
         match self {
-            Self::DuplicateSelector {
-                existing_provider, ..
-            } => existing_provider,
+            Self::DuplicateSelector { existing_provider, .. } => existing_provider,
         }
     }
 

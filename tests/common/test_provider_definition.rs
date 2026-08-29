@@ -40,10 +40,7 @@ where
     S: SyncServiceSpec,
     P: ServiceProvider<S>,
 {
-    fn create_configured(
-        &self,
-        config: &S::Config,
-    ) -> Result<S::Output, ProviderFailure<S::Error>> {
+    fn create_configured(&self, config: &S::Config) -> Result<S::Output, ProviderFailure<S::Error>> {
         self.provider.create_configured(config)
     }
 }
@@ -58,12 +55,6 @@ where
 }
 
 /// Wraps a provider fixture with its registration descriptor.
-pub(crate) fn define_provider<P>(
-    descriptor: ProviderDescriptor,
-    provider: P,
-) -> TestProviderDefinition<P> {
-    TestProviderDefinition {
-        descriptor,
-        provider,
-    }
+pub(crate) fn define_provider<P>(descriptor: ProviderDescriptor, provider: P) -> TestProviderDefinition<P> {
+    TestProviderDefinition { descriptor, provider }
 }

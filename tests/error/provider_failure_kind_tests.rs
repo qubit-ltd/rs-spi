@@ -11,10 +11,7 @@ use qubit_spi::error::ProviderFailureKind;
 /// Verifies failure kinds are distinct and identify absence precisely.
 #[test]
 fn test_provider_failure_kinds_are_distinct_and_classify_absence() {
-    assert_ne!(
-        ProviderFailureKind::Unsupported,
-        ProviderFailureKind::Unavailable,
-    );
+    assert_ne!(ProviderFailureKind::Unsupported, ProviderFailureKind::Unavailable,);
     assert_ne!(
         ProviderFailureKind::InvalidConfiguration,
         ProviderFailureKind::InitializationFailed,

@@ -34,8 +34,7 @@ fn test_selector_supports_standard_string_traits() {
 /// Verifies that a validated canonical provider ID converts without reparsing.
 #[test]
 fn test_provider_selector_from_provider_id() {
-    let id = ProviderId::new("file-command")
-        .expect("test provider ID should be valid");
+    let id = ProviderId::new("file-command").expect("test provider ID should be valid");
 
     let selector = ProviderSelector::from(&id);
 

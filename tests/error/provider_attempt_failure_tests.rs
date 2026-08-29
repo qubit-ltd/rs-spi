@@ -26,16 +26,11 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("remote")
-                    .expect("test provider ID should be valid"),
-            ),
-            ConfigurableProvider::failure(
-                TestProviderFailure::unavailable_with_source(
-                    "runtime is absent",
-                    std::io::Error::other("ENOENT"),
-                ),
-            ),
+            ProviderDescriptor::new(ProviderId::new("remote").expect("test provider ID should be valid")),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable_with_source(
+                "runtime is absent",
+                std::io::Error::other("ENOENT"),
+            )),
         ))
         .expect("test provider should register");
     let error = registry
@@ -61,13 +56,8 @@ fn test_provider_attempt_failure_into_parts_preserves_identity_and_failure() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("remote")
-                    .expect("test provider ID should be valid"),
-            ),
-            ConfigurableProvider::failure(TestProviderFailure::unavailable(
-                "offline",
-            )),
+            ProviderDescriptor::new(ProviderId::new("remote").expect("test provider ID should be valid")),
+            ConfigurableProvider::failure(TestProviderFailure::unavailable("offline")),
         ))
         .expect("test provider should register");
     let error = registry
@@ -78,9 +68,7 @@ fn test_provider_attempt_failure_into_parts_preserves_identity_and_failure() {
 
     let (attempts, termination) = error.into_parts();
     let mut attempts = attempts.into_vec();
-    let attempt = attempts
-        .pop()
-        .expect("aggregate should retain the attempted provider");
+    let attempt = attempts.pop().expect("aggregate should retain the attempted provider");
     let (provider_id, failure) = attempt.into_parts();
 
     assert!(attempts.is_empty());

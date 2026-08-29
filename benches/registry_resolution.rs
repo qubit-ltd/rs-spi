@@ -81,10 +81,7 @@ impl ServiceProvider<BenchmarkProvider> for BenchmarkProvider {
     /// # Errors
     ///
     /// This fixture never returns a provider error.
-    fn create_configured(
-        &self,
-        _config: &(),
-    ) -> Result<(), ProviderFailure<std::io::Error>> {
+    fn create_configured(&self, _config: &()) -> Result<(), ProviderFailure<std::io::Error>> {
         Ok(())
     }
 }
@@ -117,11 +114,9 @@ fn provider_descriptor(index: usize, alias_count: usize) -> ProviderDescriptor {
     let aliases = (0..alias_count)
         .map(|alias_index| format!("provider-{index}-alias-{alias_index}"))
         .collect::<Vec<_>>();
-    ProviderDescriptor::new(
-        ProviderId::new(&name).expect("benchmark provider ID should be valid"),
-    )
-    .with_aliases(aliases)
-    .expect("benchmark provider aliases should be valid")
+    ProviderDescriptor::new(ProviderId::new(&name).expect("benchmark provider ID should be valid"))
+        .with_aliases(aliases)
+        .expect("benchmark provider aliases should be valid")
 }
 
 /// Builds a populated benchmark Registry outside measured iterations.
@@ -134,10 +129,7 @@ fn provider_descriptor(index: usize, alias_count: usize) -> ProviderDescriptor {
 /// # Returns
 ///
 /// A Registry containing providers in ascending identifier order.
-fn build_registry(
-    provider_count: usize,
-    alias_count: usize,
-) -> ProviderRegistry<BenchmarkProvider> {
+fn build_registry(provider_count: usize, alias_count: usize) -> ProviderRegistry<BenchmarkProvider> {
     let registry = ProviderRegistry::default();
     for index in 0..provider_count {
         registry
@@ -165,8 +157,7 @@ fn benchmark_registration(criterion: &mut Criterion) {
             .map(|index| provider_descriptor(index, ALIASES_PER_PROVIDER))
             .collect::<Vec<_>>();
         group.throughput(Throughput::Elements(
-            u64::try_from(provider_count)
-                .expect("benchmark provider count should fit u64"),
+            u64::try_from(provider_count).expect("benchmark provider count should fit u64"),
         ));
         group.bench_function(
             BenchmarkId::new("register", format!("{provider_count}_providers")),
@@ -197,8 +188,7 @@ fn benchmark_named_resolution(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("named_resolution");
     for alias_count in NAMED_ALIAS_COUNTS {
         let registry = build_registry(8, alias_count);
-        let selection = ProviderSelection::named("provider-0")
-            .expect("benchmark named selection should be valid");
+        let selection = ProviderSelection::named("provider-0").expect("benchmark named selection should be valid");
         group.bench_function(
             BenchmarkId::new("resolve", format!("{alias_count}_aliases")),
             |bencher| {
@@ -224,16 +214,11 @@ fn benchmark_chain_resolution(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("chain_resolution");
     for candidate_count in CHAIN_CANDIDATE_COUNTS {
         let registry = build_registry(candidate_count, ALIASES_PER_PROVIDER);
-        let provider_names =
-            (0..candidate_count).map(provider_name).collect::<Vec<_>>();
-        let selection =
-            ProviderSelection::chain(provider_names.iter().map(String::as_str))
-                .expect("benchmark chain selection should be valid");
+        let provider_names = (0..candidate_count).map(provider_name).collect::<Vec<_>>();
+        let selection = ProviderSelection::chain(provider_names.iter().map(String::as_str))
+            .expect("benchmark chain selection should be valid");
         group.bench_function(
-            BenchmarkId::new(
-                "resolve",
-                format!("{candidate_count}_candidates"),
-            ),
+            BenchmarkId::new("resolve", format!("{candidate_count}_candidates")),
             |bencher| {
                 bencher.iter(|| {
                     black_box(
@@ -265,9 +250,7 @@ fn benchmark_auto_resolution(criterion: &mut Criterion) {
                     black_box(
                         registry
                             .resolve_selected(black_box(&selection))
-                            .expect(
-                                "benchmark automatic selection should resolve",
-                            ),
+                            .expect("benchmark automatic selection should resolve"),
                     )
                 });
             },
@@ -287,8 +270,7 @@ fn benchmark_auto_resolution(criterion: &mut Criterion) {
 fn benchmark_concurrent_resolution(criterion: &mut Criterion) {
     let registry = build_registry(16, ALIASES_PER_PROVIDER);
     let selection = ProviderSelection::auto();
-    let worker_count = usize::try_from(CONCURRENT_WORKERS)
-        .expect("benchmark worker count should fit usize");
+    let worker_count = usize::try_from(CONCURRENT_WORKERS).expect("benchmark worker count should fit usize");
     let mut group = criterion.benchmark_group("concurrent_resolution");
     group.throughput(Throughput::Elements(CONCURRENT_WORKERS));
     group.bench_function("4_workers_16_providers", |bencher| {

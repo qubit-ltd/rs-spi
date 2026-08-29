@@ -20,9 +20,7 @@ fn test_provider_catalog_is_shared_by_registry_clones() {
     let clone = registry.clone();
     registry
         .register(SelfDescribedProvider::new(
-            ProviderDescriptor::new(
-                ProviderId::new("shared").expect("static ID should be valid"),
-            ),
+            ProviderDescriptor::new(ProviderId::new("shared").expect("static ID should be valid")),
             "value",
         ))
         .expect("provider should register");
