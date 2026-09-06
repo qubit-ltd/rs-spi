@@ -136,7 +136,7 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     register_provider(&registry, "first", &[], 0, AsyncConfigurableProvider::success("first"));
     registry.set_default_selection(ProviderSelection::auto());
 
-    let (selection, snapshot) = registry.resolve_default_snapshot_with_selection();
+    let (selection, snapshot) = registry.resolve_default_snapshot();
     let snapshot = snapshot.expect("default snapshot should resolve");
     assert_eq!(ProviderSelection::auto(), selection);
 
@@ -157,6 +157,7 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
         block_on(
             registry
                 .resolve_default_snapshot()
+                .1
                 .expect("new default snapshot should resolve")
                 .create(),
         )
@@ -171,7 +172,7 @@ fn test_async_registry_default_snapshot_keeps_failed_resolution() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
 
-    let (selection, result) = registry.resolve_default_snapshot_with_selection();
+    let (selection, result) = registry.resolve_default_snapshot();
     assert_eq!(ProviderSelection::named("missing").unwrap(), selection);
     let error = result.expect_err("missing default provider should fail");
 

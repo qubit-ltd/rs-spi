@@ -156,20 +156,6 @@ where
         Self::resolve_from_inner(&self.read_inner(), selection)
     }
 
-    /// Resolves the current default selection against one catalog snapshot.
-    ///
-    /// # Returns
-    ///
-    /// A nonempty candidate snapshot and its fallback policy.
-    ///
-    /// # Errors
-    ///
-    /// Returns the same errors as [`Self::resolve_selected`].
-    pub(crate) fn resolve_default_snapshot(&self) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
-        let (_, candidates) = self.resolve_default_snapshot_with_selection();
-        candidates
-    }
-
     /// Resolves the current default selection and returns that selection with
     /// its candidates from one catalog snapshot.
     ///
@@ -177,7 +163,7 @@ where
     /// the candidate providers. Callers can therefore validate the captured
     /// selection against their input before creating from the returned
     /// candidates without observing a mixed catalog state.
-    pub(crate) fn resolve_default_snapshot_with_selection(
+    pub(crate) fn resolve_default_snapshot(
         &self,
     ) -> (
         ProviderSelection,

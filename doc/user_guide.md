@@ -653,17 +653,12 @@ let provider = registry.resolve()?;
 `set_default_selection` stores a validated selection but does not require its
 providers to exist yet. This permits setting policy before registration.
 `resolve_default_snapshot()` atomically captures the current default
-`ProviderSelection` and its candidates from one Registry catalog snapshot. On
-success, the returned `ResolvingServiceProvider<S>` owns both the captured
-selection policy and candidate handles. The asynchronous Registry provides the
-same operation and returns an `AsyncResolvingServiceProvider<S>`; catalog
-resolution itself is synchronous.
-
-Call `resolve_default_snapshot_with_selection()` when the caller must validate
-input against the captured default selection before creating from the same
-candidate snapshot. It returns the owned `ProviderSelection` and the resolver
-result as a pair, preserving the selection even when resolution fails; its
-asynchronous counterpart has the same contract.
+`ProviderSelection` and its candidates from one Registry catalog snapshot. It
+returns the owned `ProviderSelection` together with the resolver result,
+preserving the selection even when resolution fails. On success, the returned
+`ResolvingServiceProvider<S>` owns the captured selection policy and candidate
+handles. The asynchronous Registry provides the same operation and returns an
+`AsyncResolvingServiceProvider<S>`; catalog resolution itself is synchronous.
 
 If resolution fails, the returned `ProviderResolutionError` is also detached
 from the Registry. Selector-based failures retain the selectors captured from
@@ -672,7 +667,7 @@ Registering a matching Provider later does not change the existing error into a
 success. Likewise, a successful resolver does not see Providers registered
 after the snapshot. Call `resolve_default_snapshot()` again to obtain a newer
 selection and candidate snapshot. `resolve()` remains a compatibility alias
-with the same behavior.
+that returns only the resolver result.
 
 ### Selection and Config Are Independent
 
@@ -698,23 +693,17 @@ callers that have no config object.
 
 ## Creating the Service
 
-`ProviderRegistry::resolve_default_snapshot()` and
-`ProviderRegistry::resolve_selected` return
+`ProviderRegistry::resolve_selected` returns
 `ResolvingServiceProvider<S>`. This type is a composing resolver: it owns
 candidate handles and applies the selection's fallback policy when `create` is
 called. Its inherent creation methods return aggregate
 `ProviderCreationError` values rather than the leaf `ProviderFailure<E>` required by
 `ServiceProvider<S>`.
 
-`ProviderRegistry::resolve()` is a compatibility alias for
-`resolve_default_snapshot()`. Both APIs capture the default selection and
-candidates together, so later Registry changes do not affect a resolver or a
-resolution error that has already been returned.
-
-`ProviderRegistry::resolve_default_snapshot_with_selection()` returns the
-captured `ProviderSelection` alongside the resolver result when the caller
-needs to compare that selection with configuration. `AsyncProviderRegistry`
-exposes the same method and snapshot contract.
+`ProviderRegistry::resolve()` is a compatibility alias for the resolver-only
+default operation. Use `resolve_default_snapshot()` when the caller also needs
+the captured selection; later Registry changes do not affect the returned
+resolver or resolution error.
 
 The corresponding `AsyncProviderRegistry` methods return
 `AsyncResolvingServiceProvider<S>`. Its inherent creation methods are async;
@@ -927,16 +916,14 @@ an isolated process.
 | `ProviderRegistry::default_selection` | Read an owned snapshot of the current default selection |
 | `ProviderRegistry::set_default_selection` | Replace the process/component default policy |
 | `ProviderRegistry::resolve_selected` | Resolve an explicit selection |
-| `ProviderRegistry::resolve_default_snapshot` | Atomically resolve the current default selection and candidate snapshot |
-| `ProviderRegistry::resolve_default_snapshot_with_selection` | Return the captured default selection and candidate snapshot together |
+| `ProviderRegistry::resolve_default_snapshot` | Return the captured default selection and candidate snapshot together |
 | `ProviderRegistry::resolve` | Compatibility alias for `resolve_default_snapshot` |
 | `ProviderRegistry::descriptors` | Snapshot registration metadata |
 | `ProviderRegistry::provider_ids` | Snapshot canonical IDs |
 | `AsyncProviderRegistry::register` / `register_shared` | Register an owned or shared async Provider synchronously |
 | `AsyncProviderRegistry::set_default_selection` / `default_selection` | Replace or snapshot the async Registry default policy |
 | `AsyncProviderRegistry::resolve_selected` | Resolve an explicit selection synchronously |
-| `AsyncProviderRegistry::resolve_default_snapshot` | Atomically resolve the async Registry's current default selection and candidate snapshot |
-| `AsyncProviderRegistry::resolve_default_snapshot_with_selection` | Return the captured async default selection and candidate snapshot together |
+| `AsyncProviderRegistry::resolve_default_snapshot` | Return the captured async default selection and candidate snapshot together |
 | `AsyncProviderRegistry::resolve` | Compatibility alias for `resolve_default_snapshot` |
 | `AsyncProviderRegistry::descriptors` / `provider_ids` | Snapshot async registration metadata or canonical IDs |
 | `AsyncProviderRegistry::len` / `is_empty` | Query the async Registry size or emptiness |

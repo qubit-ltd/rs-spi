@@ -343,10 +343,10 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 `ProviderRegistry::resolve_default_snapshot()`（异步 Registry 也有对应方法）会在同一个
 目录快照中原子地捕获当前默认 `ProviderSelection` 并解析候选。如果解析失败，返回的
 `ProviderResolutionError` 仍会保留从这次 selection 捕获的 selectors；之后注册 Provider
-也不会改变已经返回的错误。解析成功时，返回的 resolver 持有已捕获的候选和 fallback policy，
+也不会改变已经返回的错误。该方法会把捕获的 selection 与 resolver 结果成对返回，即使解析
+失败也会保留 selection。解析成功时，返回的 resolver 持有已捕获的候选和 fallback policy，
 后续注册不会改变这次结果。如需获取更新后的快照，请再次调用
-`resolve_default_snapshot()`。如果调用方还需要和 resolver 或解析错误一起取得捕获的
-selection，应使用 `resolve_default_snapshot_with_selection()`。`resolve()` 仍是兼容性别名。
+`resolve_default_snapshot()`。`resolve()` 仍是兼容性别名，但只返回 resolver 结果。
 
 ## 错误边界
 

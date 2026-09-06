@@ -363,15 +363,14 @@ and does not hold the Registry lock while providers run.
 
 `ProviderRegistry::resolve_default_snapshot()` (and its asynchronous counterpart)
 atomically captures the current default `ProviderSelection` and resolves its
-candidates from one catalog snapshot. If resolution fails, the returned
-`ProviderResolutionError` retains the selectors captured from that selection, so
-registering a provider afterward cannot change the already returned error. A
-successful resolver owns its captured candidates and fallback policy; later
-registrations do not change that result. Call `resolve_default_snapshot()` again
-to obtain a newer snapshot. Call
-`resolve_default_snapshot_with_selection()` when the caller also needs the
-captured selection alongside the resolver or resolution error. `resolve()`
-remains a compatibility alias.
+candidates from one catalog snapshot. It returns the captured selection together
+with the resolver result, preserving the selection even when resolution fails.
+The returned `ProviderResolutionError` retains the selectors captured from that
+selection, so registering a provider afterward cannot change the already
+returned error. A successful resolver owns its captured candidates and fallback
+policy; later registrations do not change that result. Call
+`resolve_default_snapshot()` again to obtain a newer snapshot. `resolve()`
+remains a compatibility alias that returns only the resolver result.
 
 ## Error Boundaries
 

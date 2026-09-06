@@ -157,23 +157,6 @@ where
         ))
     }
 
-    /// Resolves the current default selection without asynchronous work.
-    ///
-    /// # Returns
-    ///
-    /// A resolver owning the selected provider snapshot.
-    ///
-    /// # Errors
-    ///
-    /// Returns the same errors as [`Self::resolve_selected`].
-    pub fn resolve_default_snapshot(&self) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
-        let candidates = self.providers.resolve_default_snapshot()?;
-        Ok(AsyncResolvingServiceProvider::new(
-            candidates.entries,
-            candidates.fallback_policy,
-        ))
-    }
-
     /// Resolves the current default selection and returns the captured
     /// selection together with its asynchronous provider snapshot.
     ///
@@ -187,14 +170,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns the same errors as [`Self::resolve_default_snapshot`].
-    pub fn resolve_default_snapshot_with_selection(
+    /// Returns the same errors as [`Self::resolve_selected`].
+    pub fn resolve_default_snapshot(
         &self,
     ) -> (
         ProviderSelection,
         Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError>,
     ) {
-        let (selection, candidates) = self.providers.resolve_default_snapshot_with_selection();
+        let (selection, candidates) = self.providers.resolve_default_snapshot();
         let resolver = candidates
             .map(|candidates| AsyncResolvingServiceProvider::new(candidates.entries, candidates.fallback_policy));
         (selection, resolver)
@@ -204,7 +187,8 @@ where
     ///
     /// This compatibility alias retains the original Registry operation name.
     pub fn resolve(&self) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
-        self.resolve_default_snapshot()
+        let (_, result) = self.resolve_default_snapshot();
+        result
     }
 
     /// Returns descriptors in successful registration order.
