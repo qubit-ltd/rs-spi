@@ -345,7 +345,8 @@ named selection 只有一个候选，因此不会回退。选择阶段不调用 
 `ProviderResolutionError` 仍会保留从这次 selection 捕获的 selectors；之后注册 Provider
 也不会改变已经返回的错误。解析成功时，返回的 resolver 持有已捕获的候选和 fallback policy，
 后续注册不会改变这次结果。如需获取更新后的快照，请再次调用
-`resolve_default_snapshot()`。`resolve()` 仍是兼容性别名。
+`resolve_default_snapshot()`。如果调用方还需要和 resolver 或解析错误一起取得捕获的
+selection，应使用 `resolve_default_snapshot_with_selection()`。`resolve()` 仍是兼容性别名。
 
 ## 错误边界
 

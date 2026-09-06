@@ -368,7 +368,10 @@ candidates from one catalog snapshot. If resolution fails, the returned
 registering a provider afterward cannot change the already returned error. A
 successful resolver owns its captured candidates and fallback policy; later
 registrations do not change that result. Call `resolve_default_snapshot()` again
-to obtain a newer snapshot. `resolve()` remains a compatibility alias.
+to obtain a newer snapshot. Call
+`resolve_default_snapshot_with_selection()` when the caller also needs the
+captured selection alongside the resolver or resolution error. `resolve()`
+remains a compatibility alias.
 
 ## Error Boundaries
 
