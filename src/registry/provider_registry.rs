@@ -161,12 +161,19 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
-    pub fn resolve(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
-        let candidates = self.providers.resolve()?;
+    pub fn resolve_default_snapshot(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
+        let candidates = self.providers.resolve_default_snapshot()?;
         Ok(ResolvingServiceProvider::new(
             candidates.entries,
             candidates.fallback_policy,
         ))
+    }
+
+    /// Resolves the current default selection.
+    ///
+    /// This compatibility alias retains the original Registry operation name.
+    pub fn resolve(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
+        self.resolve_default_snapshot()
     }
 
     /// Returns descriptors in successful registration order.

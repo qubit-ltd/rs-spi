@@ -128,6 +128,54 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
     assert!(format!("{registry:?}").contains("shared"));
 }
 
+/// Verifies a successful asynchronous default snapshot keeps its candidates after registration.
+#[test]
+fn test_async_registry_default_snapshot_keeps_successful_resolution() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    register_provider(&registry, "first", &[], 0, AsyncConfigurableProvider::success("first"));
+    registry.set_default_selection(ProviderSelection::auto());
+
+    let snapshot = registry
+        .resolve_default_snapshot()
+        .expect("default snapshot should resolve");
+
+    register_provider(&registry, "second", &[], 100, AsyncConfigurableProvider::success("second"));
+
+    assert_eq!(
+        "first",
+        block_on(snapshot.create()).expect("snapshot should retain first provider"),
+    );
+    assert_eq!(
+        "second",
+        block_on(
+            registry
+                .resolve_default_snapshot()
+                .expect("new default snapshot should resolve")
+                .create(),
+        )
+        .expect("new snapshot should select second provider"),
+    );
+}
+
+/// Verifies a failed asynchronous default snapshot remains an owned result after registration.
+#[test]
+fn test_async_registry_default_snapshot_keeps_failed_resolution() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
+
+    let error = registry
+        .resolve_default_snapshot()
+        .expect_err("missing default provider should fail");
+
+    register_provider(&registry, "missing", &[], 0, AsyncConfigurableProvider::success("now-present"));
+
+    assert!(matches!(
+        error,
+        ProviderResolutionError::UnknownProviders { selectors, .. }
+            if selectors.len() == 1 && selectors[0].as_str() == "missing"
+    ));
+}
+
 /// Verifies asynchronous Registry Debug retains one metadata snapshot.
 #[test]
 fn test_async_registry_debug_uses_one_metadata_snapshot() {

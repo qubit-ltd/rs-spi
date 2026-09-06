@@ -182,6 +182,67 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
     assert!(debug.contains("default_selection"));
 }
 
+/// Verifies a successful default snapshot keeps its candidates after registration.
+#[test]
+fn test_registry_default_snapshot_keeps_successful_resolution() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("first").expect("test provider ID should be valid")),
+            ConfigurableProvider::success("first"),
+        ))
+        .expect("first provider should register");
+    registry.set_default_selection(ProviderSelection::auto());
+
+    let snapshot = registry
+        .resolve_default_snapshot()
+        .expect("default snapshot should resolve");
+
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(
+                ProviderId::new("second").expect("test provider ID should be valid"),
+            )
+            .with_priority(100),
+            ConfigurableProvider::success("second"),
+        ))
+        .expect("second provider should register");
+
+    assert_eq!("first", snapshot.create().expect("snapshot should retain first provider"));
+    assert_eq!(
+        "second",
+        registry
+            .resolve_default_snapshot()
+            .expect("new default snapshot should resolve")
+            .create()
+            .expect("new snapshot should select second provider"),
+    );
+}
+
+/// Verifies a failed default snapshot remains an owned result after registration.
+#[test]
+fn test_registry_default_snapshot_keeps_failed_resolution() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
+
+    let error = registry
+        .resolve_default_snapshot()
+        .expect_err("missing default provider should fail");
+
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("missing").expect("test provider ID should be valid")),
+            ConfigurableProvider::success("now-present"),
+        ))
+        .expect("provider should register after failed snapshot");
+
+    assert!(matches!(
+        error,
+        ProviderResolutionError::UnknownProviders { selectors, .. }
+            if selectors.len() == 1 && selectors[0].as_str() == "missing"
+    ));
+}
+
 /// Verifies Registry Debug formatting retains one metadata snapshot.
 #[test]
 fn test_registry_debug_uses_one_metadata_snapshot() {

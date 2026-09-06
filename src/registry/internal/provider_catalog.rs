@@ -165,7 +165,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
-    pub(crate) fn resolve(&self) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
+    pub(crate) fn resolve_default_snapshot(&self) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
         let inner = self.read_inner();
         Self::resolve_from_inner(&inner, &inner.default_selection)
     }
