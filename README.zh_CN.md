@@ -340,6 +340,13 @@ SyncServiceSpec::Output
 named selection 只有一个候选，因此不会回退。选择阶段不调用 Provider 代码。创建阶段使用
 解析时得到的候选快照，并且调用 Provider 时不会持有 Registry 锁。
 
+`ProviderRegistry::resolve_default_snapshot()`（异步 Registry 也有对应方法）会在同一个
+目录快照中原子地捕获当前默认 `ProviderSelection` 并解析候选。如果解析失败，返回的
+`ProviderResolutionError` 仍会保留从这次 selection 捕获的 selectors；之后注册 Provider
+也不会改变已经返回的错误。解析成功时，返回的 resolver 持有已捕获的候选和 fallback policy，
+后续注册不会改变这次结果。如需获取更新后的快照，请再次调用
+`resolve_default_snapshot()`。`resolve()` 仍是兼容性别名。
+
 ## 错误边界
 
 | 错误 | 所属边界 | 含义 |

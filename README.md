@@ -361,6 +361,15 @@ Named selection contains one candidate, so it never falls back. Selection does
 not call provider code. Creation operates on a point-in-time candidate snapshot
 and does not hold the Registry lock while providers run.
 
+`ProviderRegistry::resolve_default_snapshot()` (and its asynchronous counterpart)
+atomically captures the current default `ProviderSelection` and resolves its
+candidates from one catalog snapshot. If resolution fails, the returned
+`ProviderResolutionError` retains the selectors captured from that selection, so
+registering a provider afterward cannot change the already returned error. A
+successful resolver owns its captured candidates and fallback policy; later
+registrations do not change that result. Call `resolve_default_snapshot()` again
+to obtain a newer snapshot. `resolve()` remains a compatibility alias.
+
 ## Error Boundaries
 
 | Error | Boundary | Meaning |
