@@ -612,8 +612,18 @@ let provider = registry.resolve()?;
 ```
 
 `set_default_selection` 保存已经校验的 selection，但不要求对应 Provider 当时已经
-存在，因此可以先设置策略、后注册实现。`resolve` 使用当前 selection 和当前
-Registry 状态进行解析。
+存在，因此可以先设置策略、后注册实现。
+
+`resolve_default_snapshot()` 会在同一个 Registry catalog 快照中，原子地捕获当前默认
+`ProviderSelection` 及其候选。成功时返回的 `ResolvingServiceProvider<S>` 会持有这次捕获
+的 selection policy 和候选 handle。异步 Registry 提供相同操作，返回
+`AsyncResolvingServiceProvider<S>`；catalog 解析本身仍然是同步的。
+
+解析失败时，返回的 `ProviderResolutionError` 同样与 Registry 状态脱离。对于基于 selector
+的失败，可以通过 `error.selectors()` 读取这次 selection 捕获的 selectors；
+`EmptyRegistry` 不包含 selectors。之后注册匹配的 Provider，不会把已经返回的错误改成成功。
+同理，成功返回的 resolver 也不会看到快照之后注册的 Provider。需要新的 selection 和候选
+快照时，再次调用 `resolve_default_snapshot()`。`resolve()` 保留为兼容性别名，行为相同。
 
 ### Selection 与 config 相互独立
 
@@ -638,10 +648,15 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 
 ## 创建 Service
 
-`ProviderRegistry::resolve` 和 `ProviderRegistry::resolve_selected` 返回
+`ProviderRegistry::resolve_default_snapshot()` 和
+`ProviderRegistry::resolve_selected` 返回
 `ResolvingServiceProvider<S>`。它是一个组合型 resolver：持有候选 Provider handle，
 并在调用 `create` 时执行 selection 中的 fallback policy。它的固有创建方法返回聚合
 `ProviderCreationError`，而不是叶 Provider 接口要求的 `ProviderFailure<E>`。
+
+`ProviderRegistry::resolve()` 是 `resolve_default_snapshot()` 的兼容性别名。两个 API
+都会同时捕获默认 selection 和候选，因此 Registry 后续变化不会影响已经返回的 resolver
+或解析错误。
 
 对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的固有创建
 方法是异步方法；await 后得到异步 `S::Output`。叶 `AsyncServiceProvider<S>` 接口才返回
@@ -838,14 +853,18 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ProviderDefinition` / `AsyncProviderDefinition` | 组合元数据与同步或异步创建能力的 marker trait |
 | `ProviderRegistry::register` | 运行时注册 owned Provider |
 | `ProviderRegistry::register_shared` | 注册已有 shared Provider |
+| `ProviderRegistry::default_selection` | 获取当前默认 selection 的自有快照 |
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
 | `ProviderRegistry::resolve_selected` | 解析显式 selection |
-| `ProviderRegistry::resolve` | 解析 Registry 当前默认值 |
+| `ProviderRegistry::resolve_default_snapshot` | 原子解析当前默认 selection 和候选快照 |
+| `ProviderRegistry::resolve` | `resolve_default_snapshot` 的兼容性别名 |
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
 | `AsyncProviderRegistry::register` / `register_shared` | 同步注册 owned 或 shared 异步 Provider |
 | `AsyncProviderRegistry::set_default_selection` / `default_selection` | 替换或获取异步 Registry 默认策略快照 |
-| `AsyncProviderRegistry::resolve_selected` / `resolve` | 同步解析显式 selection 或当前默认值 |
+| `AsyncProviderRegistry::resolve_selected` | 同步解析显式 selection |
+| `AsyncProviderRegistry::resolve_default_snapshot` | 原子解析异步 Registry 当前默认 selection 和候选快照 |
+| `AsyncProviderRegistry::resolve` | `resolve_default_snapshot` 的兼容性别名 |
 | `AsyncProviderRegistry::descriptors` / `provider_ids` | 获取异步注册元数据或 canonical ID 快照 |
 | `AsyncProviderRegistry::len` / `is_empty` | 查询异步 Registry 大小或是否为空 |
 | `ProviderSelection::named` | 选择一个 ID 或 alias |
