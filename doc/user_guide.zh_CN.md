@@ -619,6 +619,10 @@ let provider = registry.resolve()?;
 的 selection policy 和候选 handle。异步 Registry 提供相同操作，返回
 `AsyncResolvingServiceProvider<S>`；catalog 解析本身仍然是同步的。
 
+如果调用方需要先用捕获的默认 selection 校验输入，再用同一批候选创建 Service，可以调用
+`resolve_default_snapshot_with_selection()`。它会成对返回自有的 `ProviderSelection` 和
+resolver；异步 Registry 也提供相同的契约。
+
 解析失败时，返回的 `ProviderResolutionError` 同样与 Registry 状态脱离。对于基于 selector
 的失败，可以通过 `error.selectors()` 读取这次 selection 捕获的 selectors；
 `EmptyRegistry` 不包含 selectors。之后注册匹配的 Provider，不会把已经返回的错误改成成功。
@@ -657,6 +661,10 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 `ProviderRegistry::resolve()` 是 `resolve_default_snapshot()` 的兼容性别名。两个 API
 都会同时捕获默认 selection 和候选，因此 Registry 后续变化不会影响已经返回的 resolver
 或解析错误。
+
+如果需要把捕获的 selection 与 config 比较，可以使用
+`ProviderRegistry::resolve_default_snapshot_with_selection()`；`AsyncProviderRegistry`
+提供相同的方法和快照契约。
 
 对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的固有创建
 方法是异步方法；await 后得到异步 `S::Output`。叶 `AsyncServiceProvider<S>` 接口才返回
@@ -857,6 +865,7 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `ProviderRegistry::set_default_selection` | 替换进程或组件默认策略 |
 | `ProviderRegistry::resolve_selected` | 解析显式 selection |
 | `ProviderRegistry::resolve_default_snapshot` | 原子解析当前默认 selection 和候选快照 |
+| `ProviderRegistry::resolve_default_snapshot_with_selection` | 成对返回捕获的默认 selection 和候选快照 |
 | `ProviderRegistry::resolve` | `resolve_default_snapshot` 的兼容性别名 |
 | `ProviderRegistry::descriptors` | 获取注册元数据快照 |
 | `ProviderRegistry::provider_ids` | 获取 canonical ID 快照 |
@@ -864,6 +873,7 @@ Registry clone 可以看到新注册，但已经解析的 `ResolvingServiceProvi
 | `AsyncProviderRegistry::set_default_selection` / `default_selection` | 替换或获取异步 Registry 默认策略快照 |
 | `AsyncProviderRegistry::resolve_selected` | 同步解析显式 selection |
 | `AsyncProviderRegistry::resolve_default_snapshot` | 原子解析异步 Registry 当前默认 selection 和候选快照 |
+| `AsyncProviderRegistry::resolve_default_snapshot_with_selection` | 成对返回捕获的异步默认 selection 和候选快照 |
 | `AsyncProviderRegistry::resolve` | `resolve_default_snapshot` 的兼容性别名 |
 | `AsyncProviderRegistry::descriptors` / `provider_ids` | 获取异步注册元数据或 canonical ID 快照 |
 | `AsyncProviderRegistry::len` / `is_empty` | 查询异步 Registry 大小或是否为空 |

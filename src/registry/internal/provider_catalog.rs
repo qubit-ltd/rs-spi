@@ -166,8 +166,24 @@ where
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
     pub(crate) fn resolve_default_snapshot(&self) -> Result<ResolvedCandidates<P>, ProviderResolutionError> {
+        self.resolve_default_snapshot_with_selection()
+            .map(|(_, candidates)| candidates)
+    }
+
+    /// Resolves the current default selection and returns that selection with
+    /// its candidates from one catalog snapshot.
+    ///
+    /// The selection is cloned while the same read lock is held that resolves
+    /// the candidate providers. Callers can therefore validate the captured
+    /// selection against their input before creating from the returned
+    /// candidates without observing a mixed catalog state.
+    pub(crate) fn resolve_default_snapshot_with_selection(
+        &self,
+    ) -> Result<(ProviderSelection, ResolvedCandidates<P>), ProviderResolutionError> {
         let inner = self.read_inner();
-        Self::resolve_from_inner(&inner, &inner.default_selection)
+        let selection = inner.default_selection.clone();
+        let candidates = Self::resolve_from_inner(&inner, &selection)?;
+        Ok((selection, candidates))
     }
 
     /// Returns descriptors in successful registration order.

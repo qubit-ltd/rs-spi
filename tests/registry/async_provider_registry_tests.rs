@@ -135,9 +135,10 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     register_provider(&registry, "first", &[], 0, AsyncConfigurableProvider::success("first"));
     registry.set_default_selection(ProviderSelection::auto());
 
-    let snapshot = registry
-        .resolve_default_snapshot()
+    let (selection, snapshot) = registry
+        .resolve_default_snapshot_with_selection()
         .expect("default snapshot should resolve");
+    assert_eq!(ProviderSelection::auto(), selection);
 
     register_provider(&registry, "second", &[], 100, AsyncConfigurableProvider::success("second"));
 

@@ -174,6 +174,30 @@ where
         ))
     }
 
+    /// Resolves the current default selection and returns the captured
+    /// selection together with its asynchronous provider snapshot.
+    ///
+    /// Both values are captured from one catalog read snapshot. This is useful
+    /// to callers that must validate configuration against the exact default
+    /// selection whose candidates they will create from.
+    ///
+    /// # Returns
+    ///
+    /// The captured default selection and an owned resolver for its candidates.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::resolve_default_snapshot`].
+    pub fn resolve_default_snapshot_with_selection(
+        &self,
+    ) -> Result<(ProviderSelection, AsyncResolvingServiceProvider<S>), ProviderResolutionError> {
+        let (selection, candidates) = self.providers.resolve_default_snapshot_with_selection()?;
+        Ok((
+            selection,
+            AsyncResolvingServiceProvider::new(candidates.entries, candidates.fallback_policy),
+        ))
+    }
+
     /// Resolves the current default selection without asynchronous work.
     ///
     /// This compatibility alias retains the original Registry operation name.

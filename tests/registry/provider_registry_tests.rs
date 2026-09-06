@@ -194,9 +194,10 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
         .expect("first provider should register");
     registry.set_default_selection(ProviderSelection::auto());
 
-    let snapshot = registry
-        .resolve_default_snapshot()
+    let (selection, snapshot) = registry
+        .resolve_default_snapshot_with_selection()
         .expect("default snapshot should resolve");
+    assert_eq!(ProviderSelection::auto(), selection);
 
     registry
         .register(define_provider(
