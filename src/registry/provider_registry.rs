@@ -185,11 +185,13 @@ where
     /// Returns the same errors as [`Self::resolve_default_snapshot`].
     pub fn resolve_default_snapshot_with_selection(
         &self,
-    ) -> (ProviderSelection, Result<ResolvingServiceProvider<S>, ProviderResolutionError>) {
+    ) -> (
+        ProviderSelection,
+        Result<ResolvingServiceProvider<S>, ProviderResolutionError>,
+    ) {
         let (selection, candidates) = self.providers.resolve_default_snapshot_with_selection();
-        let resolver = candidates.map(|candidates| {
-            ResolvingServiceProvider::new(candidates.entries, candidates.fallback_policy)
-        });
+        let resolver =
+            candidates.map(|candidates| ResolvingServiceProvider::new(candidates.entries, candidates.fallback_policy));
         (selection, resolver)
     }
 

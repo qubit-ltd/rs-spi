@@ -128,7 +128,8 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
     assert!(format!("{registry:?}").contains("shared"));
 }
 
-/// Verifies a successful asynchronous default snapshot keeps its candidates after registration.
+/// Verifies a successful asynchronous default snapshot keeps its candidates
+/// after registration.
 #[test]
 fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -139,7 +140,13 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     let snapshot = snapshot.expect("default snapshot should resolve");
     assert_eq!(ProviderSelection::auto(), selection);
 
-    register_provider(&registry, "second", &[], 100, AsyncConfigurableProvider::success("second"));
+    register_provider(
+        &registry,
+        "second",
+        &[],
+        100,
+        AsyncConfigurableProvider::success("second"),
+    );
 
     assert_eq!(
         "first",
@@ -157,7 +164,8 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     );
 }
 
-/// Verifies a failed asynchronous default snapshot remains an owned result after registration.
+/// Verifies a failed asynchronous default snapshot remains an owned result
+/// after registration.
 #[test]
 fn test_async_registry_default_snapshot_keeps_failed_resolution() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -167,7 +175,13 @@ fn test_async_registry_default_snapshot_keeps_failed_resolution() {
     assert_eq!(ProviderSelection::named("missing").unwrap(), selection);
     let error = result.expect_err("missing default provider should fail");
 
-    register_provider(&registry, "missing", &[], 0, AsyncConfigurableProvider::success("now-present"));
+    register_provider(
+        &registry,
+        "missing",
+        &[],
+        0,
+        AsyncConfigurableProvider::success("now-present"),
+    );
 
     assert!(matches!(
         error,

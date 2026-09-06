@@ -182,7 +182,8 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
     assert!(debug.contains("default_selection"));
 }
 
-/// Verifies a successful default snapshot keeps its candidates after registration.
+/// Verifies a successful default snapshot keeps its candidates after
+/// registration.
 #[test]
 fn test_registry_default_snapshot_keeps_successful_resolution() {
     let registry = ProviderRegistry::<StringSpec>::default();
@@ -200,15 +201,16 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
 
     registry
         .register(define_provider(
-            ProviderDescriptor::new(
-                ProviderId::new("second").expect("test provider ID should be valid"),
-            )
-            .with_priority(100),
+            ProviderDescriptor::new(ProviderId::new("second").expect("test provider ID should be valid"))
+                .with_priority(100),
             ConfigurableProvider::success("second"),
         ))
         .expect("second provider should register");
 
-    assert_eq!("first", snapshot.create().expect("snapshot should retain first provider"));
+    assert_eq!(
+        "first",
+        snapshot.create().expect("snapshot should retain first provider")
+    );
     assert_eq!(
         "second",
         registry
@@ -219,7 +221,8 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
     );
 }
 
-/// Verifies a failed default snapshot remains an owned result after registration.
+/// Verifies a failed default snapshot remains an owned result after
+/// registration.
 #[test]
 fn test_registry_default_snapshot_keeps_failed_resolution() {
     let registry = ProviderRegistry::<StringSpec>::default();

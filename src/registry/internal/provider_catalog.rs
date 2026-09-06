@@ -179,7 +179,10 @@ where
     /// candidates without observing a mixed catalog state.
     pub(crate) fn resolve_default_snapshot_with_selection(
         &self,
-    ) -> (ProviderSelection, Result<ResolvedCandidates<P>, ProviderResolutionError>) {
+    ) -> (
+        ProviderSelection,
+        Result<ResolvedCandidates<P>, ProviderResolutionError>,
+    ) {
         let inner = self.read_inner();
         let selection = inner.default_selection.clone();
         let candidates = Self::resolve_from_inner(&inner, &selection);
