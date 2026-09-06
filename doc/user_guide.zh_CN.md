@@ -621,7 +621,7 @@ let provider = registry.resolve()?;
 
 如果调用方需要先用捕获的默认 selection 校验输入，再用同一批候选创建 Service，可以调用
 `resolve_default_snapshot_with_selection()`。它会成对返回自有的 `ProviderSelection` 和
-resolver；异步 Registry 也提供相同的契约。
+resolver 结果，即使解析失败也会保留 selection；异步 Registry 也提供相同的契约。
 
 解析失败时，返回的 `ProviderResolutionError` 同样与 Registry 状态脱离。对于基于 selector
 的失败，可以通过 `error.selectors()` 读取这次 selection 捕获的 selectors；
@@ -663,8 +663,8 @@ let service = registry.resolve_selected(&selection)?.create_configured(&config)?
 或解析错误。
 
 如果需要把捕获的 selection 与 config 比较，可以使用
-`ProviderRegistry::resolve_default_snapshot_with_selection()`；`AsyncProviderRegistry`
-提供相同的方法和快照契约。
+`ProviderRegistry::resolve_default_snapshot_with_selection()`；它会把 selection 与 resolver
+结果一起返回。`AsyncProviderRegistry` 提供相同的方法和快照契约。
 
 对应的 `AsyncProviderRegistry` 方法返回 `AsyncResolvingServiceProvider<S>`。它的固有创建
 方法是异步方法；await 后得到异步 `S::Output`。叶 `AsyncServiceProvider<S>` 接口才返回

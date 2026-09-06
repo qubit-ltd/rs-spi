@@ -661,8 +661,9 @@ resolution itself is synchronous.
 
 Call `resolve_default_snapshot_with_selection()` when the caller must validate
 input against the captured default selection before creating from the same
-candidate snapshot. It returns the owned `ProviderSelection` and resolver as a
-pair; its asynchronous counterpart has the same contract.
+candidate snapshot. It returns the owned `ProviderSelection` and the resolver
+result as a pair, preserving the selection even when resolution fails; its
+asynchronous counterpart has the same contract.
 
 If resolution fails, the returned `ProviderResolutionError` is also detached
 from the Registry. Selector-based failures retain the selectors captured from
@@ -711,9 +712,9 @@ candidates together, so later Registry changes do not affect a resolver or a
 resolution error that has already been returned.
 
 `ProviderRegistry::resolve_default_snapshot_with_selection()` returns the
-captured `ProviderSelection` alongside the resolver when the caller needs to
-compare that selection with configuration. `AsyncProviderRegistry` exposes the
-same method and snapshot contract.
+captured `ProviderSelection` alongside the resolver result when the caller
+needs to compare that selection with configuration. `AsyncProviderRegistry`
+exposes the same method and snapshot contract.
 
 The corresponding `AsyncProviderRegistry` methods return
 `AsyncResolvingServiceProvider<S>`. Its inherent creation methods are async;

@@ -194,9 +194,8 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
         .expect("first provider should register");
     registry.set_default_selection(ProviderSelection::auto());
 
-    let (selection, snapshot) = registry
-        .resolve_default_snapshot_with_selection()
-        .expect("default snapshot should resolve");
+    let (selection, snapshot) = registry.resolve_default_snapshot_with_selection();
+    let snapshot = snapshot.expect("default snapshot should resolve");
     assert_eq!(ProviderSelection::auto(), selection);
 
     registry
@@ -226,9 +225,9 @@ fn test_registry_default_snapshot_keeps_failed_resolution() {
     let registry = ProviderRegistry::<StringSpec>::default();
     registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
 
-    let error = registry
-        .resolve_default_snapshot()
-        .expect_err("missing default provider should fail");
+    let (selection, result) = registry.resolve_default_snapshot_with_selection();
+    assert_eq!(ProviderSelection::named("missing").unwrap(), selection);
+    let error = result.expect_err("missing default provider should fail");
 
     registry
         .register(define_provider(
