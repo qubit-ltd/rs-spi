@@ -1,6 +1,6 @@
 [package]
 name = "qubit-spi"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2024"
 rust-version = "1.94"
 autotests = false
@@ -22,8 +22,6 @@ include = [
     "/doc/**",
     "/tests/**",
     "/benches/**",
-    "/scripts/check-documentation.py",
-    "/scripts/check-package.py",
 ]
 
 [lib]
