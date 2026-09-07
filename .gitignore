@@ -80,3 +80,6 @@ external/
 *.tar.gz
 *.rar
 *.7z
+
+# Python validation tools
+__pycache__/

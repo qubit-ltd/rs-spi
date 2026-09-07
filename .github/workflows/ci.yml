@@ -19,3 +19,22 @@ jobs:
     with:
       coverage_enforce_thresholds: "1"
     secrets: inherit
+
+  documentation-contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.94.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test validation tools
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Check bilingual examples
+        run: python3 scripts/check-documentation.py
+      - name: Check release archive
+        run: python3 scripts/check-package.py

@@ -1,0 +1,77 @@
+{
+  "documents": {
+    "README.md": {
+      "quick-start": [
+        "app/src/main.rs"
+      ]
+    },
+    "README.zh_CN.md": {
+      "quick-start": [
+        "app/src/main.rs"
+      ]
+    },
+    "doc/user_guide.md": {
+      "three-crates": [
+        "lib-greeter/src/lib.rs",
+        "lib-foo/src/lib.rs",
+        "lib-friendly-greeter/src/lib.rs",
+        "app/src/main.rs"
+      ],
+      "guide-sync": [
+        "app/src/main.rs"
+      ],
+      "guide-async": [
+        "app/src/main.rs"
+      ]
+    },
+    "doc/user_guide.zh_CN.md": {
+      "three-crates": [
+        "lib-greeter/src/lib.rs",
+        "lib-foo/src/lib.rs",
+        "lib-friendly-greeter/src/lib.rs",
+        "app/src/main.rs"
+      ],
+      "guide-sync": [
+        "app/src/main.rs"
+      ],
+      "guide-async": [
+        "app/src/main.rs"
+      ]
+    },
+    "doc/design.md": {},
+    "doc/design.zh_CN.md": {}
+  },
+  "scenarios": {
+    "quick-start": {
+      "manifests": {
+        "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n"
+      },
+      "stdout": "Hello, Rust!\n"
+    },
+    "guide-sync": {
+      "manifests": {
+        "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n"
+      },
+      "stdout": ""
+    },
+    "guide-async": {
+      "manifests": {
+        "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nfutures = \"0.3\"\n"
+      },
+      "stdout": ""
+    },
+    "three-crates": {
+      "manifests": {
+        "Cargo.toml": "[workspace]\nmembers = [\"lib-greeter\", \"lib-foo\", \"lib-friendly-greeter\", \"app\"]\nresolver = \"3\"\n",
+        "lib-greeter/Cargo.toml": "[package]\nname = \"lib-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n",
+        "lib-foo/Cargo.toml": "[package]\nname = \"lib-foo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\n",
+        "lib-friendly-greeter/Cargo.toml": "[package]\nname = \"lib-friendly-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\nlib-foo = { path = \"../lib-foo\" }\nlib-friendly-greeter = { path = \"../lib-friendly-greeter\" }\n"
+      },
+      "stdout": "Hello, Rust!\n"
+    }
+  }
+}

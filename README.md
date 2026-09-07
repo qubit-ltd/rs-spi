@@ -7,9 +7,11 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Qubit SPI provides typed, runtime-mutable service-provider registries for Rust.
-Apps register providers at startup; libraries can then create an explicitly
-selected or App-defined default service without depending on its concrete type.
+Qubit SPI lets a reusable Rust library obtain an application-selected service
+without depending on a concrete backend. Applications register available
+providers, choose a default, and pass configuration when creating the service.
+For example, a library can request a greeting service while its application
+installs the implementation appropriate to its deployment.
 
 ## Installation
 
@@ -18,405 +20,67 @@ selected or App-defined default service without depending on its concrete type.
 qubit-spi = "0.11"
 ```
 
-Qubit SPI requires Rust 1.94 or later.
+Requires Rust 1.94 or later. This crate has no optional runtime features.
 
 ## Quick Start
 
-This example uses three independently published libraries and one App. It
-separates the service contract, downstream consumer, third-party provider, and
-application composition root so the runtime ownership is explicit.
+Create a binary crate, add the dependency above, and put this in `src/main.rs`.
+The application registers a provider and chooses it before a consumer resolves
+the service. Run `cargo run`; the program prints `Hello, Rust!`.
 
-Cargo package names use hyphens below; Rust refers to those crates with
-underscores. The `Cargo.toml` files are omitted for brevity.
-
-### 1. `lib-greeter`: Define the Service and Global Registry
-
-`lib-greeter` owns the service contract. Every consumer and provider uses the
-same `GreeterSpec` and the same `GREETER_REGISTRY` singleton from this crate.
-
+<!-- spi-example: quick-start; file: app/src/main.rs -->
 ```rust
-// lib-greeter/src/lib.rs
-use std::{
-    error::Error,
-    fmt,
-    sync::{Arc, LazyLock},
-};
+use qubit_spi::{ProviderDescriptor, ProviderMetadata, ProviderRegistry, ProviderSelection};
+use qubit_spi::{ServiceProvider, ServiceSpec, SyncServiceSpec, provider_descriptor};
+use qubit_spi::error::ProviderFailure;
 
-use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
-
-/// Business interface implemented by every Greeter service.
-pub trait Greeter: Send + Sync {
-    fn greet(&self, name: &str) -> String;
+struct Greeting;
+impl ServiceSpec for Greeting { type Config = String; type Error = std::io::Error; }
+impl SyncServiceSpec for Greeting { type Output = String; }
+struct Friendly;
+impl ProviderMetadata for Friendly {
+    fn descriptor(&self) -> ProviderDescriptor { provider_descriptor!("friendly") }
 }
-
-/// Configuration passed to a provider when it creates a Greeter.
-#[derive(Clone)]
-pub struct GreeterConfig {
-    /// Text placed before the name in each greeting.
-    pub prefix: String,
-}
-
-impl Default for GreeterConfig {
-    fn default() -> Self {
-        Self {
-            prefix: "Hello".to_owned(),
-        }
+impl ServiceProvider<Greeting> for Friendly {
+    fn create_configured(&self, name: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+        Ok(format!("Hello, {name}!"))
     }
 }
-
-/// Domain error returned when a Greeter provider cannot create a service.
-#[derive(Debug)]
-pub struct GreeterError;
-
-impl fmt::Display for GreeterError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("greeter provider failed")
-    }
-}
-
-impl Error for GreeterError {}
-
-/// Connects the Greeter configuration and output types to Qubit SPI.
-pub struct GreeterSpec;
-
-impl ServiceSpec for GreeterSpec {
-    // Input accepted by Greeter providers during service creation.
-    type Config = GreeterConfig;
-    // Domain error retained by classified provider failures.
-    type Error = GreeterError;
-}
-
-impl SyncServiceSpec for GreeterSpec {
-    // Service object returned to consumers after successful creation.
-    type Output = Arc<dyn Greeter>;
-}
-
-/// Process-wide Greeter provider registry shared by the App and all libraries.
-pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
-    LazyLock::new(ProviderRegistry::default);
-```
-
-### 2. `lib-foo`: Consume the Default Service
-
-`lib-foo` knows the service contract but not its implementation. `foo()` asks
-the shared Registry for its default provider, creates a Greeter with default
-configuration, and prints the result.
-
-```rust
-// lib-foo/src/lib.rs
-use lib_greeter::GREETER_REGISTRY;
-
-/// Creates the App-selected default Greeter and prints one greeting.
-pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve()?;
-    let greeter = provider.create()?;
-    println!("{}", greeter.greet("Rust"));
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let registry = ProviderRegistry::<Greeting>::default();
+    registry.register(Friendly)?;
+    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    let greeter = registry.resolve()?;
+    println!("{}", greeter.create_configured(&"Rust".to_owned())?);
     Ok(())
 }
 ```
 
-### 3. `lib-friendly-greeter`: Supply a Third-Party Provider
+## When to Use It
 
-`lib-friendly-greeter` depends on the contract from `lib-greeter`, implements the
-service, and exports one self-described provider. It does not register itself;
-the final App owns that policy decision.
+Use a registry when reusable libraries should share an application-selected
+implementation, or when a deployment can choose among several backends.
+A single concrete implementation with no selection needs can use an ordinary
+constructor. SPI manages provider registration and construction; domain APIs,
+resource caching and provider-specific configuration validation stay in your
+service crate.
 
-```rust
-// lib-friendly-greeter/src/lib.rs
-use std::sync::Arc;
+## Core Capabilities
 
-use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
-use qubit_spi::error::ProviderFailure;
-use qubit_spi::{
-    ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider,
-};
-
-/// Concrete Greeter created by the friendly provider.
-struct FriendlyGreeter {
-    /// Greeting prefix copied from the creation configuration.
-    prefix: String,
-}
-
-impl Greeter for FriendlyGreeter {
-    fn greet(&self, name: &str) -> String {
-        format!("{}, {}!", self.prefix, name)
-    }
-}
-
-/// Self-described provider exported for Apps to register explicitly.
-pub struct FriendlyGreeterProvider;
-
-impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
-    fn create_configured(
-        &self,
-        config: &GreeterConfig,
-    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
-        Ok(Arc::new(FriendlyGreeter {
-            prefix: config.prefix.clone(),
-        }))
-    }
-}
-
-impl ProviderMetadata for FriendlyGreeterProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("friendly").expect("static provider ID is valid"),
-        )
-        .with_priority(100)
-    }
-}
-```
-
-`ProviderId::new` accepts only an already-canonical token: nonempty lowercase
-ASCII, alphanumeric endpoints, and separators limited to `-`, `_`, `.`, and `+`.
-
-### 4. `app.rs`: Register the Provider and Run `lib-foo`
-
-The App is the composition root. During startup it installs the third-party
-provider into the singleton owned by `lib-greeter`, makes that provider the
-default, and then calls `foo()`.
-
-```rust
-// app.rs
-use lib_foo::foo;
-use lib_friendly_greeter::FriendlyGreeterProvider;
-use lib_greeter::GREETER_REGISTRY;
-use qubit_spi::ProviderSelection;
-
-// Application composition root: install a provider before calling lib-foo.
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
-    GREETER_REGISTRY
-        .set_default_selection(ProviderSelection::named("friendly")?);
-    foo()
-}
-```
-
-The program prints `Hello, Rust!`. `lib-foo` receives the provider selected by
-the App even though those two crates do not depend on each other. Their shared
-coordination point is the singleton defined by `lib-greeter`.
-
-The Registry default and service configuration are independent. A caller with
-specific requirements can supply either one without forcing the other:
-
-```rust,ignore
-let selection = ProviderSelection::named("friendly")?;
-let provider = GREETER_REGISTRY.resolve_selected(&selection)?;
-let config = GreeterConfig {
-    prefix: "Welcome".to_owned(),
-};
-let greeter = provider.create_configured(&config)?;
-```
-
-### 5. Async Quick Start
-
-The asynchronous API keeps catalog work synchronous and makes only service
-creation asynchronous. The Registry therefore has no executor dependency:
-
-```rust
-use qubit_spi::error::ProviderFailure;
-use qubit_spi::{
-    AsyncProviderRegistry, AsyncServiceProvider, AsyncServiceSpec,
-    ProviderDescriptor, ProviderFuture, ProviderId, ProviderMetadata,
-    ProviderSelection, ServiceSpec,
-};
-
-struct GreetingSpec;
-
-impl ServiceSpec for GreetingSpec {
-    type Config = str;
-    type Error = std::io::Error;
-}
-
-impl AsyncServiceSpec for GreetingSpec {
-    type Output = String;
-}
-
-struct FriendlyProvider;
-
-impl ProviderMetadata for FriendlyProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("friendly").expect("static provider ID is valid"),
-        )
-    }
-}
-
-impl AsyncServiceProvider<GreetingSpec> for FriendlyProvider {
-    fn create_configured<'a>(
-        &'a self,
-        name: &'a str,
-    ) -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
-        Box::pin(async move { Ok(format!("Hello, {name}!")) })
-    }
-}
-
-async fn greet() -> Result<String, Box<dyn std::error::Error>> {
-    let registry = AsyncProviderRegistry::<GreetingSpec>::default();
-    registry.register(FriendlyProvider)?;
-    let selection = ProviderSelection::named("friendly")?;
-    let resolver = registry.resolve_selected(&selection)?;
-    Ok(resolver.create_configured("Rust").await?)
-}
-```
-
-In the Registry workflow, `register`, metadata queries, default-selection
-updates, and resolution are synchronous. Creation methods on the resulting
-`AsyncResolvingServiceProvider` are async and must be awaited to obtain the
-output. Calling creation methods on an asynchronous leaf provider directly
-returns a `ProviderFuture`. `ProviderFuture` is `Send` and runtime-neutral.
-Asynchronous specifications require `Config: Sync` and
-`Output: Send + 'static`; default-config `create()` additionally requires
-`Config: Default + Send`.
-
-## Why This Crate Exists
-
-An application often depends on a capability rather than one implementation.
-A MIME detector may be backed by a model, a system command, or a repository of
-signatures. A filesystem may be local, in memory, or remote. The application
-should decide which implementations are installed and preferred; a downstream
-library should only ask for the capability it needs.
-
-The complete lifecycle has three different decisions:
-
-1. **Registration:** which provider implementations exist in this process?
-2. **Selection:** which registered provider or ordered candidates should be
-   considered for this request?
-3. **Creation:** can the selected provider create a service with the supplied
-   configuration?
-
-Qubit SPI keeps those decisions separate and gives each failure stage its own
-error type. This prevents service configuration from becoming an accidental
-requirement for provider lookup and prevents selection failures from being
-mixed with provider initialization failures.
-
-## What It Provides
-
-- `ServiceSpec` binds one service family's configuration type.
-- `SyncServiceSpec` and `AsyncServiceSpec` independently bind synchronous and
-  asynchronous output types.
-- `ServiceProvider` and `AsyncServiceProvider` are separate creation contracts.
-- `ProviderMetadata` adds stable ID, aliases, and priority to a provider.
-- `ProviderId` is a strict canonical token: nonempty lowercase ASCII,
-  alphanumeric endpoints, and only the separators `-`, `_`, `.`, and `+`;
-  construction never trims or lowercases the input.
-- `ProviderRegistry` and `AsyncProviderRegistry` are separate, runtime-mutable,
-  thread-safe catalogs whose registration and resolution methods are synchronous.
-- `ProviderSelection` contains both its target and its creation fallback policy.
-- `ResolvingServiceProvider` and `AsyncResolvingServiceProvider` are returned by
-  their respective Registry's resolution and apply fallback during creation.
-- `ProviderFuture` is the runtime-neutral, `Send` future returned by
-  `AsyncServiceProvider` implementations.
-- Separate registration, selection, leaf-provider, and aggregate-creation
-  errors retain the context needed when an operation fails.
-
-Qubit SPI does not load dynamic libraries, discover crates automatically, cache
-created services, or impose a process-wide singleton. A domain crate can expose
-its own global Registry facade when App-to-library sharing is required.
-
-## Core Lifecycle
-
-```text
-App startup
-  register ProviderMetadata + creation-capability values
-  set the Registry's default ProviderSelection
-                         │
-                         ▼
-shared ProviderRegistry<SyncServiceSpec>
-                         │ resolve_selected / resolve
-                         ▼
-ResolvingServiceProvider<SyncServiceSpec>
-                         │ create_configured(config) / create()
-                         ▼
-SyncServiceSpec::Output
-```
-
-| Stage | Main API | Success | Failure |
-| --- | --- | --- | --- |
-| Registration | `register(provider)` | Provider becomes visible through every Registry clone | `RegistrationError` |
-| Selection | `resolve_selected(&selection)` or `resolve()` | Candidate snapshot in a `ResolvingServiceProvider` | `ProviderResolutionError` |
-| Creation | `create_configured(&config)` or `create()` | `SyncServiceSpec::Output` directly | `ProviderCreationError` |
-
-The asynchronous path follows the same three-stage lifecycle. As shown in the
-[Async Quick Start](#5-async-quick-start), catalog operations remain synchronous
-and only service creation through `AsyncResolvingServiceProvider` is awaited, so
-no executor dependency is imposed.
-
-## Selection and Fallback
-
-| Selection | Candidate order | Missing selectors |
-| --- | --- | --- |
-| `ProviderSelection::named("id")` | Exactly one provider | Returns `UnknownProviders` during resolution |
-| `ProviderSelection::chain([..])` | Caller order, with duplicate providers removed | Strictly rejects any missing entry |
-| `ProviderSelection::chain_allowing_missing([..])` | Caller order, with duplicate providers removed | Skips missing entries; fails if none match |
-| `ProviderSelection::auto()` | Priority descending, then canonical ID ascending | Fails when the Registry is empty |
-
-Every selection carries a `FallbackPolicy` used later during creation:
-
-- `Never`: stop after the first provider creation failure.
-- `OnAbsence` (default): continue only after `Unsupported` or `Unavailable`.
-- `OnAnyError`: continue after every leaf-provider error.
-
-Named selection contains one candidate, so it never falls back. Selection does
-not call provider code. Creation operates on a point-in-time candidate snapshot
-and does not hold the Registry lock while providers run.
-
-`ProviderRegistry::resolve_default_snapshot()` (and its asynchronous counterpart)
-atomically captures the current default `ProviderSelection` and resolves its
-candidates from one catalog snapshot. It returns the captured selection together
-with the resolver result, preserving the selection even when resolution fails.
-The returned `ProviderResolutionError` retains the selectors captured from that
-selection, so registering a provider afterward cannot change the already
-returned error. A successful resolver owns its captured candidates and fallback
-policy; later registrations do not change that result. Call
-`resolve_default_snapshot()` again to obtain a newer snapshot. `resolve()`
-remains a compatibility alias that returns only the resolver result.
-
-## Error Boundaries
-
-| Error | Boundary | Meaning |
-| --- | --- | --- |
-| `ProviderIdError` | Provider definition | Canonical ID is empty or violates the lowercase ASCII token grammar |
-| `ProviderSelectorError` | Input parsing | Selector cannot be normalized and validated |
-| `ProviderSelectionBuildError` | Selection construction | Named or chained selection input is invalid |
-| `ProviderDescriptorError` | Provider definition | Alias is invalid or internally duplicated |
-| `RegistrationError` | Registration | ID or alias is already owned |
-| `ProviderResolutionError` | Selection resolution | No candidate can be resolved |
-| `ProviderFailure<E>` | Leaf creation | One concrete provider reports a classified domain failure |
-| `ProviderCreationError` | Resolver creation | Nonempty aggregate containing only actual provider attempts |
-
-Aggregate creation errors contain only providers that were actually invoked.
-They also report whether traversal exhausted the candidates or stopped because
-the fallback policy rejected continuing. Consumers normally return the error;
-they only inspect attempts when failure-specific handling is needed.
-
-## Runtime Registries and Global Facades
-
-`ProviderRegistry` and `AsyncProviderRegistry` each wrap synchronized shared
-state. Both have the same cheap clone semantics: registrations or
-default-selection changes made through one clone are visible through the other
-clones of that Registry. Both return owned descriptor and candidate snapshots,
-and both release Registry locks before provider code runs or an asynchronous
-creation future is polled. Their registration states are independent; registering
-a provider in one Registry does not register it in the other.
-
-A reusable domain crate can wrap one Registry in a `LazyLock` and expose a
-domain-specific `global()` method. This is how an App can install a provider
-that a separately published library later receives through `resolve()`.
-The App must configure that Registry before downstream code first needs the
-service. If Cargo links incompatible versions of the domain crate, each linked
-crate version owns its own static Registry.
-
-Use `ProviderRegistry::default()` when an isolated Registry is preferable for
-tests or scoped components. The Registry remains open to runtime registration.
+- Typed service families keep unrelated providers separate.
+- Canonical IDs and normalized aliases support named, ordered-chain and automatic selection.
+- Explicit fallback policies distinguish absent backends from configuration or initialization failures.
+- Sync and async registries expose the same catalog operations; async creation uses sendable futures without selecting an executor.
+- Registry clones share runtime changes; resolved candidates retain their captured identity, order and policy.
+- Typed errors retain actual attempts and domain diagnostics. Each create invokes a factory, which may reuse an existing resource.
 
 ## Learn More
 
-- Read the [User Guide](doc/user_guide.md) for the full lifecycle, provider
-  implementation, runtime sharing, selection semantics, fallback, diagnostics,
-  and global-facade pattern.
-- Browse the [API reference](https://docs.rs/qubit-spi).
-- 阅读[中文说明](README.zh_CN.md)。
+- [User Guide](doc/user_guide.md): three libraries plus an application, full configuration, fallback and troubleshooting.
+- [中文用户指南](doc/user_guide.zh_CN.md).
+- [Design](doc/design.md) and [中文设计说明](doc/design.zh_CN.md): contracts and implementation decisions.
+- [API reference](https://docs.rs/qubit-spi).
+- [中文 README](README.zh_CN.md).
 
 ## Testing
 
