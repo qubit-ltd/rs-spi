@@ -5,304 +5,333 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Fuzzes provider Registry indexing and selection against a reference model.
-
+//! Compares registration, full fallback traversal and historical snapshots to a
+//! linear model.
 #![no_main]
 
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::io::Error;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderMetadata;
 use qubit_spi::ProviderRegistry;
 use qubit_spi::ProviderSelection;
+use qubit_spi::ResolvingServiceProvider;
 use qubit_spi::ServiceProvider;
 use qubit_spi::ServiceSpec;
 use qubit_spi::SyncServiceSpec;
 use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
+use qubit_spi::error::ProviderResolutionError;
 
-/// Upper bound for provider registrations derived from one fuzzer input.
 const MAX_REGISTRATIONS: usize = 32;
-/// Upper bound for selectors resolved from one fuzzer input.
 const MAX_SELECTORS: usize = 16;
+const MAX_OPERATIONS: usize = 32;
 
-/// Service family used only by the Registry fuzz fixture.
+/// The model performs no filesystem or network operations.
 struct FuzzSpec;
 
 impl ServiceSpec for FuzzSpec {
-    /// Configuration is unused by the provider fixtures.
     type Config = ();
-    /// Fuzz providers do not produce domain errors.
-    type Error = std::io::Error;
+    type Error = Error;
 }
 
 impl SyncServiceSpec for FuzzSpec {
-    /// Successful providers return their canonical identifier.
     type Output = String;
 }
 
-/// Registered provider that returns its canonical identifier.
+/// Linear model entry; ownership lookup deliberately uses no production-style
+/// index.
+#[derive(Clone)]
+struct ModelEntry {
+    id: String,
+    alias: Option<String>,
+    priority: i32,
+    outcome: u8,
+}
+
+/// Actual provider records every invocation, including failures preceding
+/// success.
 struct FuzzProvider {
-    /// Immutable registration metadata.
-    descriptor: ProviderDescriptor,
+    entry: ModelEntry,
+    calls: Arc<Mutex<Vec<String>>>,
 }
 
 impl ProviderMetadata for FuzzProvider {
-    /// Returns the provider's immutable registration metadata.
+    /// Builds immutable registration metadata from validated bounded input.
     fn descriptor(&self) -> ProviderDescriptor {
-        self.descriptor.clone()
+        ProviderDescriptor::new(ProviderId::new(&self.entry.id).expect("valid model ID"))
+            .with_priority(self.entry.priority)
+            .with_aliases(self.entry.alias.iter())
+            .expect("valid model alias")
     }
 }
 
 impl ServiceProvider<FuzzSpec> for FuzzProvider {
-    /// Returns the canonical identifier selected by the Registry.
-    ///
-    /// # Parameters
-    ///
-    /// * `_config` - Unused zero-sized fuzz configuration.
-    ///
-    /// # Returns
-    ///
-    /// The registered provider's canonical identifier.
-    ///
-    /// # Errors
-    ///
-    /// This fixture never returns a provider creation error.
-    fn create_configured(&self, _config: &()) -> Result<String, ProviderFailure<std::io::Error>> {
-        Ok(self.descriptor.id().as_str().to_owned())
-    }
-}
-
-/// Minimal model of successful Registry registrations and selector ownership.
-#[derive(Default)]
-struct RegistryModel {
-    /// Canonical provider IDs in successful registration order.
-    registration_ids: Vec<String>,
-    /// Canonical provider priority indexed by identifier.
-    priorities: HashMap<String, i32>,
-    /// Canonical IDs and aliases indexed by their owning provider ID.
-    selector_ids: HashMap<String, String>,
-}
-
-impl RegistryModel {
-    /// Reports whether a descriptor can register without selector conflicts.
-    ///
-    /// # Parameters
-    ///
-    /// * `provider_id` - Candidate canonical provider identifier.
-    /// * `alias` - Optional candidate selector alias.
-    ///
-    /// # Returns
-    ///
-    /// `true` when neither selector is already owned.
-    fn can_register(&self, provider_id: &str, alias: Option<&str>) -> bool {
-        !self.selector_ids.contains_key(provider_id) && alias.is_none_or(|alias| !self.selector_ids.contains_key(alias))
-    }
-
-    /// Records one registration previously accepted by the concrete Registry.
-    ///
-    /// # Parameters
-    ///
-    /// * `provider_id` - Newly registered canonical provider identifier.
-    /// * `alias` - Optional registered selector alias.
-    /// * `priority` - Automatic-selection priority.
-    fn register(&mut self, provider_id: String, alias: Option<String>, priority: i32) {
-        self.selector_ids.insert(provider_id.clone(), provider_id.clone());
-        if let Some(alias) = alias {
-            self.selector_ids.insert(alias, provider_id.clone());
+    /// Returns the input-selected success or typed failure after recording
+    /// invocation.
+    fn create_configured(&self, _config: &()) -> Result<String, ProviderFailure<Error>> {
+        self.calls
+            .lock()
+            .expect("single-threaded event lock")
+            .push(self.entry.id.clone());
+        let error = Error::other("model failure");
+        match self.entry.outcome {
+            0 => Ok(self.entry.id.clone()),
+            1 => Err(ProviderFailure::unsupported(error)),
+            2 => Err(ProviderFailure::unavailable(error)),
+            3 => Err(ProviderFailure::invalid_configuration(error)),
+            4 => Err(ProviderFailure::initialization_failed(error)),
+            _ => unreachable!("bounded outcome"),
         }
-        self.priorities.insert(provider_id.clone(), priority);
-        self.registration_ids.push(provider_id);
-    }
-
-    /// Returns the canonical ID selected first by automatic selection.
-    ///
-    /// # Returns
-    ///
-    /// The highest-priority canonical ID, breaking ties lexicographically, or
-    /// `None` when the model has no registered providers.
-    fn first_auto_id(&self) -> Option<&str> {
-        self.priorities
-            .iter()
-            .min_by(|(left_id, left_priority), (right_id, right_priority)| {
-                right_priority.cmp(left_priority).then_with(|| left_id.cmp(right_id))
-            })
-            .map(|(provider_id, _)| provider_id.as_str())
-    }
-
-    /// Resolves selectors in chain order while suppressing duplicate providers.
-    ///
-    /// # Parameters
-    ///
-    /// * `selectors` - Valid canonical selectors in requested chain order.
-    ///
-    /// # Returns
-    ///
-    /// Canonical provider IDs in the order a lenient chain attempts them.
-    fn resolve_lenient_chain(&self, selectors: &[String]) -> Vec<String> {
-        let mut seen = HashSet::with_capacity(selectors.len());
-        let mut candidates = Vec::with_capacity(selectors.len());
-        for selector in selectors {
-            let Some(provider_id) = self.selector_ids.get(selector) else {
-                continue;
-            };
-            if seen.insert(provider_id) {
-                candidates.push(provider_id.clone());
-            }
-        }
-        candidates
     }
 }
 
-/// Maps one byte to a bounded canonical provider identifier.
-///
-/// # Parameters
-///
-/// * `value` - Byte used to choose one fixture provider identifier.
-///
-/// # Returns
-///
-/// A valid canonical provider identifier shared by controlled collisions.
-fn provider_id(value: u8) -> String {
-    format!("provider-{}", value % 8)
+/// Model-side target discriminant is independent of the production selection
+/// representation.
+#[derive(Clone)]
+struct Request {
+    mode: u8,
+    selectors: Vec<String>,
+    policy: u8,
 }
 
-/// Maps one byte to a bounded canonical selector alias.
-///
-/// # Parameters
-///
-/// * `value` - Byte used to choose one fixture alias.
-///
-/// # Returns
-///
-/// A valid canonical alias shared by controlled collisions.
-fn alias(value: u8) -> String {
-    format!("alias-{}", value % 8)
-}
-
-/// Builds a valid self-described provider from one model registration.
-///
-/// # Parameters
-///
-/// * `provider_id` - Canonical identifier for the provider.
-/// * `alias` - Optional selector alias.
-/// * `priority` - Automatic-selection priority.
-///
-/// # Returns
-///
-/// A provider fixture with the requested descriptor.
-fn provider(provider_id: &str, alias: Option<&str>, priority: i32) -> FuzzProvider {
-    let provider_id = ProviderId::new(provider_id).expect("bounded fuzz provider IDs must be canonical");
-    let descriptor = ProviderDescriptor::new(provider_id).with_priority(priority);
-    let descriptor = match alias {
-        Some(alias) => descriptor
-            .with_aliases([alias])
-            .expect("bounded fuzz aliases must be valid and distinct"),
-        None => descriptor,
-    };
-    FuzzProvider { descriptor }
-}
-
-/// Checks registration metadata against the reference model.
-///
-/// # Parameters
-///
-/// * `registry` - Concrete Registry under fuzzing.
-/// * `model` - Reference model built from accepted registrations.
-fn assert_registration_model(registry: &ProviderRegistry<FuzzSpec>, model: &RegistryModel) {
-    let registered_ids = registry.provider_ids();
-    let actual_ids = registered_ids.iter().map(ProviderId::as_str).collect::<Vec<_>>();
-    assert_eq!(model.registration_ids, actual_ids);
-    assert_eq!(model.registration_ids.len(), registry.len());
-}
-
-/// Checks named, chain, and automatic selection against the reference model.
-///
-/// # Parameters
-///
-/// * `registry` - Concrete Registry under fuzzing.
-/// * `model` - Reference model built from accepted registrations.
-/// * `selectors` - Valid selectors chosen from the fuzzer input.
-fn assert_resolution_model(registry: &ProviderRegistry<FuzzSpec>, model: &RegistryModel, selectors: &[String]) {
-    let lenient_selection = ProviderSelection::chain_allowing_missing(selectors.iter().map(String::as_str))
-        .expect("the fuzzer always creates a nonempty selector chain");
-    let expected_chain = model.resolve_lenient_chain(selectors);
-    match registry.resolve_selected(&lenient_selection) {
-        Ok(resolver) => {
-            let actual = resolver
-                .create()
-                .expect("the fuzz provider fixture must create successfully");
-            assert_eq!(expected_chain.first(), Some(&actual));
-        }
-        Err(_) => assert!(expected_chain.is_empty()),
+impl Request {
+    /// Constructs the corresponding public request without using it as the
+    /// oracle.
+    fn selection(&self) -> ProviderSelection {
+        let selection = match self.mode {
+            0 => ProviderSelection::auto(),
+            1 => ProviderSelection::named(&self.selectors[0]).expect("valid selector"),
+            2 => ProviderSelection::chain(&self.selectors).expect("valid nonempty selectors"),
+            3 => ProviderSelection::chain_allowing_missing(&self.selectors).expect("valid nonempty selectors"),
+            _ => unreachable!("bounded mode"),
+        };
+        selection.with_fallback_policy(match self.policy {
+            0 => FallbackPolicy::Never,
+            1 => FallbackPolicy::OnAbsence,
+            2 => FallbackPolicy::OnAnyError,
+            _ => unreachable!("bounded policy"),
+        })
     }
+}
 
-    let strict_selection = ProviderSelection::chain(selectors.iter().map(String::as_str))
-        .expect("the fuzzer always creates a nonempty selector chain");
-    let has_missing = selectors
+/// Finds ownership by scanning canonical IDs and aliases in registration order.
+fn owner<'a>(entries: &'a [ModelEntry], selector: &str) -> Option<&'a ModelEntry> {
+    entries
         .iter()
-        .any(|selector| !model.selector_ids.contains_key(selector));
-    match registry.resolve_selected(&strict_selection) {
-        Ok(resolver) => {
-            assert!(!has_missing);
-            let actual = resolver
-                .create()
-                .expect("the fuzz provider fixture must create successfully");
-            assert_eq!(expected_chain.first(), Some(&actual));
-        }
-        Err(_) => assert!(has_missing || expected_chain.is_empty()),
-    }
+        .find(|entry| entry.id == selector || entry.alias.as_deref() == Some(selector))
+}
 
-    let auto_selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
-    match registry.resolve_selected(&auto_selection) {
-        Ok(resolver) => {
-            let actual = resolver
-                .create()
-                .expect("the fuzz provider fixture must create successfully");
-            assert_eq!(model.first_auto_id(), Some(actual.as_str()));
+/// Computes the candidate list or resolution failure independently of
+/// production helpers.
+fn candidates(entries: &[ModelEntry], request: &Request) -> Result<Vec<ModelEntry>, (u8, Vec<String>)> {
+    if request.mode == 0 {
+        if entries.is_empty() {
+            return Err((0, vec![]));
         }
-        Err(_) => assert!(model.registration_ids.is_empty()),
+        let mut sorted = entries.to_vec();
+        sorted.sort_by(|left, right| right.priority.cmp(&left.priority).then_with(|| left.id.cmp(&right.id)));
+        return Ok(sorted);
     }
+    let selectors = if request.mode == 1 {
+        &request.selectors[..1]
+    } else {
+        &request.selectors
+    };
+    let mut missing = Vec::new();
+    let mut selected: Vec<ModelEntry> = Vec::new();
+    for selector in selectors {
+        if let Some(entry) = owner(entries, selector) {
+            if !selected.iter().any(|previous| previous.id == entry.id) {
+                selected.push(entry.clone());
+            }
+        } else {
+            missing.push(selector.clone());
+        }
+    }
+    if request.mode != 3 && !missing.is_empty() {
+        return Err((1, missing));
+    }
+    if selected.is_empty() {
+        return Err((2, selectors.to_vec()));
+    }
+    Ok(selected)
+}
+
+/// Validates full invocation and diagnostic history, including the final
+/// failure rule.
+fn assert_creation(
+    resolver: &ResolvingServiceProvider<FuzzSpec>,
+    entries: &[ModelEntry],
+    request: &Request,
+    calls: &Mutex<Vec<String>>,
+) {
+    calls.lock().expect("event lock").clear();
+    let result = resolver.create();
+    let mut expected_calls = Vec::new();
+    let mut attempts = Vec::new();
+    let mut success = None;
+    let mut termination = ProviderCreationTermination::Exhausted;
+    for (index, entry) in entries.iter().enumerate() {
+        expected_calls.push(entry.id.clone());
+        if entry.outcome == 0 {
+            success = Some(entry.id.clone());
+            break;
+        }
+        let kind = match entry.outcome {
+            1 => ProviderFailureKind::Unsupported,
+            2 => ProviderFailureKind::Unavailable,
+            3 => ProviderFailureKind::InvalidConfiguration,
+            4 => ProviderFailureKind::InitializationFailed,
+            _ => unreachable!("bounded outcome"),
+        };
+        attempts.push((entry.id.clone(), kind));
+        if index + 1 == entries.len() {
+            break;
+        }
+        // Do not call FallbackPolicy::should_continue_after in this oracle.
+        if request.policy == 0 || (request.policy == 1 && entry.outcome > 2) {
+            termination = ProviderCreationTermination::StoppedByPolicy;
+            break;
+        }
+    }
+    assert_eq!(expected_calls, *calls.lock().expect("event lock"));
+    if let Some(expected) = success {
+        assert_eq!(expected, result.expect("model predicts success"));
+    } else {
+        let error = result.expect_err("model predicts failure");
+        assert_eq!(termination, error.termination());
+        assert_eq!(
+            attempts,
+            error
+                .attempts()
+                .iter()
+                .map(|attempt| (attempt.provider_id().as_str().to_owned(), attempt.failure().kind()))
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+/// Compares structured resolution errors rather than merely checking is_err.
+fn assert_resolution_error(error: ProviderResolutionError, expected: (u8, Vec<String>)) {
+    let (kind, selectors) = expected;
+    match kind {
+        0 => assert!(matches!(error, ProviderResolutionError::EmptyRegistry)),
+        1 => assert!(matches!(error, ProviderResolutionError::UnknownProviders { .. })),
+        2 => assert!(matches!(error, ProviderResolutionError::NoCandidates { .. })),
+        _ => unreachable!("bounded resolution error"),
+    }
+    assert_eq!(
+        selectors,
+        error
+            .selectors()
+            .unwrap_or_default()
+            .iter()
+            .map(|selector| selector.as_str().to_owned())
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Creates deliberate canonical/alias collisions and unknown selectors.
+fn selector(value: u8) -> String {
+    format!("{}-{}", if value & 128 == 0 { "provider" } else { "alias" }, value % 16)
 }
 
 fuzz_target!(|data: &[u8]| {
     let registry = ProviderRegistry::<FuzzSpec>::default();
-    let mut model = RegistryModel::default();
-
-    for fields in data.chunks_exact(3).take(MAX_REGISTRATIONS) {
-        let provider_id = provider_id(fields[0]);
-        let alias = (fields[1] & 1 == 0).then(|| alias(fields[1]));
-        let priority = i32::from(fields[2] as i8);
-        let expected = model.can_register(&provider_id, alias.as_deref());
-        let actual = registry.register(provider(&provider_id, alias.as_deref(), priority));
-        assert_eq!(expected, actual.is_ok());
-        if expected {
-            model.register(provider_id, alias, priority);
-        }
-        assert_registration_model(&registry, &model);
-    }
-
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let mut entries = Vec::new();
+    let mut historical = Vec::new();
     let selectors = data
         .iter()
         .rev()
         .take(MAX_SELECTORS)
-        .map(|value| {
-            if value % 3 == 0 {
-                format!("missing-{}", value % 8)
-            } else if value & 1 == 0 {
-                alias(*value)
-            } else {
-                provider_id(*value)
-            }
-        })
+        .map(|value| selector(*value))
         .collect::<Vec<_>>();
     let selectors = if selectors.is_empty() {
-        vec!["missing-0".to_owned()]
+        vec!["unknown".to_owned()]
     } else {
         selectors
     };
-    assert_resolution_model(&registry, &model, &selectors);
+    for (operation, fields) in data.chunks_exact(5).take(MAX_OPERATIONS).enumerate() {
+        if operation < MAX_REGISTRATIONS {
+            let id = selector(fields[0] & 127);
+            let alias = (fields[1] != 255)
+                .then(|| selector(fields[1]))
+                .filter(|alias| *alias != id);
+            let priority = match fields[2] {
+                0 => i32::MIN,
+                255 => i32::MAX,
+                value => i32::from(value as i8),
+            };
+            let entry = ModelEntry {
+                id,
+                alias,
+                priority,
+                outcome: fields[3] % 5,
+            };
+            let expected = owner(&entries, &entry.id).is_none()
+                && entry
+                    .alias
+                    .as_ref()
+                    .is_none_or(|alias| owner(&entries, alias).is_none());
+            let result = registry.register(FuzzProvider {
+                entry: entry.clone(),
+                calls: Arc::clone(&calls),
+            });
+            assert_eq!(expected, result.is_ok());
+            if expected {
+                entries.push(entry);
+            }
+            assert_eq!(
+                entries.iter().map(|entry| entry.id.as_str()).collect::<Vec<_>>(),
+                registry
+                    .provider_ids()
+                    .iter()
+                    .map(ProviderId::as_str)
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(entries.len(), registry.len());
+        }
+        // Every mode is exercised at each operation, including strict multi-missing
+        // chains.
+        for mode in 0..4 {
+            let request = Request {
+                mode,
+                selectors: selectors.clone(),
+                policy: fields[4] % 3,
+            };
+            let selection = request.selection();
+            registry.set_default_selection(selection.clone());
+            let (captured_selection, actual) = registry.resolve_default_snapshot();
+            assert_eq!(selection, captured_selection);
+            match (actual, candidates(&entries, &request)) {
+                (Ok(resolver), Ok(expected)) => {
+                    assert_creation(&resolver, &expected, &request, &calls);
+                    if mode == fields[4] % 4 {
+                        historical.push((resolver, expected, request));
+                    }
+                }
+                (Err(error), Err(expected)) => assert_resolution_error(error, expected),
+                _ => panic!("model and registry disagree about resolution"),
+            }
+        }
+    }
+    if data.len() < 5 {
+        assert!(matches!(
+            registry.resolve(),
+            Err(ProviderResolutionError::EmptyRegistry)
+        ));
+    }
+    // Replaying captured candidates after all later registrations/default changes
+    // must be stable.
+    for (resolver, expected, request) in historical {
+        assert_creation(&resolver, &expected, &request, &calls);
+    }
 });

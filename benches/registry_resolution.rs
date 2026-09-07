@@ -144,8 +144,8 @@ fn build_registry(provider_count: usize, alias_count: usize) -> ProviderRegistry
 /// Benchmarks registration while varying the number of providers.
 ///
 /// Provider descriptors are prepared outside timed iterations so the measured
-/// work isolates Registry construction, selector indexing, and priority
-/// ordering.
+/// work includes Registry construction, fixture and metadata descriptor clones,
+/// selector indexing, priority ordering, and dropping the populated Registry.
 ///
 /// # Parameters
 ///
@@ -315,9 +315,109 @@ fn benchmark_concurrent_resolution(criterion: &mut Criterion) {
     group.finish();
 }
 
+/// Measures snapshot cloning separately from selection and creation.
+fn benchmark_resolver_clone(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("resolver_clone");
+    for count in AUTO_PROVIDER_COUNTS {
+        let registry = build_registry(count, ALIASES_PER_PROVIDER);
+        let resolver = registry.resolve().expect("populated registry resolves");
+        group.bench_with_input(BenchmarkId::from_parameter(count), &resolver, |bencher, resolver| {
+            bencher.iter(|| black_box(black_box(resolver).clone()));
+        });
+    }
+    group.finish();
+}
+
+/// Measures descriptor alias parsing including early and late rejection.
+fn benchmark_alias_parsing(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("alias_parsing");
+    for count in [0, 2, 16] {
+        for invalid in ["none", "first", "last"] {
+            if count == 0 && invalid != "none" {
+                continue;
+            }
+            let mut aliases = (0..count).map(|index| format!("alias-{index}")).collect::<Vec<_>>();
+            if invalid != "none" {
+                aliases[if invalid == "first" { 0 } else { count - 1 }] = "invalid alias".to_owned();
+            }
+            group.bench_function(BenchmarkId::new(invalid, count), |bencher| {
+                bencher.iter(|| {
+                    black_box(
+                        ProviderDescriptor::new(ProviderId::new("benchmark").expect("valid ID"))
+                            .with_aliases(black_box(&aliases)),
+                    )
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
+/// Measures the default operation, including the atomic selection snapshot.
+fn benchmark_default_resolution(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("default_resolution");
+    for count in AUTO_PROVIDER_COUNTS {
+        let registry = build_registry(count, ALIASES_PER_PROVIDER);
+        group.bench_function(BenchmarkId::from_parameter(count), |bencher| {
+            bencher.iter(|| black_box(registry.resolve()));
+        });
+    }
+    group.finish();
+}
+
+/// Measures bounded registration/read contention, excluding thread setup and
+/// joining.
+fn benchmark_concurrent_registration(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("concurrent_registration");
+    group.bench_function("32_writes_128_reads", |bencher| {
+        bencher.iter_custom(|iterations| {
+            let mut elapsed = std::time::Duration::ZERO;
+            for _ in 0..iterations {
+                let registry = build_registry(1, 0);
+                let ready = Barrier::new(3);
+                let start = Barrier::new(3);
+                let completed = Barrier::new(3);
+                elapsed += thread::scope(|scope| {
+                    scope.spawn(|| {
+                        ready.wait();
+                        start.wait();
+                        for index in 1..=32 {
+                            registry
+                                .register(BenchmarkProvider {
+                                    descriptor: provider_descriptor(index, 0),
+                                })
+                                .expect("bounded unique registration succeeds");
+                        }
+                        completed.wait();
+                    });
+                    scope.spawn(|| {
+                        ready.wait();
+                        start.wait();
+                        for _ in 0..128 {
+                            let _ = black_box(registry.resolve_default_snapshot());
+                        }
+                        completed.wait();
+                    });
+                    ready.wait();
+                    let began = Instant::now();
+                    start.wait();
+                    completed.wait();
+                    began.elapsed()
+                });
+            }
+            elapsed
+        });
+    });
+    group.finish();
+}
+
 criterion_group!(
     registry_resolution_benches,
     benchmark_registration,
+    benchmark_default_resolution,
+    benchmark_concurrent_registration,
+    benchmark_resolver_clone,
+    benchmark_alias_parsing,
     benchmark_named_resolution,
     benchmark_chain_resolution,
     benchmark_auto_resolution,
