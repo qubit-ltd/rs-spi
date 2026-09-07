@@ -28,6 +28,36 @@ use crate::registry::internal::ProviderCatalog;
 /// # Type Parameters
 ///
 /// * `S` - Synchronous service family whose providers are registered.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Ok(config.clone())
+///     }
+/// }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let resolver = registry.resolve()?;
+/// assert_eq!("hello", resolver.create_configured(&"hello".to_owned())?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct ProviderRegistry<S>
 where
     S: SyncServiceSpec,
@@ -60,14 +90,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without mutation when the provider's
-    /// canonical ID or any alias is already registered.
+    /// Returns [`RegistrationError`] without inserting this provider when its
+    /// canonical ID or any alias is already registered. Reentrant changes
+    /// made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
     /// Propagates a panic raised while obtaining the provider descriptor. The
-    /// Registry remains unchanged because descriptor generation precedes all
-    /// mutation.
+    /// attempted registration is not applied. Changes made by reentrant
+    /// metadata callbacks are not rolled back.
     #[inline]
     pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
     where
@@ -93,14 +124,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without mutation when the provider's
-    /// canonical ID or any alias is already registered.
+    /// Returns [`RegistrationError`] without inserting this provider when its
+    /// canonical ID or any alias is already registered. Reentrant changes
+    /// made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
     /// Propagates a panic raised while obtaining the provider descriptor. The
-    /// Registry remains unchanged because descriptor generation precedes all
-    /// mutation.
+    /// attempted registration is not applied. Changes made by reentrant
+    /// metadata callbacks are not rolled back.
     #[inline(always)]
     pub fn register_shared(&self, provider: Arc<dyn ProviderDefinition<S>>) -> Result<(), RegistrationError> {
         self.providers.register_shared(provider)
@@ -180,7 +212,16 @@ where
 
     /// Resolves the current default selection.
     ///
-    /// This compatibility alias retains the original Registry operation name.
+    /// Captures the current default and returns its candidate resolver.
+    ///
+    /// # Returns
+    ///
+    /// An owned candidate snapshot governed by the captured default policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderResolutionError`] if the captured default selects no
+    /// candidates or requires an unknown selector.
     pub fn resolve(&self) -> Result<ResolvingServiceProvider<S>, ProviderResolutionError> {
         let (_, result) = self.resolve_default_snapshot();
         result

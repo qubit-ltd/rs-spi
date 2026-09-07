@@ -76,7 +76,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// A typed provider failure with its configured domain source.
-    #[must_use]
     pub(crate) fn with_source(
         kind: ProviderFailureKind,
         reason: impl Into<Box<str>>,
@@ -94,7 +93,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// A failure classified as unsupported.
-    #[must_use]
     pub(crate) fn unsupported(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::unsupported(TestError {
             reason: reason.into(),
@@ -111,7 +109,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// A failure classified as unavailable.
-    #[must_use]
     pub(crate) fn unavailable(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::unavailable(TestError {
             reason: reason.into(),
@@ -128,7 +125,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// A failure classified as invalid configuration.
-    #[must_use]
     pub(crate) fn invalid_configuration(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::invalid_configuration(TestError {
             reason: reason.into(),
@@ -145,7 +141,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// A failure classified as initialization failed.
-    #[must_use]
     pub(crate) fn initialization_failed(reason: impl Into<Box<str>>) -> ProviderFailure<TestError> {
         ProviderFailure::initialization_failed(TestError {
             reason: reason.into(),
@@ -163,7 +158,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// An unavailable failure retaining the configured source.
-    #[must_use]
     pub(crate) fn unavailable_with_source(
         reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,
@@ -181,7 +175,6 @@ impl TestProviderFailure {
     /// # Returns
     ///
     /// An initialization failure retaining the configured source.
-    #[must_use]
     pub(crate) fn initialization_failed_with_source(
         reason: impl Into<Box<str>>,
         source: impl Error + Send + Sync + 'static,

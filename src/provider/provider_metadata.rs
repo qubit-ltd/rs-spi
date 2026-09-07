@@ -14,6 +14,19 @@ use crate::ProviderDescriptor;
 /// Registry registration snapshots the returned descriptor before acquiring
 /// its write lock. Later provider state changes therefore cannot alter the
 /// registered lookup metadata.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderDescriptor, ProviderMetadata, provider_descriptor};
+/// struct Local;
+/// impl ProviderMetadata for Local {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         provider_descriptor!("local", aliases: ["disk"], priority: 10)
+///     }
+/// }
+/// assert_eq!("disk", Local.descriptor().aliases()[0].as_str());
+/// ```
 pub trait ProviderMetadata: Send + Sync + 'static {
     /// Returns this provider's registration metadata.
     ///

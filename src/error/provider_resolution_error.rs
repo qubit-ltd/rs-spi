@@ -13,8 +13,25 @@ use std::fmt;
 use crate::ProviderSelector;
 
 /// Error returned when a Registry cannot resolve provider candidates.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// let error = registry.resolve().expect_err("empty registry cannot resolve auto");
+/// assert!(error.is_empty_registry());
+/// assert!(error.selectors().is_none());
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderResolutionError {
     /// One or more required selectors matched no registered provider.
     #[non_exhaustive]
@@ -95,7 +112,6 @@ impl ProviderResolutionError {
     ///
     /// Panics when `selectors` is empty.
     #[inline]
-    #[must_use]
     pub(crate) fn unknown_providers(selectors: Vec<ProviderSelector>) -> Self {
         assert!(
             !selectors.is_empty(),
@@ -120,7 +136,6 @@ impl ProviderResolutionError {
     ///
     /// Panics when `selectors` is empty.
     #[inline]
-    #[must_use]
     pub(crate) fn no_candidates(selectors: Vec<ProviderSelector>) -> Self {
         assert!(
             !selectors.is_empty(),
@@ -137,7 +152,6 @@ impl ProviderResolutionError {
     ///
     /// The empty-Registry resolution error.
     #[inline]
-    #[must_use]
     pub(crate) const fn empty_registry() -> Self {
         Self::EmptyRegistry
     }

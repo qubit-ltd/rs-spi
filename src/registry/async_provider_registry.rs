@@ -29,6 +29,34 @@ use crate::registry::internal::ProviderCatalog;
 /// # Type Parameters
 ///
 /// * `S` - Asynchronous service family whose providers are registered.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, AsyncServiceSpec, AsyncServiceProvider, ProviderFuture};
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Spec;
+/// impl ServiceSpec for Spec { type Config = String; type Error = std::io::Error; }
+/// impl AsyncServiceSpec for Spec { type Output = String; }
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl AsyncServiceProvider<Spec> for Echo {
+///     fn create_configured<'a>(&'a self, config: &'a String)
+///         -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
+///         Box::pin(async move { Ok(config.clone()) })
+///     }
+/// }
+/// let registry = qubit_spi::AsyncProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let resolver = registry.resolve()?;
+/// assert_eq!("hello", futures::executor::block_on(resolver.create_configured(&"hello".to_owned()))?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct AsyncProviderRegistry<S>
 where
     S: AsyncServiceSpec,
@@ -63,14 +91,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without mutation when the provider's
-    /// canonical ID or any alias is already registered.
+    /// Returns [`RegistrationError`] without inserting this provider when its
+    /// canonical ID or any alias is already registered. Reentrant changes
+    /// made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
     /// Propagates a panic raised while obtaining the provider descriptor. The
-    /// Registry remains unchanged because descriptor generation precedes all
-    /// mutation.
+    /// attempted registration is not applied. Changes made by reentrant
+    /// metadata callbacks are not rolled back.
     #[inline]
     pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
     where
@@ -96,14 +125,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without mutation when the provider's
-    /// canonical ID or any alias is already registered.
+    /// Returns [`RegistrationError`] without inserting this provider when its
+    /// canonical ID or any alias is already registered. Reentrant changes
+    /// made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
     /// Propagates a panic raised while obtaining the provider descriptor. The
-    /// Registry remains unchanged because descriptor generation precedes all
-    /// mutation.
+    /// attempted registration is not applied. Changes made by reentrant
+    /// metadata callbacks are not rolled back.
     #[inline(always)]
     pub fn register_shared(&self, provider: Arc<dyn AsyncProviderDefinition<S>>) -> Result<(), RegistrationError> {
         self.providers.register_shared(provider)
@@ -185,7 +215,16 @@ where
 
     /// Resolves the current default selection without asynchronous work.
     ///
-    /// This compatibility alias retains the original Registry operation name.
+    /// Captures the current default and returns its candidate resolver.
+    ///
+    /// # Returns
+    ///
+    /// An owned candidate snapshot governed by the captured default policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderResolutionError`] if the captured default selects no
+    /// candidates or requires an unknown selector.
     pub fn resolve(&self) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
         let (_, result) = self.resolve_default_snapshot();
         result

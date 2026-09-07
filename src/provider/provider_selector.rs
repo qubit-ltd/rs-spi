@@ -17,6 +17,16 @@ use crate::error::ProviderSelectorError;
 ///
 /// This type is used at configuration and request boundaries, where inputs are
 /// trimmed and ASCII-lowercased before registry lookup.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::ProviderSelector;
+/// let selector = ProviderSelector::parse(" FILE-Command ")?;
+/// assert_eq!("file-command", selector.as_str());
+/// assert!(ProviderSelector::parse("file/path").is_err());
+/// # Ok::<(), qubit_spi::error::ProviderSelectorError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ProviderSelector(
     /// Normalized selector text accepted by registry lookup.

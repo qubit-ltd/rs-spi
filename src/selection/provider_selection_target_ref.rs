@@ -30,6 +30,18 @@ use crate::ProviderSelector;
 ///     }
 /// }
 /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderSelection, ProviderSelectionTargetRef};
+/// let selection = ProviderSelection::named(" LOCAL ")?;
+/// match selection.target() {
+///     ProviderSelectionTargetRef::Named(selector) => assert_eq!("local", selector.as_str()),
+///     _ => unreachable!("constructed a named selection"),
+/// }
+/// # Ok::<(), qubit_spi::error::ProviderSelectionBuildError>(())
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderSelectionTargetRef<'a> {

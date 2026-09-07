@@ -12,12 +12,24 @@ use std::collections::HashSet;
 use crate::ProviderId;
 use crate::ProviderSelector;
 use crate::error::ProviderDescriptorError;
+use crate::error::ProviderSelectorError;
 
 /// Immutable metadata that identifies and ranks a registered provider.
 ///
 /// Construct a descriptor while assembling a [`crate::ProviderRegistry`]: its
 /// ID and aliases control explicit lookup, while its priority controls
 /// automatic selection order.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderDescriptor, ProviderId};
+/// let descriptor = ProviderDescriptor::new(ProviderId::new("remote")?)
+///     .with_aliases([" NETWORK "])?.with_priority(20);
+/// assert_eq!("network", descriptor.aliases()[0].as_str());
+/// assert_eq!(20, descriptor.priority());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderDescriptor {
     /// Canonical identifier unique within one Registry and service family.
@@ -70,6 +82,17 @@ impl ProviderDescriptor {
         &self.aliases
     }
 
+    /// Returns the priority used to order automatic selection candidates.
+    ///
+    /// # Returns
+    ///
+    /// The descending automatic-selection sort key.
+    #[inline(always)]
+    #[must_use]
+    pub const fn priority(&self) -> i32 {
+        self.priority
+    }
+
     /// Replaces the descriptor's aliases with normalized lookup selectors.
     ///
     /// # Type Parameters
@@ -88,29 +111,16 @@ impl ProviderDescriptor {
     /// # Errors
     ///
     /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates
-    /// another alias, or duplicates the canonical provider ID.
+    /// another alias, or duplicates the canonical provider ID. Validation stops
+    /// consuming the input iterator at the first error.
     pub fn with_aliases<I, T>(mut self, aliases: I) -> Result<Self, ProviderDescriptorError>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
-        let mut inputs = Vec::new();
-        for alias in aliases {
-            inputs.push(Box::<str>::from(alias.as_ref()));
-        }
+        let inputs = aliases.into_iter().map(|alias| ProviderSelector::parse(alias.as_ref()));
         self.aliases = normalize_aliases(&self.id, inputs)?;
         Ok(self)
-    }
-
-    /// Returns the priority used to order automatic selection candidates.
-    ///
-    /// # Returns
-    ///
-    /// The descending automatic-selection sort key.
-    #[inline(always)]
-    #[must_use]
-    pub const fn priority(&self) -> i32 {
-        self.priority
     }
 
     /// Sets the priority used by automatic selection.
@@ -181,6 +191,12 @@ impl ProviderDescriptor {
     /// # Returns
     ///
     /// The descriptor represented by the validated static metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called directly with an invalid ID, invalid alias, or
+    /// duplicate selector. The public macro validates these conditions at
+    /// compile time.
     #[doc(hidden)]
     #[must_use]
     pub fn __from_static_literals(id: &str, aliases: &[&str], priority: i32) -> Self {
@@ -217,15 +233,20 @@ const fn static_tokens_equal(left: &str, right: &str) -> bool {
     true
 }
 
-/// Normalizes and validates owned alias inputs for one canonical provider ID.
+/// Validates lazily parsed alias inputs for one canonical provider ID.
 ///
-/// Keeping validation outside the generic public method avoids duplicating the
-/// complete validation state machine for every caller iterator type.
+/// Parsing and duplicate checks proceed in encounter order without collecting
+/// copies of the raw strings. The iterator is not consumed beyond the first
+/// error.
+///
+/// # Type Parameters
+///
+/// * `I` - Iterator yielding one parsed selector or input error at a time.
 ///
 /// # Parameters
 ///
 /// * `id` - Canonical provider ID that aliases must not duplicate.
-/// * `inputs` - Owned raw aliases in caller-supplied order.
+/// * `inputs` - Lazily parsed aliases in caller-supplied order.
 ///
 /// # Returns
 ///
@@ -235,15 +256,16 @@ const fn static_tokens_equal(left: &str, right: &str) -> bool {
 ///
 /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates the
 /// canonical provider ID, or duplicates an earlier normalized alias.
-fn normalize_aliases(
-    id: &ProviderId,
-    inputs: Vec<Box<str>>,
-) -> Result<Box<[ProviderSelector]>, ProviderDescriptorError> {
+fn normalize_aliases<I>(id: &ProviderId, inputs: I) -> Result<Box<[ProviderSelector]>, ProviderDescriptorError>
+where
+    I: Iterator<Item = Result<ProviderSelector, ProviderSelectorError>>,
+{
     let canonical_selector = ProviderSelector::from(id);
-    let mut seen = HashSet::with_capacity(inputs.len());
-    let mut normalized = Vec::with_capacity(inputs.len());
-    for (alias_index, input) in inputs.into_iter().enumerate() {
-        let alias = match ProviderSelector::parse(&input) {
+    let (minimum, _) = inputs.size_hint();
+    let mut seen = HashSet::with_capacity(minimum);
+    let mut normalized = Vec::with_capacity(minimum);
+    for (alias_index, input) in inputs.enumerate() {
+        let alias = match input {
             Ok(alias) => alias,
             Err(source) => {
                 return Err(ProviderDescriptorError::invalid_alias(alias_index, source));

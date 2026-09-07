@@ -641,3 +641,30 @@ impl ServiceProvider<StringSpec> for PanickingProvider {
         panic!("test provider panic");
     }
 }
+
+/// Every create invokes the factory, but provider-owned resources may be
+/// shared.
+#[test]
+fn test_resolver_clone_preserves_provider_identity_without_caching_outputs() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use crate::common::registry_contract_provider::SharedOutputProvider;
+    use crate::common::registry_contract_provider::SharedOutputSpec;
+    let registry = ProviderRegistry::<SharedOutputSpec>::default();
+    let output = Arc::new("shared allocation".to_owned());
+    let calls = Arc::new(AtomicUsize::new(0));
+    registry
+        .register(SharedOutputProvider {
+            output: Arc::clone(&output),
+            calls: Arc::clone(&calls),
+        })
+        .expect("shared provider registers");
+    let resolver = registry.resolve().expect("provider resolves");
+    let cloned = resolver.clone();
+    let first = resolver.create().expect("infallible provider succeeds");
+    let second = cloned.create().expect("infallible provider succeeds");
+    assert_eq!(2, calls.load(Ordering::SeqCst));
+    assert!(Arc::ptr_eq(&output, &first));
+    assert!(Arc::ptr_eq(&first, &second));
+}

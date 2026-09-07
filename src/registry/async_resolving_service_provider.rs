@@ -18,9 +18,45 @@ use crate::registry::internal::RegistryEntry;
 
 /// Resolver that awaits a point-in-time snapshot of asynchronous candidates.
 ///
+/// Each creation invokes a factory, but the factory may reuse an existing
+/// resource or return a shared handle. No fresh underlying allocation is
+/// promised.
+///
+/// Dropping a resolver creation future before polling invokes no provider.
+/// Cancellation while awaiting a candidate drops its future without fallback;
+/// it does not undo external effects or stop independently spawned tasks.
+///
 /// # Type Parameters
 ///
 /// * `S` - Asynchronous service family created by the candidates.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, AsyncServiceSpec, AsyncServiceProvider, ProviderFuture};
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Spec;
+/// impl ServiceSpec for Spec { type Config = String; type Error = std::io::Error; }
+/// impl AsyncServiceSpec for Spec { type Output = String; }
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl AsyncServiceProvider<Spec> for Echo {
+///     fn create_configured<'a>(&'a self, config: &'a String)
+///         -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
+///         Box::pin(async move { Ok(config.clone()) })
+///     }
+/// }
+/// let registry = qubit_spi::AsyncProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let resolver = registry.resolve()?;
+/// assert_eq!("hello", futures::executor::block_on(resolver.create_configured(&"hello".to_owned()))?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct AsyncResolvingServiceProvider<S>
 where
     S: AsyncServiceSpec,
@@ -144,7 +180,7 @@ where
     /// # Returns
     ///
     /// An independent resolver with the same candidates and policy.
-    #[inline(always)]
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             candidates: self.candidates.to_vec().into_boxed_slice(),

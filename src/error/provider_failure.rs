@@ -16,7 +16,21 @@ use super::ProviderFailureKind;
 ///
 /// E is the domain error declared by the service specification. The failure
 /// kind controls fallback independently from the retained domain diagnostic.
+///
+/// # Type Parameters
+///
+/// * `E` - Domain error declared by the service specification.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::error::{ProviderFailure, ProviderFailureKind};
+/// let failure = ProviderFailure::unavailable(std::io::Error::other("backend offline"));
+/// assert_eq!(ProviderFailureKind::Unavailable, failure.kind());
+/// assert_eq!("backend offline", failure.error().to_string());
+/// ```
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct ProviderFailure<E> {
     /// Classification consumed by resolver fallback policy.
     kind: ProviderFailureKind,
@@ -35,7 +49,6 @@ impl<E> ProviderFailure<E> {
     ///
     /// A failure classified as unsupported.
     #[inline(always)]
-    #[must_use]
     pub const fn unsupported(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::Unsupported,
@@ -53,7 +66,6 @@ impl<E> ProviderFailure<E> {
     ///
     /// A failure classified as unavailable.
     #[inline(always)]
-    #[must_use]
     pub const fn unavailable(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::Unavailable,
@@ -71,7 +83,6 @@ impl<E> ProviderFailure<E> {
     ///
     /// A failure classified as invalid configuration.
     #[inline(always)]
-    #[must_use]
     pub const fn invalid_configuration(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::InvalidConfiguration,
@@ -89,7 +100,6 @@ impl<E> ProviderFailure<E> {
     ///
     /// A failure classified as initialization failed.
     #[inline(always)]
-    #[must_use]
     pub const fn initialization_failed(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::InitializationFailed,

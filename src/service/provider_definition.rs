@@ -19,6 +19,35 @@ use crate::SyncServiceSpec;
 /// # Type Parameters
 ///
 /// * `S` - Synchronous service family implemented by the provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Ok(config.clone())
+///     }
+/// }
+/// let provider: std::sync::Arc<dyn qubit_spi::ProviderDefinition<Spec>> = std::sync::Arc::new(Echo);
+/// assert_eq!("echo", provider.descriptor().id().as_str());
+/// assert_eq!("hello", provider.create_configured(&"hello".to_owned())?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub trait ProviderDefinition<S>: ProviderMetadata + ServiceProvider<S>
 where
     S: SyncServiceSpec,

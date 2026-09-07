@@ -22,9 +22,41 @@ use crate::error::ProviderFailure;
 /// errors from later operations on that output do not trigger another
 /// provider attempt.
 ///
+/// Each creation invokes a factory, but the factory may reuse an existing
+/// resource or return a shared handle. No fresh underlying allocation is
+/// promised.
+///
 /// # Type Parameters
 ///
 /// * `S` - Synchronous service family created by this provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Ok(config.clone())
+///     }
+/// }
+/// assert_eq!("explicit", Echo.create_configured(&"explicit".to_owned())?);
+/// assert_eq!("", Echo.create()?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub trait ServiceProvider<S>: Send + Sync + 'static
 where
     S: SyncServiceSpec,

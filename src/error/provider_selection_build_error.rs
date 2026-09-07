@@ -13,8 +13,18 @@ use std::fmt;
 use super::ProviderSelectorError;
 
 /// Error returned when a provider selection cannot be constructed.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::ProviderSelection;
+/// let error = ProviderSelection::chain(["file", "invalid/path"]).expect_err("second selector is invalid");
+/// assert_eq!(Some(1), error.selector_index());
+/// assert_eq!("invalid/path", error.selector_error().expect("parse error").input());
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderSelectionBuildError {
     /// One selector input cannot be parsed.
     #[non_exhaustive]
@@ -83,7 +93,6 @@ impl ProviderSelectionBuildError {
     ///
     /// An invalid-selector selection error retaining its source.
     #[inline]
-    #[must_use]
     pub(crate) fn invalid_selector(selector_index: Option<usize>, source: ProviderSelectorError) -> Self {
         Self::InvalidSelector { selector_index, source }
     }
@@ -94,7 +103,6 @@ impl ProviderSelectionBuildError {
     ///
     /// The empty-chain selection error.
     #[inline]
-    #[must_use]
     pub(crate) const fn empty_chain() -> Self {
         Self::EmptyChain
     }

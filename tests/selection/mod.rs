@@ -8,7 +8,6 @@
 //! Integration tests for provider selection inputs and policies.
 
 mod fallback_policy_tests;
-mod internal;
 mod missing_provider_policy_tests;
 mod provider_selection_target_ref_tests;
 mod provider_selection_tests;

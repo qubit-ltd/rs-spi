@@ -13,6 +13,15 @@
 /// factory returns an error. Named selection always uses exactly one provider
 /// and never falls back. It does not handle errors produced by a service after
 /// that service has been created successfully.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{FallbackPolicy, error::ProviderFailureKind};
+/// assert!(FallbackPolicy::OnAbsence.should_continue_after(ProviderFailureKind::Unavailable));
+/// assert!(!FallbackPolicy::OnAbsence.should_continue_after(ProviderFailureKind::InitializationFailed));
+/// assert!(FallbackPolicy::OnAnyError.should_continue_after(ProviderFailureKind::InitializationFailed));
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum FallbackPolicy {

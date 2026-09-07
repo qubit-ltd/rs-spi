@@ -10,8 +10,18 @@
 use thiserror::Error;
 
 /// Error returned when provider selector input cannot be parsed.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderSelector, error::ProviderSelectorError};
+/// let error = ProviderSelector::parse(" /FILE ").expect_err("slash is not valid");
+/// assert!(matches!(error, ProviderSelectorError::Invalid { .. }));
+/// assert_eq!(" /FILE ", error.input());
+/// ```
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderSelectorError {
     /// Trimming the input produced an empty selector.
     #[non_exhaustive]
@@ -42,7 +52,6 @@ impl ProviderSelectorError {
     ///
     /// An empty selector error.
     #[inline]
-    #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
         Self::Empty { input: input.into() }
     }
@@ -58,7 +67,6 @@ impl ProviderSelectorError {
     ///
     /// An invalid selector error retaining both representations.
     #[inline]
-    #[must_use]
     pub(crate) fn invalid(input: &str, normalized: &str) -> Self {
         Self::Invalid {
             input: input.into(),

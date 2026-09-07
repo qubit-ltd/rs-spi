@@ -13,8 +13,19 @@ use std::fmt;
 use super::ProviderSelectorError;
 
 /// Error returned when provider descriptor aliases are invalid or ambiguous.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderDescriptor, ProviderId, error::ProviderDescriptorError};
+/// let error = ProviderDescriptor::new(ProviderId::new("file")?)
+///     .with_aliases([" FILE "]).expect_err("alias must not duplicate canonical ID");
+/// assert!(matches!(error, ProviderDescriptorError::AliasMatchesId { .. }));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderDescriptorError {
     /// An alias cannot be parsed as a selector.
     #[non_exhaustive]
@@ -50,7 +61,6 @@ impl ProviderDescriptorError {
     ///
     /// An invalid-alias descriptor error retaining the parse source.
     #[inline]
-    #[must_use]
     pub(crate) fn invalid_alias(alias_index: usize, source: ProviderSelectorError) -> Self {
         Self::InvalidAlias { alias_index, source }
     }
@@ -65,7 +75,6 @@ impl ProviderDescriptorError {
     ///
     /// A duplicate-alias descriptor error.
     #[inline]
-    #[must_use]
     pub(crate) fn duplicate_alias(alias: &str) -> Self {
         Self::DuplicateAlias { alias: alias.into() }
     }
@@ -80,7 +89,6 @@ impl ProviderDescriptorError {
     ///
     /// An alias-matches-ID descriptor error.
     #[inline]
-    #[must_use]
     pub(crate) fn alias_matches_id(alias: &str) -> Self {
         Self::AliasMatchesId { alias: alias.into() }
     }

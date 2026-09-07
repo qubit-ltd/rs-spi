@@ -20,6 +20,7 @@ use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderResolutionError;
+use qubit_spi::error::RegistrationError;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
@@ -194,6 +195,9 @@ fn test_async_registry_default_snapshot_keeps_failed_resolution() {
 /// Verifies asynchronous Registry Debug retains one metadata snapshot.
 #[test]
 fn test_async_registry_debug_uses_one_metadata_snapshot() {
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     registry.set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"));
     let formatting_registry = registry.clone();
@@ -233,4 +237,271 @@ pub(crate) fn register_provider<P>(
     registry
         .register(define_provider(descriptor, provider))
         .expect("unique async provider should register");
+}
+
+/// Metadata is sampled once; provider mutations do not change registered
+/// selectors.
+#[test]
+fn test_descriptor_is_sampled_once_and_owned_by_registry() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use crate::common::registry_contract_provider::RegistryContractProvider;
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let changed = Arc::new(AtomicBool::new(false));
+    let observed_calls = Arc::clone(&calls);
+    let observed_changed = Arc::clone(&changed);
+    registry
+        .register(RegistryContractProvider {
+            metadata: Box::new(move || {
+                observed_calls.fetch_add(1, Ordering::SeqCst);
+                let id = if observed_changed.load(Ordering::SeqCst) {
+                    "later"
+                } else {
+                    "original"
+                };
+                ProviderDescriptor::new(ProviderId::new(id).expect("valid fixture ID"))
+                    .with_aliases(["initial-alias"])
+                    .expect("valid alias")
+                    .with_priority(i32::MAX)
+            }),
+            on_drop: None,
+        })
+        .expect("provider registers");
+    changed.store(true, Ordering::SeqCst);
+    let mut descriptors = registry.descriptors();
+    assert_eq!("original", descriptors[0].id().as_str());
+    assert_eq!(i32::MAX, descriptors[0].priority());
+    descriptors.clear();
+    assert_eq!(1, registry.descriptors().len());
+    assert!(
+        registry
+            .resolve_selected(&ProviderSelection::named("later").expect("valid selector"))
+            .is_err()
+    );
+    assert!(
+        registry
+            .resolve_selected(&ProviderSelection::named("initial-alias").expect("valid selector"))
+            .is_ok()
+    );
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+/// Metadata and rejected-provider destruction must run outside catalog locks.
+#[test]
+fn test_descriptor_and_rejected_drop_can_reenter_registry() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use crate::common::registry_contract_provider::RegistryContractProvider;
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let reentrant = registry.clone();
+    registry
+        .register(RegistryContractProvider {
+            metadata: Box::new(move || {
+                assert!(reentrant.is_empty());
+                reentrant.set_default_selection(ProviderSelection::auto());
+                ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))
+            }),
+            on_drop: None,
+        })
+        .expect("reentrant metadata registers");
+    let before_ids = registry.provider_ids();
+    let before_descriptors = registry.descriptors();
+    let drops = Arc::new(AtomicUsize::new(0));
+    let observed_drops = Arc::clone(&drops);
+    let reentrant = registry.clone();
+    let result = registry.register(RegistryContractProvider {
+        metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))),
+        on_drop: Some(Box::new(move || {
+            reentrant.set_default_selection(ProviderSelection::auto());
+            assert_eq!(1, reentrant.descriptors().len());
+            observed_drops.fetch_add(1, Ordering::SeqCst);
+        })),
+    });
+    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert_eq!(1, drops.load(Ordering::SeqCst));
+    assert_eq!(before_ids, registry.provider_ids());
+    assert_eq!(before_descriptors, registry.descriptors());
+}
+
+/// A metadata panic leaves the catalog intact and usable for later
+/// registration.
+#[test]
+fn test_descriptor_panic_does_not_mutate_or_poison_registry() {
+    use std::panic::AssertUnwindSafe;
+    use std::panic::catch_unwind;
+
+    use crate::common::registry_contract_provider::RegistryContractProvider;
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let before_ids = registry.provider_ids();
+    let before_descriptors = registry.descriptors();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        registry.register(RegistryContractProvider {
+            metadata: Box::new(|| panic!("metadata panic")),
+            on_drop: None,
+        })
+    }));
+    assert!(result.is_err());
+    assert_eq!(before_ids, registry.provider_ids());
+    assert_eq!(before_descriptors, registry.descriptors());
+    registry
+        .register(RegistryContractProvider {
+            metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("after-panic").expect("valid ID"))),
+            on_drop: None,
+        })
+        .expect("registry remains writable");
+}
+
+/// Each returned selection governs its own resolver despite concurrent default
+/// changes.
+#[test]
+fn test_default_snapshot_is_consistent_during_concurrent_updates() {
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
+    use std::sync::Barrier;
+
+    use qubit_spi::ProviderCreationTermination;
+
+    use crate::common::test_error::TestProviderFailure;
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("a").expect("valid ID")).with_priority(i32::MIN),
+            AsyncConfigurableProvider::success("a"),
+        ))
+        .expect("a registers");
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("b").expect("valid ID")).with_priority(i32::MAX),
+            AsyncConfigurableProvider::failure(TestProviderFailure::unavailable("b absent")),
+        ))
+        .expect("b registers");
+    let selections = [
+        ProviderSelection::named("a").expect("valid selection"),
+        ProviderSelection::auto().with_fallback_policy(FallbackPolicy::Never),
+        ProviderSelection::chain(["b", "a"])
+            .expect("valid chain")
+            .with_fallback_policy(FallbackPolicy::OnAnyError),
+        ProviderSelection::named("b")
+            .expect("valid selection")
+            .with_fallback_policy(FallbackPolicy::Never),
+    ];
+    registry.set_default_selection(selections[0].clone());
+    let barrier = Barrier::new(2);
+    thread::scope(|scope| {
+        scope.spawn(|| {
+            for iteration in 0..512 {
+                barrier.wait();
+                registry.set_default_selection(selections[iteration % selections.len()].clone());
+                barrier.wait();
+            }
+        });
+        for _ in 0..512 {
+            barrier.wait();
+            let (selection, resolver) = registry.resolve_default_snapshot();
+            barrier.wait();
+            let resolver = resolver.expect("all known defaults resolve");
+            let result = block_on(resolver.create());
+            if selection == selections[0] || selection == selections[2] {
+                assert_eq!("a", result.expect("selected path reaches a"));
+            } else {
+                assert!(selection == selections[1] || selection == selections[3]);
+                let error = result.expect_err("selected path stops at b");
+                assert_eq!(1, error.attempts().len());
+                assert_eq!("b", error.attempts()[0].provider_id().as_str());
+                assert_eq!(
+                    if selection == selections[1] {
+                        ProviderCreationTermination::StoppedByPolicy
+                    } else {
+                        ProviderCreationTermination::Exhausted
+                    },
+                    error.termination(),
+                );
+            }
+        }
+    });
+}
+
+/// Registration reentered from metadata wins before the outer conflict check.
+#[test]
+fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
+    use crate::common::registry_contract_provider::RegistryContractProvider;
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let reentrant = registry.clone();
+    let result = registry.register(RegistryContractProvider {
+        metadata: Box::new(move || {
+            reentrant
+                .register(RegistryContractProvider {
+                    metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("nested").expect("valid ID"))),
+                    on_drop: None,
+                })
+                .expect("nested provider registers without an outer write lock");
+            ProviderDescriptor::new(ProviderId::new("outer").expect("valid ID"))
+                .with_aliases(["nested"])
+                .expect("valid alias")
+        }),
+        on_drop: None,
+    });
+    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert_eq!(
+        vec![ProviderId::new("nested").expect("valid ID")],
+        registry.provider_ids()
+    );
+    assert_eq!("nested", registry.descriptors()[0].id().as_str());
+    assert!(
+        registry
+            .resolve_selected(&ProviderSelection::named("outer").expect("valid selector"))
+            .is_err()
+    );
+}
+
+/// A panicking outer descriptor does not roll back a completed reentrant
+/// registration.
+#[test]
+fn test_descriptor_panic_preserves_reentrant_registration() {
+    use std::panic::AssertUnwindSafe;
+    use std::panic::catch_unwind;
+
+    use crate::common::registry_contract_provider::RegistryContractProvider;
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let reentrant = registry.clone();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        registry.register(RegistryContractProvider {
+            metadata: Box::new(move || {
+                reentrant
+                    .register(RegistryContractProvider {
+                        metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("nested").expect("valid ID"))),
+                        on_drop: None,
+                    })
+                    .expect("nested registration completes before the panic");
+                panic!("outer metadata panic");
+            }),
+            on_drop: None,
+        })
+    }));
+    assert!(result.is_err());
+    assert_eq!(
+        vec![ProviderId::new("nested").expect("valid ID")],
+        registry.provider_ids()
+    );
+    assert_eq!(
+        vec![ProviderDescriptor::new(ProviderId::new("nested").expect("valid ID"))],
+        registry.descriptors()
+    );
+    registry
+        .resolve_selected(&ProviderSelection::named("nested").expect("valid selector"))
+        .expect("completed reentrant registration remains resolvable");
 }

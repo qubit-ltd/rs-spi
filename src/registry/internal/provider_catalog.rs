@@ -30,6 +30,9 @@ use crate::selection::ProviderSelectionRepr;
 
 /// Shared provider catalog independent of creation mode.
 ///
+/// Synchronous lock acquisition may block while another thread holds a
+/// competing catalog guard. Provider callbacks run outside these guards.
+///
 /// # Type Parameters
 ///
 /// * `P` - Possibly unsized provider metadata contract stored by the catalog.
@@ -57,8 +60,13 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without mutation when any selector is
-    /// already registered.
+    /// Returns [`RegistrationError`] without inserting this provider when any
+    /// selector is already registered. Reentrant callback changes remain.
+    ///
+    /// # Panics
+    ///
+    /// Propagates descriptor callback panics without applying this
+    /// registration. Completed reentrant registrations are not rolled back.
     pub(crate) fn register_shared(&self, provider: Arc<P>) -> Result<(), RegistrationError> {
         let descriptor = provider.descriptor();
         let canonical_selector = ProviderSelector::from(descriptor.id());
@@ -97,19 +105,7 @@ where
     #[must_use]
     pub(crate) fn metadata_snapshot(&self) -> (Vec<ProviderDescriptor>, ProviderSelection) {
         let inner = self.read_inner();
-        let descriptors = inner
-            .registration_ids
-            .iter()
-            .map(|provider_id| {
-                inner
-                    .entries
-                    .get(provider_id)
-                    .expect("registered provider ID must have an entry")
-                    .descriptor
-                    .as_ref()
-                    .clone()
-            })
-            .collect();
+        let descriptors = Self::descriptors_from_inner(&inner);
         let default_selection = inner.default_selection.clone();
         (descriptors, default_selection)
     }
@@ -163,6 +159,11 @@ where
     /// the candidate providers. Callers can therefore validate the captured
     /// selection against their input before creating from the returned
     /// candidates without observing a mixed catalog state.
+    ///
+    /// # Returns
+    ///
+    /// The captured selection paired with its resolved candidates or resolution
+    /// error, both computed while the same read guard is held.
     pub(crate) fn resolve_default_snapshot(
         &self,
     ) -> (
@@ -182,20 +183,7 @@ where
     /// Owned descriptor snapshots in registration order.
     #[must_use]
     pub(crate) fn descriptors(&self) -> Vec<ProviderDescriptor> {
-        let inner = self.read_inner();
-        inner
-            .registration_ids
-            .iter()
-            .map(|provider_id| {
-                inner
-                    .entries
-                    .get(provider_id)
-                    .expect("registered provider ID must have an entry")
-                    .descriptor
-                    .as_ref()
-                    .clone()
-            })
-            .collect()
+        Self::descriptors_from_inner(&self.read_inner())
     }
 
     /// Returns canonical provider IDs in successful registration order.
@@ -246,6 +234,11 @@ where
     ///
     /// Returns [`ProviderResolutionError`] when required providers are absent,
     /// no lenient-chain candidate exists, or automatic selection is empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a selector refers to an entry missing from the canonical
+    /// index.
     fn resolve_from_inner(
         inner: &RegistryInner<P>,
         selection: &ProviderSelection,
@@ -342,7 +335,8 @@ where
         ))
     }
 
-    /// Acquires shared catalog state.
+    /// Acquires shared catalog state, blocking until conflicting writers
+    /// release it.
     ///
     /// # Returns
     ///
@@ -352,7 +346,8 @@ where
         self.inner.read()
     }
 
-    /// Acquires exclusive catalog state.
+    /// Acquires exclusive catalog state, blocking until other guards are
+    /// released.
     ///
     /// # Returns
     ///
@@ -360,6 +355,36 @@ where
     #[inline(always)]
     fn write_inner(&self) -> RwLockWriteGuard<'_, RegistryInner<P>> {
         self.inner.write()
+    }
+
+    /// Clones metadata in registration order while the caller retains its read
+    /// guard.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Catalog state protected by the caller's read lock.
+    ///
+    /// # Returns
+    ///
+    /// Independent descriptors in successful registration order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an internal registration ID has no corresponding entry.
+    fn descriptors_from_inner(inner: &RegistryInner<P>) -> Vec<ProviderDescriptor> {
+        inner
+            .registration_ids
+            .iter()
+            .map(|provider_id| {
+                inner
+                    .entries
+                    .get(provider_id)
+                    .expect("registered provider ID must have an entry")
+                    .descriptor
+                    .as_ref()
+                    .clone()
+            })
+            .collect()
     }
 }
 

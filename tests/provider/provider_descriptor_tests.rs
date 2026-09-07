@@ -86,3 +86,45 @@ fn test_descriptor_keeps_typed_metadata() {
             .collect::<Vec<_>>(),
     );
 }
+
+/// Invalid aliases stop consuming a caller's iterator immediately.
+#[test]
+fn test_with_aliases_stops_consuming_after_first_invalid_input() {
+    use std::cell::Cell;
+
+    use qubit_spi::error::ProviderDescriptorError;
+    let consumed = Cell::new(0);
+    let aliases = ["invalid alias", "valid", "unused"]
+        .into_iter()
+        .inspect(|_| consumed.set(consumed.get() + 1));
+    let error = ProviderDescriptor::new(ProviderId::new("provider").expect("valid ID"))
+        .with_aliases(aliases)
+        .expect_err("first alias is invalid");
+    assert!(matches!(
+        error,
+        ProviderDescriptorError::InvalidAlias { alias_index: 0, .. }
+    ));
+    assert_eq!(1, consumed.get());
+}
+
+/// Successful alias validation consumes every item and retains encounter order.
+#[test]
+fn test_with_aliases_consumes_all_successful_inputs_in_order() {
+    use std::cell::Cell;
+    let consumed = Cell::new(0);
+    let aliases = [" FIRST ", "Second", "third"]
+        .into_iter()
+        .inspect(|_| consumed.set(consumed.get() + 1));
+    let descriptor = ProviderDescriptor::new(ProviderId::new("provider").expect("valid ID"))
+        .with_aliases(aliases)
+        .expect("all aliases normalize successfully");
+    assert_eq!(3, consumed.get());
+    assert_eq!(
+        vec!["first", "second", "third"],
+        descriptor
+            .aliases()
+            .iter()
+            .map(|alias| alias.as_str())
+            .collect::<Vec<_>>()
+    );
+}

@@ -9,7 +9,6 @@
 
 mod async_provider_registry_tests;
 mod async_resolving_service_provider_tests;
-mod internal;
 mod provider_creation_termination_tests;
 mod provider_registry_tests;
 mod resolving_service_provider_tests;

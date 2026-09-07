@@ -188,6 +188,7 @@
 //! assert_eq!("hello", greeter.greet());
 //! # Ok(())
 //! # }
+//! # futures::executor::block_on(example()).expect("async example succeeds");
 //! ```
 
 pub mod error;

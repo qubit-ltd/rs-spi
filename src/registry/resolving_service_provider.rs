@@ -23,9 +23,43 @@ use crate::registry::internal::RegistryEntry;
 /// fallback policy. Successful creation returns the service output directly;
 /// failures from later operations on that output do not re-enter fallback.
 ///
+/// Each creation invokes a factory, but the factory may reuse an existing
+/// resource or return a shared handle. No fresh underlying allocation is
+/// promised.
+///
 /// # Type Parameters
 ///
 /// * `S` - Synchronous service family created by the candidates.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Ok(config.clone())
+///     }
+/// }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let resolver = registry.resolve()?;
+/// assert_eq!("hello", resolver.create_configured(&"hello".to_owned())?);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct ResolvingServiceProvider<S>
 where
     S: SyncServiceSpec,

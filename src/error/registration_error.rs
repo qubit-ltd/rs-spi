@@ -10,8 +10,40 @@
 use thiserror::Error;
 
 /// Error returned when a provider registration conflicts with registry state.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Ok(config.clone())
+///     }
+/// }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let error = registry.register(Echo).expect_err("canonical ID already belongs to a provider");
+/// assert!(matches!(error, qubit_spi::error::RegistrationError::DuplicateSelector { .. }));
+/// assert_eq!(1, registry.len());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum RegistrationError {
     /// A selector is already owned by a registered provider.
     #[non_exhaustive]
@@ -40,7 +72,6 @@ impl RegistrationError {
     ///
     /// A registry-owned duplicate-selector error.
     #[inline]
-    #[must_use]
     pub(crate) fn duplicate_selector(selector: &str, existing_provider: &str, provider: &str) -> Self {
         Self::DuplicateSelector {
             selector: selector.into(),

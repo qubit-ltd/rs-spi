@@ -13,9 +13,43 @@ use crate::error::ProviderFailure;
 
 /// Runtime-independent asynchronous factory contract for one provider.
 ///
+/// Each creation invokes a factory, but the factory may reuse an existing
+/// resource or return a shared handle. No fresh underlying allocation is
+/// promised.
+///
+/// Dropping a resolver creation future before polling invokes no provider.
+/// Cancellation while awaiting a candidate drops its future without fallback;
+/// it does not undo external effects or stop independently spawned tasks.
+///
 /// # Type Parameters
 ///
 /// * `S` - Asynchronous service family created by this provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, AsyncServiceSpec, AsyncServiceProvider, ProviderFuture};
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Spec;
+/// impl ServiceSpec for Spec { type Config = String; type Error = std::io::Error; }
+/// impl AsyncServiceSpec for Spec { type Output = String; }
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl AsyncServiceProvider<Spec> for Echo {
+///     fn create_configured<'a>(&'a self, config: &'a String)
+///         -> ProviderFuture<'a, Result<String, ProviderFailure<std::io::Error>>> {
+///         Box::pin(async move { Ok(config.clone()) })
+///     }
+/// }
+/// let result = futures::executor::block_on(Echo.create_configured(&"explicit".to_owned()))?;
+/// assert_eq!("explicit", result);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub trait AsyncServiceProvider<S>: Send + Sync + 'static
 where
     S: AsyncServiceSpec,
@@ -68,8 +102,8 @@ where
     ///
     /// # Panics
     ///
-    /// The returned future may panic if the provider implementation or its
-    /// creation future panics.
+    /// The method may panic before returning a future. The returned future may
+    /// also panic while the provider implementation is polled.
     fn create_configured<'a>(
         &'a self,
         config: &'a S::Config,

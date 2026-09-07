@@ -11,6 +11,15 @@
 ///
 /// Resolver fallback uses this classification while the associated domain
 /// error remains in ProviderFailure.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::error::ProviderFailureKind;
+/// assert!(ProviderFailureKind::Unsupported.is_absence());
+/// assert!(ProviderFailureKind::Unavailable.is_absence());
+/// assert!(!ProviderFailureKind::InvalidConfiguration.is_absence());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum ProviderFailureKind {

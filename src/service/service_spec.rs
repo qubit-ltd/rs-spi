@@ -16,6 +16,19 @@ use std::error::Error;
 /// output independently through [`crate::SyncServiceSpec`] or
 /// [`crate::AsyncServiceSpec`]. Define one marker type implementing this trait
 /// for each service family that needs independently typed registration.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::ServiceSpec;
+/// struct TextService;
+/// impl ServiceSpec for TextService {
+///     type Config = str; // Borrow a view without requiring an owned configuration.
+///     type Error = std::io::Error;
+/// }
+/// let config: &<TextService as ServiceSpec>::Config = "hello";
+/// assert_eq!("hello", config);
+/// ```
 pub trait ServiceSpec: 'static {
     /// Configuration type passed to provider factories.
     ///

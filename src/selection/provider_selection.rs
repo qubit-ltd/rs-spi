@@ -146,50 +146,6 @@ impl ProviderSelection {
         Self::build_chain(values, MissingProviderPolicy::Ignore)
     }
 
-    /// Builds a validated chain with the specified missing-provider policy.
-    ///
-    /// # Type Parameters
-    ///
-    /// * `I` - Iterator-like source of selector inputs.
-    /// * `T` - Individual selector input convertible to a string reference.
-    ///
-    /// # Parameters
-    ///
-    /// * `values` - Raw selectors normalized in encounter order.
-    /// * `missing_policy` - Policy retained with the chain target.
-    ///
-    /// # Returns
-    ///
-    /// A validated nonempty selector chain.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
-    /// or when `values` contains no selectors.
-    fn build_chain<I, T>(values: I, missing_policy: MissingProviderPolicy) -> Result<Self, ProviderSelectionBuildError>
-    where
-        I: IntoIterator<Item = T>,
-        T: AsRef<str>,
-    {
-        let mut selectors = Vec::new();
-        for (selector_index, value) in values.into_iter().enumerate() {
-            let input = value.as_ref();
-            let selector = ProviderSelector::parse(input)
-                .map_err(|source| ProviderSelectionBuildError::invalid_selector(Some(selector_index), source))?;
-            selectors.push(selector);
-        }
-        if selectors.is_empty() {
-            return Err(ProviderSelectionBuildError::empty_chain());
-        }
-        Ok(Self {
-            target: ProviderSelectionRepr::Chain {
-                selectors: selectors.into_boxed_slice(),
-                missing_policy,
-            },
-            fallback_policy: FallbackPolicy::OnAbsence,
-        })
-    }
-
     /// Returns a lossless borrowed view of the selection target.
     ///
     /// # Returns
@@ -248,6 +204,50 @@ impl ProviderSelection {
     #[must_use]
     pub(crate) const fn repr(&self) -> &ProviderSelectionRepr {
         &self.target
+    }
+
+    /// Builds a validated chain with the specified missing-provider policy.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `I` - Iterator-like source of selector inputs.
+    /// * `T` - Individual selector input convertible to a string reference.
+    ///
+    /// # Parameters
+    ///
+    /// * `values` - Raw selectors normalized in encounter order.
+    /// * `missing_policy` - Policy retained with the chain target.
+    ///
+    /// # Returns
+    ///
+    /// A validated nonempty selector chain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
+    /// or when `values` contains no selectors.
+    fn build_chain<I, T>(values: I, missing_policy: MissingProviderPolicy) -> Result<Self, ProviderSelectionBuildError>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<str>,
+    {
+        let mut selectors = Vec::new();
+        for (selector_index, value) in values.into_iter().enumerate() {
+            let input = value.as_ref();
+            let selector = ProviderSelector::parse(input)
+                .map_err(|source| ProviderSelectionBuildError::invalid_selector(Some(selector_index), source))?;
+            selectors.push(selector);
+        }
+        if selectors.is_empty() {
+            return Err(ProviderSelectionBuildError::empty_chain());
+        }
+        Ok(Self {
+            target: ProviderSelectionRepr::Chain {
+                selectors: selectors.into_boxed_slice(),
+                missing_policy,
+            },
+            fallback_policy: FallbackPolicy::OnAbsence,
+        })
     }
 }
 

@@ -14,7 +14,44 @@ use super::ProviderFailure;
 use crate::ProviderId;
 
 /// Diagnostic record for one provider that failed to create a service.
+///
+/// # Type Parameters
+///
+/// * `E` - Domain error declared by the service specification.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Err(ProviderFailure::unavailable(std::io::Error::other(config.clone())))
+///     }
+/// }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let error = registry.resolve()?.create_configured(&"offline".to_owned()).expect_err("provider is unavailable");
+/// let attempt = &error.attempts()[0];
+/// assert_eq!("echo", attempt.provider_id().as_str());
+/// assert_eq!("offline", attempt.failure().error().to_string());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct ProviderAttemptFailure<E> {
     /// Canonical identifier of the provider that was invoked.
     provider_id: ProviderId,
@@ -34,7 +71,6 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// A provider attempt retaining its identity and causal error.
     #[inline]
-    #[must_use]
     pub(crate) fn new(provider_id: ProviderId, failure: ProviderFailure<E>) -> Self {
         Self { provider_id, failure }
     }
@@ -56,7 +92,6 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// The retained leaf provider failure.
     #[inline(always)]
-    #[must_use]
     pub const fn failure(&self) -> &ProviderFailure<E> {
         &self.failure
     }
@@ -67,7 +102,6 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// The provider ID captured before invocation and its typed failure.
     #[inline(always)]
-    #[must_use]
     pub fn into_parts(self) -> (ProviderId, ProviderFailure<E>) {
         (self.provider_id, self.failure)
     }

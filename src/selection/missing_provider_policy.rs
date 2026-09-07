@@ -22,6 +22,17 @@
 ///     }
 /// }
 /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{MissingProviderPolicy, ProviderSelection, ProviderSelectionTargetRef};
+/// let selection = ProviderSelection::chain_allowing_missing(["optional", "local"])?;
+/// assert!(matches!(selection.target(), ProviderSelectionTargetRef::Chain {
+///     missing_policy: MissingProviderPolicy::Ignore, ..
+/// }));
+/// # Ok::<(), qubit_spi::error::ProviderSelectionBuildError>(())
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum MissingProviderPolicy {

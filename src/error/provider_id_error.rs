@@ -10,8 +10,18 @@
 use thiserror::Error;
 
 /// Error returned when a canonical provider ID cannot be constructed.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ProviderId, error::ProviderIdError};
+/// let error = ProviderId::new("File").expect_err("IDs must already be canonical");
+/// assert!(matches!(error, ProviderIdError::NonCanonical { .. }));
+/// assert_eq!("File", error.input());
+/// ```
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderIdError {
     /// The supplied provider ID was empty.
     #[non_exhaustive]
@@ -40,7 +50,6 @@ impl ProviderIdError {
     ///
     /// An empty provider ID error.
     #[inline]
-    #[must_use]
     pub(crate) fn empty(input: &str) -> Self {
         Self::Empty { input: input.into() }
     }
@@ -55,7 +64,6 @@ impl ProviderIdError {
     ///
     /// A noncanonical provider ID error.
     #[inline]
-    #[must_use]
     pub(crate) fn noncanonical(input: &str) -> Self {
         Self::NonCanonical { input: input.into() }
     }

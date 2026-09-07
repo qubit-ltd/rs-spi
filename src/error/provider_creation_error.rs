@@ -14,8 +14,45 @@ use super::ProviderAttemptFailure;
 use crate::ProviderCreationTermination;
 
 /// Nonempty aggregate returned when a resolver cannot create a service.
+///
+/// # Type Parameters
+///
+/// * `E` - Domain error declared by the service specification.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = String;
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = String; }
+/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+/// use qubit_spi::error::ProviderFailure;
+/// struct Echo;
+/// impl ProviderMetadata for Echo {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("echo").expect("valid static ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Echo {
+///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///         Err(ProviderFailure::unavailable(std::io::Error::other(config.clone())))
+///     }
+/// }
+/// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
+/// registry.register(Echo)?;
+/// let error = registry.resolve()?.create_configured(&"offline".to_owned()).expect_err("provider is unavailable");
+/// assert!(error.is_absence());
+/// assert_eq!(1, error.attempts().len());
+/// assert_eq!("echo", error.decisive_attempt().provider_id().as_str());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[must_use]
 pub struct ProviderCreationError<E> {
     /// Actual provider failures in encounter order.
     attempts: Box<[ProviderAttemptFailure<E>]>,
@@ -38,7 +75,6 @@ impl<E> ProviderCreationError<E> {
     ///
     /// Panics when `attempts` is empty.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::Exhausted)
     }
@@ -57,36 +93,8 @@ impl<E> ProviderCreationError<E> {
     ///
     /// Panics when `attempts` is empty.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn stopped_by_policy(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
-    }
-
-    /// Creates an aggregate with an explicit traversal termination.
-    ///
-    /// # Parameters
-    ///
-    /// * `attempts` - Nonempty provider failures in encounter order.
-    /// * `termination` - Reason traversal ended without a service.
-    ///
-    /// # Returns
-    ///
-    /// An aggregate creation error retaining all attempts.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `attempts` is empty.
-    #[inline]
-    #[must_use]
-    fn new(attempts: Vec<ProviderAttemptFailure<E>>, termination: ProviderCreationTermination) -> Self {
-        assert!(
-            !attempts.is_empty(),
-            "provider creation errors require at least one attempt",
-        );
-        Self {
-            attempts: attempts.into_boxed_slice(),
-            termination,
-        }
     }
 
     /// Returns ordered actual provider failures.
@@ -95,7 +103,6 @@ impl<E> ProviderCreationError<E> {
     ///
     /// The nonempty attempt sequence retained by this aggregate.
     #[inline(always)]
-    #[must_use]
     pub const fn attempts(&self) -> &[ProviderAttemptFailure<E>] {
         &self.attempts
     }
@@ -121,7 +128,6 @@ impl<E> ProviderCreationError<E> {
     ///
     /// Panics only if the internal nonempty-attempt invariant is violated.
     #[inline]
-    #[must_use]
     pub fn decisive_attempt(&self) -> &ProviderAttemptFailure<E> {
         self.attempts
             .last()
@@ -150,6 +156,32 @@ impl<E> ProviderCreationError<E> {
     #[must_use]
     pub fn into_parts(self) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
         (self.attempts, self.termination)
+    }
+
+    /// Creates an aggregate with an explicit traversal termination.
+    ///
+    /// # Parameters
+    ///
+    /// * `attempts` - Nonempty provider failures in encounter order.
+    /// * `termination` - Reason traversal ended without a service.
+    ///
+    /// # Returns
+    ///
+    /// An aggregate creation error retaining all attempts.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `attempts` is empty.
+    #[inline]
+    fn new(attempts: Vec<ProviderAttemptFailure<E>>, termination: ProviderCreationTermination) -> Self {
+        assert!(
+            !attempts.is_empty(),
+            "provider creation errors require at least one attempt",
+        );
+        Self {
+            attempts: attempts.into_boxed_slice(),
+            termination,
+        }
     }
 }
 

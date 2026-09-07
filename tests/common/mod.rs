@@ -15,3 +15,7 @@ pub(crate) mod self_described_provider;
 pub(crate) mod string_spec;
 pub(crate) mod test_error;
 pub(crate) mod test_provider_definition;
+
+pub(crate) mod async_drop_provider;
+pub(crate) mod registry_contract_provider;
+pub(crate) mod subprocess_case;

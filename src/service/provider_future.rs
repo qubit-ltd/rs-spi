@@ -16,4 +16,13 @@ use std::pin::Pin;
 ///
 /// * `'a` - Maximum lifetime of data borrowed by the future.
 /// * `T` - Value produced when the future completes.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::ProviderFuture;
+/// let input = String::from("borrowed");
+/// let future: ProviderFuture<'_, usize> = Box::pin(async { input.len() });
+/// assert_eq!(8, futures::executor::block_on(future));
+/// ```
 pub type ProviderFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

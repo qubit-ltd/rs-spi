@@ -7,6 +7,8 @@
 // =============================================================================
 //! Shared fallback state transitions for provider resolvers.
 
+use std::mem::take;
+
 use crate::FallbackPolicy;
 use crate::ProviderId;
 use crate::error::ProviderAttemptFailure;
@@ -14,6 +16,10 @@ use crate::error::ProviderCreationError;
 use crate::error::ProviderFailure;
 
 /// Mutable failure state retained while a resolver traverses candidates.
+///
+/// # Type Parameters
+///
+/// * `E` - Domain error retained in each actual provider attempt.
 pub(crate) struct FallbackState<E> {
     /// Policy deciding whether an untried candidate remains admissible.
     policy: FallbackPolicy,
@@ -45,7 +51,7 @@ impl<E> FallbackState<E> {
     /// # Parameters
     ///
     /// * `provider_id` - Canonical ID of the provider that failed.
-    /// * `error` - Classified leaf provider error.
+    /// * `failure` - Classified leaf provider error.
     /// * `has_remaining` - Whether an untried candidate remains.
     ///
     /// # Returns
@@ -61,12 +67,10 @@ impl<E> FallbackState<E> {
         let kind = failure.kind();
         self.attempts.push(ProviderAttemptFailure::new(provider_id, failure));
         if !has_remaining {
-            return Some(ProviderCreationError::exhausted(std::mem::take(&mut self.attempts)));
+            return Some(ProviderCreationError::exhausted(take(&mut self.attempts)));
         }
         if !self.policy.should_continue_after(kind) {
-            return Some(ProviderCreationError::stopped_by_policy(std::mem::take(
-                &mut self.attempts,
-            )));
+            return Some(ProviderCreationError::stopped_by_policy(take(&mut self.attempts)));
         }
         None
     }
