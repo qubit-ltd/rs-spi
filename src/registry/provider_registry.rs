@@ -17,7 +17,7 @@ use crate::ProviderSelection;
 use crate::ResolvingServiceProvider;
 use crate::SyncServiceSpec;
 use crate::error::ProviderResolutionError;
-use crate::error::RegistrationError;
+use crate::error::RegistryMutationError;
 use crate::registry::internal::ProviderCatalog;
 
 /// Shared catalog of synchronous providers for one service family.
@@ -90,9 +90,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without inserting this provider when its
-    /// canonical ID or any alias is already registered. Reentrant changes
-    /// made by the metadata callback are not rolled back.
+    /// Returns [`RegistryMutationError`] without inserting this provider when
+    /// its canonical ID or any alias is already registered. Reentrant
+    /// changes made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
@@ -100,7 +100,7 @@ where
     /// attempted registration is not applied. Changes made by reentrant
     /// metadata callbacks are not rolled back.
     #[inline]
-    pub fn register<P>(&self, provider: P) -> Result<(), RegistrationError>
+    pub fn register<P>(&self, provider: P) -> Result<(), RegistryMutationError>
     where
         P: ProviderDefinition<S>,
     {
@@ -124,9 +124,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without inserting this provider when its
-    /// canonical ID or any alias is already registered. Reentrant changes
-    /// made by the metadata callback are not rolled back.
+    /// Returns [`RegistryMutationError`] without inserting this provider when
+    /// its canonical ID or any alias is already registered. Reentrant
+    /// changes made by the metadata callback are not rolled back.
     ///
     /// # Panics
     ///
@@ -134,7 +134,7 @@ where
     /// attempted registration is not applied. Changes made by reentrant
     /// metadata callbacks are not rolled back.
     #[inline(always)]
-    pub fn register_shared(&self, provider: Arc<dyn ProviderDefinition<S>>) -> Result<(), RegistrationError> {
+    pub fn register_shared(&self, provider: Arc<dyn ProviderDefinition<S>>) -> Result<(), RegistryMutationError> {
         self.providers.register_shared(provider)
     }
 
@@ -155,8 +155,19 @@ where
     ///
     /// * `selection` - New default selection stored by the Registry.
     #[inline(always)]
-    pub fn set_default_selection(&self, selection: ProviderSelection) {
-        self.providers.set_default_selection(selection);
+    pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
+        self.providers.set_default_selection(selection)
+    }
+
+    /// Seals this registry against further mutation.
+    pub fn seal(&self) {
+        self.providers.seal();
+    }
+
+    #[must_use]
+    /// Returns whether this registry is sealed.
+    pub fn is_sealed(&self) -> bool {
+        self.providers.is_sealed()
     }
 
     /// Resolves an explicit selection into a synchronous candidate snapshot.

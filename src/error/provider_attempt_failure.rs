@@ -81,7 +81,7 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// The provider identity captured before creation was attempted.
     #[inline(always)]
-    #[must_use]
+    #[must_use = "the retained provider failure carries diagnostic context"]
     pub const fn provider_id(&self) -> &ProviderId {
         &self.provider_id
     }
@@ -92,6 +92,7 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// The retained leaf provider failure.
     #[inline(always)]
+    #[must_use = "the provider ID and failure preserve the attempted operation"]
     pub const fn failure(&self) -> &ProviderFailure<E> {
         &self.failure
     }
@@ -102,6 +103,7 @@ impl<E> ProviderAttemptFailure<E> {
     ///
     /// The provider ID captured before invocation and its typed failure.
     #[inline(always)]
+    #[must_use = "the provider ID and failure preserve the attempted operation"]
     pub fn into_parts(self) -> (ProviderId, ProviderFailure<E>) {
         (self.provider_id, self.failure)
     }

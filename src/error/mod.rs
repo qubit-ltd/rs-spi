@@ -48,7 +48,7 @@ mod provider_id_error;
 mod provider_resolution_error;
 mod provider_selection_build_error;
 mod provider_selector_error;
-mod registration_error;
+mod registry_mutation_error;
 
 pub use provider_attempt_failure::ProviderAttemptFailure;
 pub use provider_creation_error::ProviderCreationError;
@@ -59,4 +59,4 @@ pub use provider_id_error::ProviderIdError;
 pub use provider_resolution_error::ProviderResolutionError;
 pub use provider_selection_build_error::ProviderSelectionBuildError;
 pub use provider_selector_error::ProviderSelectorError;
-pub use registration_error::RegistrationError;
+pub use registry_mutation_error::RegistryMutationError;

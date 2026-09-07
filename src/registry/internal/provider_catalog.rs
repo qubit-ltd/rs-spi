@@ -25,7 +25,7 @@ use crate::ProviderMetadata;
 use crate::ProviderSelection;
 use crate::ProviderSelector;
 use crate::error::ProviderResolutionError;
-use crate::error::RegistrationError;
+use crate::error::RegistryMutationError;
 use crate::selection::ProviderSelectionRepr;
 
 /// Shared provider catalog independent of creation mode.
@@ -60,17 +60,22 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] without inserting this provider when any
-    /// selector is already registered. Reentrant callback changes remain.
+    /// Returns [`RegistryMutationError`] without inserting this provider when
+    /// any selector is already registered. Reentrant callback changes
+    /// remain.
     ///
     /// # Panics
     ///
     /// Propagates descriptor callback panics without applying this
     /// registration. Completed reentrant registrations are not rolled back.
-    pub(crate) fn register_shared(&self, provider: Arc<P>) -> Result<(), RegistrationError> {
+    pub(crate) fn register_shared(&self, provider: Arc<P>) -> Result<(), RegistryMutationError> {
+        if self.is_sealed() {
+            return Err(RegistryMutationError::Sealed);
+        }
         let descriptor = provider.descriptor();
         let canonical_selector = ProviderSelector::from(descriptor.id());
         let mut inner = self.write_inner();
+        Self::ensure_mutable(&inner)?;
 
         Self::validate_selector(&inner, &canonical_selector, descriptor.id().as_str())?;
         for alias in descriptor.aliases() {
@@ -127,8 +132,28 @@ where
     ///
     /// * `selection` - New default selection stored in the catalog.
     #[inline(always)]
-    pub(crate) fn set_default_selection(&self, selection: ProviderSelection) {
-        self.write_inner().default_selection = selection;
+    pub(crate) fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
+        let mut inner = self.write_inner();
+        Self::ensure_mutable(&inner)?;
+        inner.default_selection = selection;
+        Ok(())
+    }
+
+    pub(crate) fn seal(&self) {
+        self.write_inner().sealed = true;
+    }
+
+    #[must_use]
+    pub(crate) fn is_sealed(&self) -> bool {
+        self.read_inner().sealed
+    }
+
+    fn ensure_mutable(inner: &RegistryInner<P>) -> Result<(), RegistryMutationError> {
+        if inner.sealed {
+            Err(RegistryMutationError::Sealed)
+        } else {
+            Ok(())
+        }
     }
 
     /// Resolves one explicit selection against a single catalog snapshot.
@@ -314,13 +339,13 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistrationError`] naming both providers when the selector
-    /// is already claimed.
+    /// Returns [`RegistryMutationError`] naming both providers when the
+    /// selector is already claimed.
     fn validate_selector(
         inner: &RegistryInner<P>,
         selector: &ProviderSelector,
         provider: &str,
-    ) -> Result<(), RegistrationError> {
+    ) -> Result<(), RegistryMutationError> {
         let Some(existing) = inner
             .selector_ids
             .get(selector)
@@ -328,7 +353,7 @@ where
         else {
             return Ok(());
         };
-        Err(RegistrationError::duplicate_selector(
+        Err(RegistryMutationError::duplicate_selector(
             selector.as_str(),
             existing.descriptor.id().as_str(),
             provider,

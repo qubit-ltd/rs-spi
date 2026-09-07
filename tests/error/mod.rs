@@ -16,4 +16,4 @@ mod provider_id_error_tests;
 mod provider_resolution_error_tests;
 mod provider_selection_build_error_tests;
 mod provider_selector_error_tests;
-mod registration_error_tests;
+mod registry_mutation_error_tests;

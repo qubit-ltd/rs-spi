@@ -12,6 +12,7 @@ use std::fmt;
 use crate::AsyncProviderDefinition;
 use crate::AsyncServiceSpec;
 use crate::FallbackPolicy;
+use crate::ProviderDescriptor;
 use crate::error::ProviderCreationError;
 use crate::registry::internal::FallbackState;
 use crate::registry::internal::RegistryEntry;
@@ -73,6 +74,15 @@ where
     S: AsyncServiceSpec,
     S::Config: Sync,
 {
+    #[must_use]
+    pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
+        self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())
+    }
+
+    #[must_use]
+    pub const fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
+    }
     /// Creates an asynchronous resolver from resolved candidates.
     ///
     /// # Parameters

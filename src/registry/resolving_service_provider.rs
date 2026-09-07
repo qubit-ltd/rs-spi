@@ -11,6 +11,7 @@ use std::fmt;
 
 use crate::FallbackPolicy;
 use crate::ProviderDefinition;
+use crate::ProviderDescriptor;
 use crate::SyncServiceSpec;
 use crate::error::ProviderCreationError;
 use crate::registry::internal::FallbackState;
@@ -74,6 +75,15 @@ impl<S> ResolvingServiceProvider<S>
 where
     S: SyncServiceSpec,
 {
+    #[must_use]
+    pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
+        self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())
+    }
+
+    #[must_use]
+    pub const fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
+    }
     /// Creates a composing provider from resolved candidates.
     ///
     /// # Parameters

@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 // =============================================================================
 //    Copyright (c) 2026 Haixing Hu.
 //
@@ -20,7 +21,7 @@ use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderResolutionError;
-use qubit_spi::error::RegistrationError;
+use qubit_spi::error::RegistryMutationError;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
@@ -127,6 +128,21 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
             .expect("shared provider should create"),
     );
     assert!(format!("{registry:?}").contains("shared"));
+}
+
+#[test]
+fn test_async_registry_seal_is_shared_by_clones() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let clone = registry.clone();
+    registry.seal();
+    assert!(registry.is_sealed());
+    assert!(clone.is_sealed());
+    assert!(
+        clone
+            .set_default_selection(ProviderSelection::auto())
+            .expect_err("sealed registry rejects selection mutation")
+            .is_sealed()
+    );
 }
 
 /// Verifies a successful asynchronous default snapshot keeps its candidates
@@ -324,7 +340,7 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
             observed_drops.fetch_add(1, Ordering::SeqCst);
         })),
     });
-    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert!(matches!(result, Err(RegistryMutationError::DuplicateSelector { .. })));
     assert_eq!(1, drops.load(Ordering::SeqCst));
     assert_eq!(before_ids, registry.provider_ids());
     assert_eq!(before_descriptors, registry.descriptors());
@@ -452,7 +468,7 @@ fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
         }),
         on_drop: None,
     });
-    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert!(matches!(result, Err(RegistryMutationError::DuplicateSelector { .. })));
     assert_eq!(
         vec![ProviderId::new("nested").expect("valid ID")],
         registry.provider_ids()

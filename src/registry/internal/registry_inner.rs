@@ -31,6 +31,8 @@ pub(crate) struct RegistryInner<P: ?Sized> {
     pub(crate) registration_ids: Vec<ProviderId>,
     /// Selection used by callers that do not supply an explicit preference.
     pub(crate) default_selection: ProviderSelection,
+    /// Whether further mutations are rejected.
+    pub(crate) sealed: bool,
 }
 
 impl<P: ?Sized> Default for RegistryInner<P> {
@@ -46,6 +48,7 @@ impl<P: ?Sized> Default for RegistryInner<P> {
             selector_ids: HashMap::new(),
             registration_ids: Vec::new(),
             default_selection: ProviderSelection::auto(),
+            sealed: false,
         }
     }
 }

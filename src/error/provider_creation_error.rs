@@ -103,6 +103,7 @@ impl<E> ProviderCreationError<E> {
     ///
     /// The nonempty attempt sequence retained by this aggregate.
     #[inline(always)]
+    #[must_use = "the attempt slice contains the aggregate failure details"]
     pub const fn attempts(&self) -> &[ProviderAttemptFailure<E>] {
         &self.attempts
     }
@@ -113,7 +114,7 @@ impl<E> ProviderCreationError<E> {
     ///
     /// The resolver's traversal termination reason.
     #[inline(always)]
-    #[must_use]
+    #[must_use = "the decisive attempt identifies the terminating provider failure"]
     pub const fn termination(&self) -> ProviderCreationTermination {
         self.termination
     }
@@ -128,6 +129,7 @@ impl<E> ProviderCreationError<E> {
     ///
     /// Panics only if the internal nonempty-attempt invariant is violated.
     #[inline]
+    #[must_use = "the decisive attempt identifies the terminating provider failure"]
     pub fn decisive_attempt(&self) -> &ProviderAttemptFailure<E> {
         self.attempts
             .last()

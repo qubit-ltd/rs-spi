@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 // =============================================================================
 //    Copyright (c) 2026 Haixing Hu.
 //
@@ -18,7 +19,7 @@ use qubit_spi::ProviderId;
 use qubit_spi::ProviderRegistry;
 use qubit_spi::ProviderSelection;
 use qubit_spi::error::ProviderResolutionError;
-use qubit_spi::error::RegistrationError;
+use qubit_spi::error::RegistryMutationError;
 
 use crate::common::blocking_writer::BlockingWriter;
 use crate::common::configurable_provider::ConfigurableProvider;
@@ -79,7 +80,7 @@ fn test_registry_rejects_conflicts_without_partial_mutation() {
         ))
         .expect_err("duplicate alias should be rejected");
 
-    assert!(matches!(error, RegistrationError::DuplicateSelector { .. }));
+    assert!(matches!(error, RegistryMutationError::DuplicateSelector { .. }));
     assert_eq!(
         vec!["english"],
         registry
@@ -113,7 +114,7 @@ fn test_registry_rejects_duplicate_canonical_id_without_partial_mutation() {
         ))
         .expect_err("duplicate canonical ID should be rejected");
 
-    assert!(matches!(error, RegistrationError::DuplicateSelector { .. }));
+    assert!(matches!(error, RegistryMutationError::DuplicateSelector { .. }));
     assert_eq!(
         vec!["english"],
         registry
@@ -142,6 +143,21 @@ fn test_registry_clones_share_later_registrations() {
         vec!["english"],
         clone.provider_ids().iter().map(ProviderId::as_str).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn test_registry_seal_is_idempotent_and_shared_by_clones() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    let clone = registry.clone();
+    assert!(!registry.is_sealed());
+    registry.seal();
+    registry.seal();
+    assert!(registry.is_sealed());
+    assert!(clone.is_sealed());
+    let error = registry
+        .set_default_selection(ProviderSelection::auto())
+        .expect_err("sealed registry rejects selection mutation");
+    assert!(error.is_sealed());
 }
 
 /// Verifies reading and replacing the registry's default selection.
@@ -435,7 +451,7 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
             observed_drops.fetch_add(1, Ordering::SeqCst);
         })),
     });
-    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert!(matches!(result, Err(RegistryMutationError::DuplicateSelector { .. })));
     assert_eq!(1, drops.load(Ordering::SeqCst));
     assert_eq!(before_ids, registry.provider_ids());
     assert_eq!(before_descriptors, registry.descriptors());
@@ -561,7 +577,7 @@ fn test_registry_rejects_cross_kind_selector_collisions_atomically() {
                 .expect("valid alias"),
             ConfigurableProvider::success("rejected"),
         ));
-        assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+        assert!(matches!(result, Err(RegistryMutationError::DuplicateSelector { .. })));
         assert_eq!(before, registry.descriptors());
         assert!(
             registry
@@ -594,7 +610,7 @@ fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
         }),
         on_drop: None,
     });
-    assert!(matches!(result, Err(RegistrationError::DuplicateSelector { .. })));
+    assert!(matches!(result, Err(RegistryMutationError::DuplicateSelector { .. })));
     assert_eq!(
         vec![ProviderId::new("nested").expect("valid ID")],
         registry.provider_ids()
