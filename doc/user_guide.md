@@ -24,7 +24,7 @@ creation methods and returns `ProviderCreationError<E>`. It is not itself a leaf
 
 Create a Cargo workspace with members `lib-greeter`, `lib-foo`,
 `lib-friendly-greeter` and `app`. Give each package version `0.1.0`, edition `2024`,
-and add `qubit-spi = "0.11"` to each package's dependencies. The workspace root is:
+and add `qubit-spi = "0.12"` to each package's dependencies. The workspace root is:
 
 ```toml
 [workspace]

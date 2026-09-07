@@ -23,7 +23,7 @@
 
 新建 Cargo workspace，包含 `lib-greeter`、`lib-foo`、`lib-friendly-greeter` 和
 `app` 四个成员。每个包使用版本 `0.1.0`、edition `2024`，并在依赖中加入
-`qubit-spi = "0.11"`。workspace 根目录的 `Cargo.toml` 为：
+`qubit-spi = "0.12"`。workspace 根目录的 `Cargo.toml` 为：
 
 ```toml
 [workspace]

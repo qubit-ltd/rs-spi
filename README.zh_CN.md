@@ -15,7 +15,7 @@ Qubit SPI 为 Rust 库提供可由应用选择的服务实现。库只依赖服�
 
 ```toml
 [dependencies]
-qubit-spi = "0.11"
+qubit-spi = "0.12"
 ```
 
 需要 Rust 1.94 或更高版本。本 crate 没有可选的运行时 feature。

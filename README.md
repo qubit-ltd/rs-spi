@@ -17,7 +17,7 @@ installs the implementation appropriate to its deployment.
 
 ```toml
 [dependencies]
-qubit-spi = "0.11"
+qubit-spi = "0.12"
 ```
 
 Requires Rust 1.94 or later. This crate has no optional runtime features.
