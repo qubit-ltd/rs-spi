@@ -75,11 +75,15 @@ impl<S> ResolvingServiceProvider<S>
 where
     S: SyncServiceSpec,
 {
+    /// Returns provider descriptors in the deterministic candidate attempt
+    /// order.
     #[must_use]
     pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
         self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())
     }
 
+    /// Returns the policy that determines whether a failed candidate permits
+    /// fallback.
     #[must_use]
     pub const fn fallback_policy(&self) -> FallbackPolicy {
         self.fallback_policy
