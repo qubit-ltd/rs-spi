@@ -21,6 +21,7 @@ include = [
     "/src/**",
     "/doc/**",
     "/tests/**",
+    "/scripts/check-documentation.py",
     "/benches/**",
 ]
 
