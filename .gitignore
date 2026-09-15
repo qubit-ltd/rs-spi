@@ -83,3 +83,19 @@ external/
 
 # Python validation tools
 __pycache__/
+
+# Locally installed pinned rs-infra tools
+.infra/tools/bin/
+
+# Generated infrastructure reports
+/ci-summary.json
+/coverage-badge.json
+/coverage-summary.md
+/coverage.json
+/coverage.txt
+/lcov.info
+/public/
+/pages-artifact.tar.gz
+
+# Keep generated fuzz discoveries local; tracked seed corpus stays versioned.
+/fuzz/corpus/
