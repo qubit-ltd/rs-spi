@@ -2,7 +2,7 @@
 
 [中文版](design.zh_CN.md) · [User Guide](user_guide.md) · [README](../README.md)
 
-This document describes the 0.11 API and its implementation contracts. It is for
+This document describes the 0.12 API and its implementation contracts. It is for
 maintainers and domain-crate authors. The user guide contains runnable integration
 examples; this document records why registration, selection and creation remain
 separate and what future changes must preserve.
@@ -152,8 +152,11 @@ intentional. Neither candidate introduced a production dependency or runtime fea
   documentation and archive contracts. Changes must also be exercised through
   filesystem, MIME and Magika consumers with their actual dependency paths checked.
 
-No unregister/freeze API, successful-output metadata wrapper, dependency injection
-container or dynamic plugin loader is added without a concrete domain need.
+There is no unregister or unseal operation. Applications may call `seal()` after
+startup registration and default-selection configuration; subsequent registry
+mutations are rejected. Do not add a successful-output metadata wrapper,
+dependency-injection container, or dynamic plugin loader without a concrete
+domain need.
 Keep the catalog and failure state machine shared; keep domain-specific validation
 in adapters. Any future public API change must update both languages, executable
 examples and affected downstream crates together.

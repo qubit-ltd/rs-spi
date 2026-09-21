@@ -2,7 +2,7 @@
 
 [中文版](user_guide.zh_CN.md) · [README](../README.md) · [Design](design.md)
 
-This guide covers `qubit-spi` 0.11 and Rust 1.94+. It is for domain-library authors,
+This guide covers `qubit-spi` 0.12 and Rust 1.94+. It is for domain-library authors,
 provider implementers and application authors who compose them. The goal is for
 `lib-foo` to obtain a greeting service chosen by its application, without depending
 on the concrete provider crate.
@@ -410,8 +410,9 @@ can wrap `LazyLock`; configure it before consumers first resolve services.
 A global registry retains registered providers and the resources they own for
 the lifetime of the process. Different linked versions of a domain crate have
 different static registries.
-Registration remains open at runtime. There is no unregister, freeze, service
-cache, dynamic-library loading or automatic dependency injection. URI semantics,
+Registration remains open at runtime until the application calls `seal()`. There is
+no unregister or unseal operation, service cache, dynamic-library loading or
+automatic dependency injection. URI semantics,
 credentials, output identity validation and lifecycle policy belong to domain
 crates/providers. Successful output is returned directly without metadata wrapping.
 
