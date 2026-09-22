@@ -3,11 +3,15 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
+use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderMetadata;
 use qubit_spi::ProviderSelection;
 use qubit_spi::ServiceProvider;
@@ -22,6 +26,10 @@ use crate::common::string_spec::StringSpec;
 use crate::common::test_error::TestError;
 use crate::common::test_provider_definition::TestProviderDefinition;
 use crate::common::test_provider_definition::define_provider;
+
+mod macro_path_support {
+    pub(crate) use crate::common::string_spec::StringSpec as OrdinarySpec;
+}
 
 declare_sync_provider_inventory! {
     pub mod discovered_providers {
@@ -89,7 +97,7 @@ impl ServiceProvider<StringSpec> for PanicDescriptorProvider {
 impl ProviderMetadata for PanicDescriptorProvider {
     /// Panics to prove registry construction preserves metadata callback
     /// panics.
-    fn descriptor(&self) -> qubit_spi::ProviderDescriptor {
+    fn descriptor(&self) -> ProviderDescriptor {
         panic!("descriptor panic must propagate")
     }
 }
@@ -98,6 +106,72 @@ submit_sync_provider! {
     inventory_entry = descriptor_panic_providers::Entry;
     spec = StringSpec;
     provider = PanicDescriptorProvider;
+}
+
+declare_sync_provider_inventory! {
+    pub mod descriptor_count_providers {
+        spec = StringSpec;
+    }
+}
+
+static DESCRIPTOR_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+/// Provider that counts descriptor sampling during inventory registration.
+struct CountingDescriptorProvider;
+
+impl ServiceProvider<StringSpec> for CountingDescriptorProvider {
+    /// Never creates a service because this fixture only verifies registration.
+    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<TestError>> {
+        unreachable!("descriptor sampling test does not create services")
+    }
+}
+
+impl ProviderMetadata for CountingDescriptorProvider {
+    /// Returns metadata while recording each descriptor sample.
+    fn descriptor(&self) -> ProviderDescriptor {
+        DESCRIPTOR_CALLS.fetch_add(1, Ordering::SeqCst);
+        provider_descriptor!("descriptor-count")
+    }
+}
+
+submit_sync_provider! {
+    inventory_entry = descriptor_count_providers::Entry;
+    spec = StringSpec;
+    provider = CountingDescriptorProvider;
+}
+
+declare_sync_provider_inventory! {
+    pub mod ordinary_path_providers {
+        spec = macro_path_support::OrdinarySpec;
+    }
+}
+
+declare_sync_provider_inventory! {
+    pub mod self_path_providers {
+        spec = self::StringSpec;
+    }
+}
+
+declare_sync_provider_inventory! {
+    pub mod crate_path_providers {
+        spec = crate::common::string_spec::StringSpec;
+    }
+}
+
+declare_sync_provider_inventory! {
+    pub mod absolute_external_path_providers {
+        spec = ::inventory_test_contract::ExternalStringSpec;
+    }
+}
+
+mod super_path_declarations {
+    use qubit_spi::declare_sync_provider_inventory;
+
+    declare_sync_provider_inventory! {
+        pub mod providers {
+            spec = super::StringSpec;
+        }
+    }
 }
 
 declare_sync_provider_inventory! {
@@ -195,6 +269,48 @@ fn test_build_registry_propagates_descriptor_panic() {
         .expect_err("descriptor panic should escape registry construction");
 
     assert_eq!(Some(&"descriptor panic must propagate"), panic.downcast_ref::<&str>());
+}
+
+/// Verifies that inventory registration samples each descriptor exactly once.
+#[test]
+fn test_build_registry_samples_each_descriptor_once() {
+    DESCRIPTOR_CALLS.store(0, Ordering::SeqCst);
+
+    let registry = descriptor_count_providers::build_registry().expect("descriptor-count provider should register");
+
+    assert_eq!(1, registry.len());
+    assert_eq!(1, DESCRIPTOR_CALLS.load(Ordering::SeqCst));
+}
+
+/// Verifies that every supported declaration path remains anchored at the
+/// declaration site.
+#[test]
+fn test_declare_inventory_resolves_relative_and_absolute_spec_paths() {
+    assert!(
+        ordinary_path_providers::build_registry()
+            .expect("ordinary relative path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        self_path_providers::build_registry()
+            .expect("self path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        crate_path_providers::build_registry()
+            .expect("crate path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        super_path_declarations::providers::build_registry()
+            .expect("super path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        absolute_external_path_providers::build_registry()
+            .expect("absolute external path should compile and build")
+            .is_empty()
+    );
 }
 
 /// Verifies that source ordering determines the order of successful

@@ -7,6 +7,23 @@
 // =============================================================================
 //! Integration tests for the public Qubit SPI contract.
 
+#[cfg(feature = "inventory")]
+extern crate self as inventory_test_contract;
+
+#[cfg(feature = "inventory")]
+pub struct ExternalStringSpec;
+
+#[cfg(feature = "inventory")]
+impl qubit_spi::ServiceSpec for ExternalStringSpec {
+    type Config = String;
+    type Error = std::convert::Infallible;
+}
+
+#[cfg(feature = "inventory")]
+impl qubit_spi::SyncServiceSpec for ExternalStringSpec {
+    type Output = String;
+}
+
 mod common;
 mod error;
 #[cfg(feature = "inventory")]

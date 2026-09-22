@@ -3,15 +3,61 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Macros for declaring and submitting synchronous provider inventories.
 
 /// Declares one synchronous provider inventory for a concrete service family.
 ///
-/// The generated module exposes [`build_registry`](Self::build_registry) and
-/// a hidden entry type used by [`submit_sync_provider!`].
+/// The generated module exposes a `build_registry` function and a hidden entry
+/// type used by the `submit_sync_provider!` macro.
+#[allow(clippy::crate_in_macro_def)] // Preserves the declaration crate's explicit `crate::` path.
 #[macro_export]
 macro_rules! declare_sync_provider_inventory {
+    (
+        $visibility:vis mod $module:ident {
+            spec = self::$($spec:ident)::+;
+        }
+    ) => {
+        $crate::declare_sync_provider_inventory! {
+            @build $visibility mod $module {
+                spec = super::$($spec)::+;
+            }
+        }
+    };
+    (
+        $visibility:vis mod $module:ident {
+            spec = super::$($spec:ident)::+;
+        }
+    ) => {
+        $crate::declare_sync_provider_inventory! {
+            @build $visibility mod $module {
+                spec = super::super::$($spec)::+;
+            }
+        }
+    };
+    (
+        $visibility:vis mod $module:ident {
+            spec = crate::$($spec:ident)::+;
+        }
+    ) => {
+        $crate::declare_sync_provider_inventory! {
+            @build $visibility mod $module {
+                spec = crate::$($spec)::+;
+            }
+        }
+    };
+    (
+        $visibility:vis mod $module:ident {
+            spec = ::$($spec:ident)::+;
+        }
+    ) => {
+        $crate::declare_sync_provider_inventory! {
+            @build $visibility mod $module {
+                spec = ::$($spec)::+;
+            }
+        }
+    };
     (
         $visibility:vis mod $module:ident {
             spec = $spec:ident;
@@ -30,7 +76,7 @@ macro_rules! declare_sync_provider_inventory {
     ) => {
         $crate::declare_sync_provider_inventory! {
             @build $visibility mod $module {
-                spec = $($spec)::+;
+                spec = super::$($spec)::+;
             }
         }
     };
