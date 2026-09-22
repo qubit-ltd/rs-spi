@@ -1,3 +1,10 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Provider intentionally colliding with alpha's canonical ID.
 
 use std::convert::Infallible;
@@ -18,7 +25,8 @@ impl ProviderMetadata for DuplicateProvider {
 }
 
 impl ServiceProvider<service_contract::FixtureSpec> for DuplicateProvider {
-    /// Creates an unreachable fixture output because registration must fail first.
+    /// Creates an unreachable fixture output because registration must fail
+    /// first.
     fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<Infallible>> {
         Ok("duplicate".to_owned())
     }
