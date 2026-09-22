@@ -231,6 +231,8 @@ pub use service::SyncServiceSpec;
 pub mod __private {
     pub use ::inventory;
 
+    pub use crate::inventory::AsyncProviderInventoryEntry;
     pub use crate::inventory::SyncProviderInventoryEntry;
+    pub use crate::inventory::build_async_registry;
     pub use crate::inventory::build_sync_registry;
 }

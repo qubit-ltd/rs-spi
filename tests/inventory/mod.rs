@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+mod async_inventory_tests;
 mod provider_inventory_build_error_tests;
 mod provider_registration_source_tests;
 mod sync_inventory_tests;
