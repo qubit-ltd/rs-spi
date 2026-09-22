@@ -18,7 +18,13 @@ Qubit SPI 为 Rust 库提供可由应用选择的服务实现。库只依赖服�
 qubit-spi = "0.12"
 ```
 
-需要 Rust 1.94 或更高版本。本 crate 没有可选的运行时 feature。
+需要 Rust 1.94 或更高版本。默认 feature 集为空。只有服务族需要链接期发现服务
+提供者时，才启用可选的 `inventory` feature：
+
+```toml
+[dependencies]
+qubit-spi = { version = "0.12", features = ["inventory"] }
+```
 
 ## 快速开始
 
@@ -68,9 +74,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 注册表的克隆共享运行时变更；解析后的候选快照保留当时的身份、顺序和策略。
 - 类型化错误保留实际调用记录和领域诊断。每次创建都会调用工厂，但工厂可以复用已有资源。
 
+### 可选的链接服务提供者发现
+
+启用 `inventory` 后，服务契约 crate 为一个服务族声明一个 collection，服务提供者
+crate 向该 collection 提交工厂条目。应用从已链接的条目构建注册表，必要时显式注册
+有状态服务提供者，设置默认选择，最后在创建服务前封存注册表。collection 按服务族
+隔离：提交到一个契约的服务提供者不会出现在另一个契约的注册表中。
+
+发现发生在链接期，不发生在 Cargo 解析依赖时。在 `Cargo.toml` 中列出服务提供者
+crate 并不保证它的 inventory 条目进入最终二进制；若该 crate 没有其他被引用的符号，
+可在例如 `linked_providers.rs` 中用 `use provider_friendly as _;` 固定链接它。
+
+每个发现到的条目仍走普通注册表的注册路径。因此工厂或描述符冲突会让
+`build_registry()` 原子失败，不会返回半成品注册表。发现来源的顺序也不决定自动选择；
+`ProviderSelection::auto()` 仍按优先级降序、规范 ID 升序排列候选。它是静态链接的
+服务提供者发现机制，不是动态插件系统：不会加载共享库，也不会在程序链接完成后发现
+新的服务提供者。
+
 ## 延伸阅读
 
-- [中文用户指南](doc/user_guide.zh_CN.md)：三个库与应用的完整集成、配置、回退和排障。
+- [中文用户指南](doc/user_guide.zh_CN.md)：显式注册和链接期三 crate 组装、配置、回退与排障。
 - [English User Guide](doc/user_guide.md)。
 - [中文设计说明](doc/design.zh_CN.md)与 [English Design](doc/design.md)：行为契约与实现决策。
 - [API 文档](https://docs.rs/qubit-spi)。

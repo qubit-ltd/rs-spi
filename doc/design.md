@@ -22,6 +22,36 @@ filesystem registries can validate output identity in a wrapper, and a rooted lo
 provider can return a clone of its existing filesystem handle. SPI does not infer
 those domain contracts from metadata.
 
+## Optional Link-Time Provider Discovery
+
+The default feature set is empty. Enabling `inventory` adds a static,
+link-time discovery adapter; it does not change the explicit registry API or
+make provider discovery a runtime default. A service-contract crate invokes
+`declare_sync_provider_inventory!` or `declare_async_provider_inventory!` for a
+concrete `ServiceSpec`. That declaration owns one inventory collection and its
+`build_registry()` function. Provider crates invoke the corresponding
+`submit_*_provider!` macro with a zero-argument factory. The factory runs only
+when the application builds the registry, so providers can still construct
+stateful values explicitly through the ordinary `register` API.
+
+Collections are typed and isolated by service family. An entry submitted to the
+collection declared for `GreeterSpec`, for example, cannot be read while
+building a registry for a different spec. Building iterates discovered entries
+and registers each through the ordinary atomic registration path. If a factory,
+descriptor, ID or alias fails, `build_registry()` returns a
+`ProviderInventoryBuildError` with the source location and returns no registry;
+it never exposes a partially built result.
+
+Cargo dependency resolution is not linker reachability. A provider package in
+`Cargo.toml` may be omitted from the final binary when no symbol anchors it.
+Applications should keep such anchors together in a module such as
+`linked_providers.rs`, using `use provider_friendly as _;`, before calling the
+contract's `build_registry()`. The order in which crates are linked or entries
+are discovered is not a selection policy: automatic selection remains priority
+descending then canonical ID ascending. This facility discovers entries compiled
+into the executable; it does not load dynamic libraries, scan directories, or
+accept plugins after startup.
+
 ## Catalog and Snapshot Boundaries
 
 ```mermaid
@@ -145,6 +175,9 @@ intentional. Neither candidate introduced a production dependency or runtime fea
   require the declared inventory, and run real Cargo scenarios. Missing scenarios,
   ignored fences and stale methods fail validation. Rust examples must not be
   replaced by unrelated duplicate source fixtures.
+- The documentation scenarios include a real three-crate `inventory-providers`
+  workspace: the contract declares a collection, a provider submits a factory,
+  and the app anchors that provider, builds, augments, selects, seals and creates.
 - Package validation uses an actual Cargo archive and builds/tests its extracted
   contents without a checkout path patch. This prevents tests from depending on
   excluded fuzz sources or shared CI submodules.

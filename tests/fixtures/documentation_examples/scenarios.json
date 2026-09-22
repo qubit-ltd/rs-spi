@@ -17,6 +17,12 @@
         "lib-friendly-greeter/src/lib.rs",
         "app/src/main.rs"
       ],
+      "inventory-providers": [
+        "service-contract/src/lib.rs",
+        "provider-friendly/src/lib.rs",
+        "app/src/linked_providers.rs",
+        "app/src/main.rs"
+      ],
       "guide-sync": [
         "app/src/main.rs"
       ],
@@ -29,6 +35,12 @@
         "lib-greeter/src/lib.rs",
         "lib-foo/src/lib.rs",
         "lib-friendly-greeter/src/lib.rs",
+        "app/src/main.rs"
+      ],
+      "inventory-providers": [
+        "service-contract/src/lib.rs",
+        "provider-friendly/src/lib.rs",
+        "app/src/linked_providers.rs",
         "app/src/main.rs"
       ],
       "guide-sync": [
@@ -45,33 +57,42 @@
     "quick-start": {
       "manifests": {
         "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
-        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n"
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\n"
       },
       "stdout": "Hello, Rust!\n"
     },
     "guide-sync": {
       "manifests": {
         "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
-        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n"
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\n"
       },
       "stdout": ""
     },
     "guide-async": {
       "manifests": {
         "Cargo.toml": "[workspace]\nmembers = [\"app\"]\nresolver = \"3\"\n",
-        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nfutures = \"0.3\"\n"
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nfutures = \"0.3\"\n"
       },
       "stdout": ""
     },
     "three-crates": {
       "manifests": {
         "Cargo.toml": "[workspace]\nmembers = [\"lib-greeter\", \"lib-foo\", \"lib-friendly-greeter\", \"app\"]\nresolver = \"3\"\n",
-        "lib-greeter/Cargo.toml": "[package]\nname = \"lib-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\n",
-        "lib-foo/Cargo.toml": "[package]\nname = \"lib-foo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\n",
-        "lib-friendly-greeter/Cargo.toml": "[package]\nname = \"lib-friendly-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\n",
-        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\" }\nlib-greeter = { path = \"../lib-greeter\" }\nlib-foo = { path = \"../lib-foo\" }\nlib-friendly-greeter = { path = \"../lib-friendly-greeter\" }\n"
+        "lib-greeter/Cargo.toml": "[package]\nname = \"lib-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\n",
+        "lib-foo/Cargo.toml": "[package]\nname = \"lib-foo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nlib-greeter = { path = \"../lib-greeter\" }\n",
+        "lib-friendly-greeter/Cargo.toml": "[package]\nname = \"lib-friendly-greeter\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nlib-greeter = { path = \"../lib-greeter\" }\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nlib-greeter = { path = \"../lib-greeter\" }\nlib-foo = { path = \"../lib-foo\" }\nlib-friendly-greeter = { path = \"../lib-friendly-greeter\" }\n"
       },
       "stdout": "Hello, Rust!\n"
+    },
+    "inventory-providers": {
+      "manifests": {
+        "Cargo.toml": "[workspace]\nmembers = [\"service-contract\", \"provider-friendly\", \"app\"]\nresolver = \"3\"\n",
+        "service-contract/Cargo.toml": "[package]\nname = \"service-contract\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\n",
+        "provider-friendly/Cargo.toml": "[package]\nname = \"provider-friendly\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nservice-contract = { path = \"../service-contract\" }\n",
+        "app/Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nqubit-spi = { path = \"$SPI_ROOT\", features = [\"inventory\"] }\nprovider-friendly = { path = \"../provider-friendly\" }\nservice-contract = { path = \"../service-contract\" }\n"
+      },
+      "stdout": "Hello, inventory!\n"
     }
   }
 }

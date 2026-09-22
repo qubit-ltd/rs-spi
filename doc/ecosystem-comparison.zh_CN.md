@@ -8,7 +8,11 @@
 
 **结论先行**：rs-spi 不是“Rust 动态插件框架”的同类替代品，而是一个用于**静态链接应用内、运行时可配置的多后端服务选择器**。它最突出的价值，是将“候选发现（显式注册）—选择（名称/链/自动）—构造（带失败语义的回退）”分成三个阶段，并让同步与异步在选择和错误语义上保持一致。对于文件系统、对象存储、编码器、认证后端这类“应用决定装配、库只依赖抽象”的场景，它比手写 `match` 或仅用 `inventory` 更完整、可观测且并发边界更清楚。
 
-代价也同样明确：它没有跨 crate 自动发现、没有运行时 `.so/.dll` 加载、没有依赖图装配，也不处理已成功创建对象的生命周期、缓存、健康检查或后续操作失败。因此应把它定位为**轻量、显式、类型化 SPI 基础设施**，不要作为通用 DI 容器或第三方二进制插件平台来评估或扩张。
+代价也同样明确：默认 feature 集不做跨 crate 自动发现；可选的 `inventory` feature
+只能发现最终二进制中已链接的静态 factory，仍没有运行时 `.so/.dll` 加载、依赖图装配，
+也不处理已成功创建对象的生命周期、缓存、健康检查或后续操作失败。因此应把它定位为
+**轻量、显式、类型化 SPI 基础设施**，不要作为通用 DI 容器或第三方二进制插件平台来
+评估或扩张。
 
 ## 1. 项目定位与边界
 
@@ -57,7 +61,10 @@ flowchart LR
 
 ## 3. 值得肯定的设计选择
 
-1. **显式装配而非魔法发现。** 应用拥有最终依赖图和默认策略，库不会因为“某个 crate 恰好被链接”而悄然改变后端。这很适合安全边界明确、部署差异大的基础设施库，也使测试可在局部 registry 中完成。
+1. **显式装配与可选发现并存。** 默认路径由应用显式注册；启用 `inventory` 时，应用仍
+   需决定哪些 provider crate 被固定链接、何时构建、是否追加有状态 provider、如何选择
+   与何时封存。仅在 `Cargo.toml` 中声明依赖不会使 provider 自动可见。这很适合安全边界
+   明确、部署差异大的基础设施库，也使测试可在局部 registry 中完成。
 2. **选择与构造分离。** `named`/`chain`/`auto` 解决“试谁、按何顺序”；`Never`/`OnAbsence`/`OnAnyError` 解决“失败后是否继续”。普通 registry 往往把这两层混成单个 `get()`，从而无法解释为什么没有尝试下一个 provider。
 3. **失败分类不是布尔回退。** `Unsupported`、`Unavailable`、`InvalidConfiguration`、`InitializationFailed` 使默认 `OnAbsence` 不会把用户配置错误掩盖成“换个后端试试”。这把可靠性策略显式放进 API，但要求每个 provider 正确分类。
 4. **可复现的选择和诊断。** `auto` 的顺序是 priority 降序、canonical ID 升序，不依赖哈希遍历；链式选择对重复 provider 去重并保留首次顺序。[`resolve_from_inner`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:267) 这对配置审计、测试和故障复现很有价值。
@@ -71,8 +78,8 @@ flowchart LR
 | 方案 | 发现与加载模型 | 与 rs-spi 相比的优势 | 相对 rs-spi 的短板 | 最适合的场景 |
 | --- | --- | --- | --- | --- |
 | **直接 trait + 构造函数/参数注入** | 无 registry；调用者显式传 `Arc<dyn Trait>`、泛型或具体值 | 最小 API/依赖/运行时成本；所有依赖在类型签名中可见；无全局可变目录 | 不提供多 provider 的名称、优先级、链式回退与聚合诊断；这些逻辑很容易散落在业务层 | 单实现或调用点本就掌握依赖的库；这是 rs-spi README 所建议的默认方案 |
-| **rs-spi** | 显式 runtime 注册，但 provider 必须静态链接进最终程序 | 类型化服务族；选择与构造分离；一致的 sync/async 回退、快照和错误链 | 注册样板较多；无自动发现/动态加载/对象缓存；配置和错误必须在一个服务族内统一 | 多可选后端、应用决定部署策略、需明确 fallback 的库生态 |
-| **`inventory`** | 链接期收集 `submit!` 的静态条目；最终二进制迭代 | 扩展 crate 不需要中央注册表；适合 handler、测试、schema 等“贡献声明” | 仅负责发现，不定义选择、优先级、并发目录、构造、异步或失败协议；被链接不等于必然可达，且很难让应用显式控制集合 | 希望静态插件自行声明、条目可用 `'static` 表示的场景；可作为 rs-spi 上层的注册来源 |
+| **rs-spi** | 默认显式 runtime 注册；可选 `inventory` feature 读取最终二进制中已链接的 provider factory | 类型化服务族；选择与构造分离；一致的 sync/async 回退、快照和错误链；可将链接期发现纳入同一原子构建路径 | 注册/锚定仍有样板；无动态加载/对象缓存；配置和错误必须在一个服务族内统一 | 多可选后端、应用决定部署策略、需明确 fallback 的库生态；可选用静态扩展 crate 贡献 factory |
+| **`inventory`** | 链接期收集 `submit!` 的静态条目；最终二进制迭代 | 扩展 crate 不需要中央注册表；适合 handler、测试、schema 等“贡献声明” | 仅负责发现，不定义选择、优先级、并发目录、构造、异步或失败协议；Cargo 依赖不等于条目进入最终链接图 | 希望静态插件自行声明、条目可用 `'static` 表示的场景；也是 rs-spi `inventory` feature 实际采用的发现层 |
 | **`linkme` distributed slice** | linker 将散布的 `static` 元素拼为只读连续切片 | 极低运行期开销，跨平台的分布式静态表；不需启动期可变 registry | 元素必须适于静态初始化；顺序不是 rs-spi 这种显式优先级/ID 协议；仍不解决构造、选择与错误语义 | 编译期命令表、codec 表、测试/基准登记；也可用来给 rs-spi 批量登记 factory |
 | **`shaku` 等 DI 容器** | 宏声明 module、component 与依赖图，编译期检查一部分错误 | 把多服务依赖关系和构造图整体表达，可检出环；适合应用 composition root | 比 rs-spi 更侵入业务类型和构造方式；不天然等同于“同一服务多个后端 + 失败时按策略尝试” | 应用内有稳定、较大的对象图；不是跨 crate 后端选择的最小抽象 |
 | **`abi_stable` / `dynamic-plugin`** | 从动态库加载二进制插件，经 FFI/stable-ABI 包装调用 | 可安装、更新或由第三方提供而不重编 host；解决 rs-spi 明确不处理的物理插件边界 | FFI-safe 类型、版本/布局、分发、加载错误和卸载语义显著复杂；不能把普通 Rust trait object 直接跨边界传递 | IDE、宿主程序、可下载扩展、独立发布插件；不应为同一 Cargo 二进制内的后端选择引入 |
@@ -81,7 +88,12 @@ flowchart LR
 
 ### 可组合，而非互斥
 
-最自然的组合是 `inventory` 或 `linkme` 只负责把静态 `fn register(&ProviderRegistry<_>)` 收集起来，应用在 composition root 迭代它们，仍由 rs-spi 完成 ID 冲突校验、选择、快照和 fallback。这样得到“无中心登记列表”的便利，同时保留 rs-spi 的显式启用边界。注意：若直接让所有发现的 provider 自动注册，显式性会从“应用代码可见”退化为“最终链接图可见”；应允许应用过滤或排序注册函数。
+`inventory` 已是 rs-spi 的可选集成：服务契约 crate 声明与服务族绑定的 collection，
+provider crate 提交 factory，应用用 `use provider_friendly as _;` 等锚点决定链接集合，
+再调用 `build_registry()`。rs-spi 随后完成 ID 冲突校验、选择、快照和 fallback；构建
+失败不会返回部分 registry。`linkme` 仍可作为上层来源，但需要适配为同样的显式构建
+步骤。无论来源为何，条目发现/链接顺序都不是自动选择顺序，后者固定为优先级降序和
+规范 ID 升序。
 
 动态插件场景也可采用两层结构：ABI 插件层只暴露稳定的 factory/descriptor 协议，宿主把成功加载的适配器注册进 rs-spi。但这是一项新产品能力，需要单独设计 ABI、版本协商、隔离、资源所有权和不可安全卸载等规则；绝不应把现在的 `dyn ProviderDefinition<S>` 当作跨动态库 ABI。
 

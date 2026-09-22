@@ -201,6 +201,172 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## 可选的链接期服务提供者发现
+
+前面的示例刻意由应用显式注册服务提供者。如果希望独立维护的服务提供者 crate 提交
+工厂，又不想维护中心注册列表，可在所有参与 crate 中启用 `inventory`。默认 feature
+集为空，因此这是一项按需启用的能力：
+
+```toml
+[dependencies]
+qubit-spi = { version = "0.12", features = ["inventory"] }
+```
+
+下面的 `inventory-providers` workspace 恰好包含三个 crate：`service-contract`、
+`provider-friendly` 和 `app`。契约 crate 声明 collection，服务提供者提交工厂，应用
+固定链接该服务提供者、构建发现到的注册表、显式追加有状态服务提供者、设置选择、
+封存注册表并创建服务。运行 `cargo run -p app` 会输出 `Hello, inventory!`。
+
+### 1. 契约 crate：一个服务族对应一个 collection
+
+<!-- spi-example: inventory-providers; file: service-contract/src/lib.rs -->
+```rust
+use std::convert::Infallible;
+use std::sync::Arc;
+
+use qubit_spi::{ServiceSpec, SyncServiceSpec};
+
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
+}
+
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    type Config = String;
+    type Error = Infallible;
+}
+
+impl SyncServiceSpec for GreeterSpec {
+    type Output = Arc<dyn Greeter>;
+}
+
+qubit_spi::declare_sync_provider_inventory! {
+    pub mod providers {
+        spec = crate::GreeterSpec;
+    }
+}
+```
+
+该 collection 与 `GreeterSpec` 绑定并按服务族隔离；其他服务族提交的条目不会被
+`providers::build_registry()` 读取。
+
+### 2. 服务提供者 crate：提交工厂
+
+<!-- spi-example: inventory-providers; file: provider-friendly/src/lib.rs -->
+```rust
+use std::convert::Infallible;
+use std::sync::Arc;
+
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::{ProviderDescriptor, ProviderMetadata, ServiceProvider};
+use service_contract::{Greeter, GreeterSpec};
+
+struct FriendlyGreeter;
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("Hello, {name}!")
+    }
+}
+
+struct FriendlyProvider;
+
+impl ProviderMetadata for FriendlyProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        qubit_spi::provider_descriptor!("friendly").with_priority(10)
+    }
+}
+
+impl ServiceProvider<GreeterSpec> for FriendlyProvider {
+    fn create_configured(
+        &self,
+        _config: &String,
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<Infallible>> {
+        Ok(Arc::new(FriendlyGreeter))
+    }
+}
+
+qubit_spi::submit_sync_provider! {
+    inventory_entry = service_contract::providers::Entry;
+    spec = service_contract::GreeterSpec;
+    provider = FriendlyProvider;
+}
+```
+
+### 3. 应用 crate：固定链接、构建、补充注册、选择与封存
+
+只在 `Cargo.toml` 中声明依赖并不保证服务提供者会被链接到最终可执行文件。应将明确
+的固定链接集中在小模块中；下面的 `_` 导入是有意的，它让服务提供者的 inventory
+条目保持可达。
+
+<!-- spi-example: inventory-providers; file: app/src/linked_providers.rs -->
+```rust
+use provider_friendly as _;
+```
+
+<!-- spi-example: inventory-providers; file: app/src/main.rs -->
+```rust
+mod linked_providers;
+
+use std::convert::Infallible;
+use std::sync::Arc;
+
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::{ProviderDescriptor, ProviderMetadata, ProviderSelection, ServiceProvider};
+use service_contract::{Greeter, GreeterSpec};
+
+struct ConfiguredGreeter {
+    prefix: String,
+}
+
+impl Greeter for ConfiguredGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {name}!", self.prefix)
+    }
+}
+
+struct ConfiguredProvider {
+    prefix: String,
+}
+
+impl ProviderMetadata for ConfiguredProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        qubit_spi::provider_descriptor!("configured").with_priority(100)
+    }
+}
+
+impl ServiceProvider<GreeterSpec> for ConfiguredProvider {
+    fn create_configured(
+        &self,
+        _config: &String,
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<Infallible>> {
+        Ok(Arc::new(ConfiguredGreeter {
+            prefix: self.prefix.clone(),
+        }))
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let registry = service_contract::providers::build_registry()?;
+    registry.register(ConfiguredProvider {
+        prefix: "Hello".to_owned(),
+    })?;
+    registry.set_default_selection(ProviderSelection::named("configured")?);
+    registry.seal();
+
+    let greeter = registry.resolve()?.create()?;
+    println!("{}", greeter.greet("inventory"));
+    Ok(())
+}
+```
+
+`build_registry()` 对每个发现到的工厂都使用普通注册的原子路径。任何工厂或描述符
+失败时，它会返回带提交源代码位置的错误，不会给出部分构建的注册表。服务提供者的
+链接或发现顺序也不决定 `ProviderSelection::auto()`：自动选择始终按优先级降序、规范
+ID 升序进行。这一机制不是动态插件框架：不会加载共享库，也不会在可执行文件链接后
+再发现服务提供者。
+
 ## 选择、配置与诊断
 
 注册表的默认选择与服务配置相互独立。新注册表默认采用自动选择和 `OnAbsence`

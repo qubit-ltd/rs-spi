@@ -18,6 +18,29 @@
 文件系统注册表可以通过包装器验证输出身份，指定根目录的本地服务提供者也可以
 返回已有文件系统句柄的克隆。SPI 不会根据元数据推断这些业务约束。
 
+## 可选的链接期服务提供者发现
+
+默认 feature 集为空。启用 `inventory` 后，SPI 才提供静态链接期发现适配层；它既不
+改变显式注册表 API，也不会把运行时发现变成默认行为。服务契约 crate 对某个具体的
+`ServiceSpec` 调用 `declare_sync_provider_inventory!` 或
+`declare_async_provider_inventory!`。该声明拥有一个 inventory collection 及其
+`build_registry()` 函数。服务提供者 crate 使用对应的 `submit_*_provider!` 宏提交
+零参数工厂。工厂只会在应用构建注册表时执行，因此有状态对象仍可通过普通的
+`register` API 由应用显式注册。
+
+collection 由服务族类型约束并彼此隔离。例如，提交到 `GreeterSpec` collection 的
+条目不能在构建另一种 spec 的注册表时被读取。构建时会逐个遍历发现的条目，并沿用
+普通注册的原子路径。若工厂、描述符、ID 或别名失败，`build_registry()` 返回包含
+源代码位置的 `ProviderInventoryBuildError`，且不返回任何注册表；不会暴露部分构建
+的结果。
+
+Cargo 解析依赖不等于链接器将 crate 放入最终二进制。即使 `Cargo.toml` 中列出了
+服务提供者包，在没有符号固定它时仍可能被省略。应用应把这类固定链接集中到
+`linked_providers.rs` 一类模块，并在调用契约 crate 的 `build_registry()` 前写入
+`use provider_friendly as _;`。crate 链接或条目发现的顺序不是选择策略：自动选择
+始终按优先级降序、规范 ID 升序进行。此能力只发现已编入可执行文件的条目；不加载
+动态库、不扫描目录，也不接受启动后的插件。
+
 ## 目录与快照边界
 
 ```mermaid
@@ -116,6 +139,8 @@ SPI 不缓存输出，也不保证新分配。创建成功后的服务操作错�
   历史快照。保留命名边界种子，随机探索产物放入临时目录。
 - Markdown 检查按语言独立提取带标记的 Rust 代码，校验完整清单后执行真实 Cargo
   场景。删除整个场景、忽略代码块或使用过期方法都会失败，不用无关副本替代原文代码。
+- 文档场景包含真实的三 crate `inventory-providers` workspace：契约声明 collection，
+  服务提供者提交工厂，应用固定链接该服务提供者，并依次构建、补充注册、选择、封存和创建。
 - 发布包验证使用真实 Cargo 归档，在解包后构建和测试，不注入指向 checkout 的路径
   补丁，防止测试依赖未发布的 fuzz 源码或共享 CI 子模块。
 - CI 执行格式相关 lint、测试、文档及项目专属的示例和归档检查。修改还需要经过

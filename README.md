@@ -20,7 +20,14 @@ installs the implementation appropriate to its deployment.
 qubit-spi = "0.12"
 ```
 
-Requires Rust 1.94 or later. This crate has no optional runtime features.
+Requires Rust 1.94 or later. The default feature set is empty. Enable the
+optional `inventory` feature only when a service family uses link-time provider
+discovery:
+
+```toml
+[dependencies]
+qubit-spi = { version = "0.12", features = ["inventory"] }
+```
 
 ## Quick Start
 
@@ -74,9 +81,31 @@ service crate.
 - Registry clones share runtime changes; resolved candidates retain their captured identity, order and policy.
 - Typed errors retain actual attempts and domain diagnostics. Each create invokes a factory, which may reuse an existing resource.
 
+### Optional linked-provider discovery
+
+With `inventory`, a service-contract crate declares one collection for one
+service family, and provider crates submit factory entries to that collection.
+The application builds the registry from its linked entries, may explicitly
+register stateful providers, selects a default, then seals the registry before
+creating the service. Collections are isolated by service family: a provider
+submitted for one contract cannot appear in another contract's registry.
+
+Discovery happens at link time, not when Cargo resolves dependencies. Listing a
+provider crate in `Cargo.toml` does not guarantee that its inventory entry is in
+the final binary; anchor a provider that has no other symbols with
+`use provider_friendly as _;` in (for example) `linked_providers.rs`.
+
+Each discovered entry is registered through the normal registry path. A factory
+or descriptor conflict therefore fails `build_registry()` atomically: no partly
+built registry is returned. Discovery/source order also does not decide
+automatic selection; `ProviderSelection::auto()` still orders candidates by
+priority descending and canonical ID ascending. This is static linked-provider
+discovery, not a dynamic-plugin system: it neither loads shared libraries nor
+discovers providers after the program is linked.
+
 ## Learn More
 
-- [User Guide](doc/user_guide.md): three libraries plus an application, full configuration, fallback and troubleshooting.
+- [User Guide](doc/user_guide.md): explicit and link-time three-crate composition, full configuration, fallback and troubleshooting.
 - [中文用户指南](doc/user_guide.zh_CN.md).
 - [Design](doc/design.md) and [中文设计说明](doc/design.zh_CN.md): contracts and implementation decisions.
 - [API reference](https://docs.rs/qubit-spi).
