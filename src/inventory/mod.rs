@@ -5,14 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for the public Qubit SPI contract.
+//! Types supporting optional link-time provider discovery.
 
-mod common;
-mod error;
-#[cfg(feature = "inventory")]
-mod inventory;
-mod lib_tests;
-mod provider;
-mod registry;
-mod selection;
-mod service;
+mod provider_registration_source;
+
+pub use provider_registration_source::ProviderRegistrationSource;

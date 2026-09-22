@@ -5,14 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Integration tests for the public Qubit SPI contract.
 
-mod common;
-mod error;
-#[cfg(feature = "inventory")]
-mod inventory;
-mod lib_tests;
-mod provider;
-mod registry;
-mod selection;
-mod service;
+mod provider_inventory_build_error_tests;
+mod provider_registration_source_tests;

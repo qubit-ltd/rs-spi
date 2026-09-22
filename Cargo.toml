@@ -29,6 +29,10 @@ include = [
 name = "qubit_spi"
 doctest = true
 
+[features]
+default = []
+inventory = ["dep:inventory"]
+
 [[test]]
 name = "integration_tests"
 path = "tests/mod.rs"
@@ -38,6 +42,7 @@ name = "registry_resolution"
 harness = false
 
 [dependencies]
+inventory = { version = "^0.3", optional = true }
 parking_lot = "^0.12"
 qubit-collections = { version = "0.2" }
 thiserror = "^2.0"

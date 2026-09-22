@@ -45,6 +45,8 @@ mod provider_descriptor_error;
 mod provider_failure;
 mod provider_failure_kind;
 mod provider_id_error;
+#[cfg(feature = "inventory")]
+mod provider_inventory_build_error;
 mod provider_resolution_error;
 mod provider_selection_build_error;
 mod provider_selector_error;
@@ -56,6 +58,8 @@ pub use provider_descriptor_error::ProviderDescriptorError;
 pub use provider_failure::ProviderFailure;
 pub use provider_failure_kind::ProviderFailureKind;
 pub use provider_id_error::ProviderIdError;
+#[cfg(feature = "inventory")]
+pub use provider_inventory_build_error::ProviderInventoryBuildError;
 pub use provider_resolution_error::ProviderResolutionError;
 pub use provider_selection_build_error::ProviderSelectionBuildError;
 pub use provider_selector_error::ProviderSelectorError;
