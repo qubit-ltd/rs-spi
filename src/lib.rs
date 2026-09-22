@@ -230,4 +230,7 @@ pub use service::SyncServiceSpec;
 #[doc(hidden)]
 pub mod __private {
     pub use ::inventory;
+
+    pub use crate::inventory::SyncProviderInventoryEntry;
+    pub use crate::inventory::build_sync_registry;
 }

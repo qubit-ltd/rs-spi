@@ -8,3 +8,4 @@
 
 mod provider_inventory_build_error_tests;
 mod provider_registration_source_tests;
+mod sync_inventory_tests;
