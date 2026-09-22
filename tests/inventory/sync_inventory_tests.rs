@@ -44,6 +44,47 @@ submit_sync_provider! {
 }
 
 declare_sync_provider_inventory! {
+    pub mod caller_factory_providers {
+        spec = StringSpec;
+    }
+}
+
+/// Builds a provider through a name that must remain visible inside the macro's
+/// generated factory function.
+fn factory() -> TestProviderDefinition<ConfigurableProvider> {
+    define_provider(
+        provider_descriptor!("caller-factory"),
+        ConfigurableProvider::success("caller-factory"),
+    )
+}
+
+submit_sync_provider! {
+    inventory_entry = caller_factory_providers::Entry;
+    spec = StringSpec;
+    provider = factory();
+}
+
+declare_sync_provider_inventory! {
+    pub mod internal_factory_name_providers {
+        spec = StringSpec;
+    }
+}
+
+/// Builds a provider through the macro implementation's former internal name.
+fn __qubit_spi_inventory_factory() -> TestProviderDefinition<ConfigurableProvider> {
+    define_provider(
+        provider_descriptor!("internal-factory-name"),
+        ConfigurableProvider::success("internal-factory-name"),
+    )
+}
+
+submit_sync_provider! {
+    inventory_entry = internal_factory_name_providers::Entry;
+    spec = StringSpec;
+    provider = __qubit_spi_inventory_factory();
+}
+
+declare_sync_provider_inventory! {
     pub mod duplicate_providers {
         spec = StringSpec;
     }
@@ -219,6 +260,41 @@ fn test_build_registry_discovers_and_creates_synchronous_provider() {
         resolver
             .create()
             .expect("discovered provider should create its service"),
+    );
+}
+
+/// Verifies that a provider expression can call a caller function named
+/// `factory` without macro-generated name capture.
+#[test]
+fn test_submit_provider_preserves_caller_factory_name_resolution() {
+    let registry = caller_factory_providers::build_registry().expect("caller factory provider should register");
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::named("caller-factory").expect("static selector should be valid"))
+        .expect("caller factory provider should resolve");
+
+    assert_eq!(
+        "caller-factory",
+        resolver
+            .create()
+            .expect("caller factory provider should create its service"),
+    );
+}
+
+/// Verifies that provider expressions cannot be captured by a macro-internal
+/// factory identifier.
+#[test]
+fn test_submit_provider_preserves_internal_factory_name_resolution() {
+    let registry =
+        internal_factory_name_providers::build_registry().expect("internal factory name provider should register");
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::named("internal-factory-name").expect("static selector should be valid"))
+        .expect("internal factory name provider should resolve");
+
+    assert_eq!(
+        "internal-factory-name",
+        resolver
+            .create()
+            .expect("internal factory name provider should create its service"),
     );
 }
 

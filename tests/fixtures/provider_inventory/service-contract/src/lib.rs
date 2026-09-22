@@ -5,6 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+#![deny(missing_docs)]
+
+//! Service-family contract used by the cross-crate provider fixture.
 
 use std::convert::Infallible;
 

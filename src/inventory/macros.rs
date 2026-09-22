@@ -85,6 +85,7 @@ macro_rules! declare_sync_provider_inventory {
             spec = $spec:path;
         }
     ) => {
+        #[doc = "Link-time provider inventory for one concrete service family."]
         $visibility mod $module {
 
             #[doc(hidden)]
@@ -142,13 +143,11 @@ macro_rules! submit_sync_provider {
         provider = $provider:expr;
     ) => {
         const _: () = {
-            fn factory() -> ::std::sync::Arc<dyn $crate::ProviderDefinition<$spec>> {
-                ::std::sync::Arc::new($provider)
-            }
-
             $crate::__private::inventory::submit! {
                 $($inventory_entry)::+::__new(
-                    factory,
+                    || -> ::std::sync::Arc<dyn $crate::ProviderDefinition<$spec>> {
+                        ::std::sync::Arc::new($provider)
+                    },
                     $crate::ProviderRegistrationSource::new(
                         env!("CARGO_PKG_NAME"),
                         module_path!(),
@@ -239,6 +238,7 @@ macro_rules! declare_async_provider_inventory {
             spec = $spec:path;
         }
     ) => {
+        #[doc = "Link-time provider inventory for one concrete service family."]
         $visibility mod $module {
 
             #[doc(hidden)]
@@ -297,13 +297,11 @@ macro_rules! submit_async_provider {
         provider = $provider:expr;
     ) => {
         const _: () = {
-            fn factory() -> ::std::sync::Arc<dyn $crate::AsyncProviderDefinition<$spec>> {
-                ::std::sync::Arc::new($provider)
-            }
-
             $crate::__private::inventory::submit! {
                 $($inventory_entry)::+::__new(
-                    factory,
+                    || -> ::std::sync::Arc<dyn $crate::AsyncProviderDefinition<$spec>> {
+                        ::std::sync::Arc::new($provider)
+                    },
                     $crate::ProviderRegistrationSource::new(
                         env!("CARGO_PKG_NAME"),
                         module_path!(),
