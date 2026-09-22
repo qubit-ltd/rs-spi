@@ -349,6 +349,9 @@ impl ServiceProvider<GreeterSpec> for ConfiguredProvider {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = service_contract::providers::build_registry()?;
+    let friendly = registry.resolve_selected(&ProviderSelection::named("friendly")?)?.create()?;
+    assert_eq!("Hello, inventory!", friendly.greet("inventory"));
+
     registry.register(ConfiguredProvider {
         prefix: "Hello".to_owned(),
     })?;
@@ -361,11 +364,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`build_registry()` 对每个发现到的工厂都使用普通注册的原子路径。任何工厂或描述符
-失败时，它会返回带提交源代码位置的错误，不会给出部分构建的注册表。服务提供者的
-链接或发现顺序也不决定 `ProviderSelection::auto()`：自动选择始终按优先级降序、规范
-ID 升序进行。这一机制不是动态插件框架：不会加载共享库，也不会在可执行文件链接后
-再发现服务提供者。
+第一段具名解析和断言发生在应用注册 `ConfiguredProvider` 之前，因此移除链接锚点或
+服务提供者提交时，这个场景会在这里准确失败。`build_registry()` 对每个发现到的工厂
+都使用普通注册的原子路径。只有注册冲突才会返回带提交源代码位置的
+`ProviderInventoryBuildError`，且不会给出部分构建的注册表。零参数工厂没有 `Result`
+返回值；工厂和 `descriptor()` 的 panic 原样传播。服务提供者的链接或发现顺序也不决定
+`ProviderSelection::auto()`：自动选择始终按优先级降序、规范 ID 升序进行。这一机制不是
+动态插件框架：不会加载共享库，也不会在可执行文件链接后再发现服务提供者。
 
 ## 选择、配置与诊断
 

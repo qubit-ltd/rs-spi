@@ -36,11 +36,13 @@ stateful values explicitly through the ordinary `register` API.
 
 Collections are typed and isolated by service family. An entry submitted to the
 collection declared for `GreeterSpec`, for example, cannot be read while
-building a registry for a different spec. Building iterates discovered entries
-and registers each through the ordinary atomic registration path. If a factory,
-descriptor, ID or alias fails, `build_registry()` returns a
-`ProviderInventoryBuildError` with the source location and returns no registry;
-it never exposes a partially built result.
+building a registry for a different spec. Building iterates discovered entries,
+calls each zero-argument factory, and registers the resulting provider through
+the ordinary atomic registration path. Only a registration conflict (canonical
+ID or alias ownership) is returned as a `ProviderInventoryBuildError` with the
+submission source location; no partially built registry is returned. Factories
+do not return `Result`, and factory or `descriptor()` panics propagate unchanged
+rather than being converted into inventory build errors.
 
 Cargo dependency resolution is not linker reachability. A provider package in
 `Cargo.toml` may be omitted from the final binary when no symbol anchors it.

@@ -95,13 +95,13 @@ provider crate in `Cargo.toml` does not guarantee that its inventory entry is in
 the final binary; anchor a provider that has no other symbols with
 `use provider_friendly as _;` in (for example) `linked_providers.rs`.
 
-Each discovered entry is registered through the normal registry path. A factory
-or descriptor conflict therefore fails `build_registry()` atomically: no partly
-built registry is returned. Discovery/source order also does not decide
-automatic selection; `ProviderSelection::auto()` still orders candidates by
-priority descending and canonical ID ascending. This is static linked-provider
-discovery, not a dynamic-plugin system: it neither loads shared libraries nor
-discovers providers after the program is linked.
+Each discovered entry is registered through the normal registry path. A
+registration conflict therefore fails `build_registry()` atomically: no partly
+built registry is returned. Discovery/source order also does not decide automatic
+selection; `ProviderSelection::auto()` still orders candidates by priority
+descending and canonical ID ascending. This is static linked-provider discovery,
+not a dynamic-plugin system: it neither loads shared libraries nor discovers
+providers after the program is linked.
 
 ## Learn More
 

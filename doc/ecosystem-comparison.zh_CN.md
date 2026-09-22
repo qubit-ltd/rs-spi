@@ -2,9 +2,9 @@
 
 ## 研究基线与结论
 
-- **对象**：`qubit-spi` 0.12.0，仓库 [rs-spi](/home/starfish/working/qubit/rust-common/rs-spi)，提交 `63cc5b6`；分析日期 2026-09-22。
-- **范围**：标准深度的静态源码、项目文档和公开的上游文档对比；未运行测试、基准或示例，因本次授权是设计评估而非构建验证。
-- **工作区**：开始分析时 `git status --short` 为空；CodeGraph 索引不存在，因此使用定向源码阅读。
+- **对象**：`qubit-spi` 0.12.0，仓库 [rs-spi](/home/starfish/working/qubit/rust-common/rs-spi)，实现代码基线提交 `4370fc6`；分析日期 2026-09-23。
+- **范围**：标准深度的静态源码、项目文档和公开的上游文档对比。本轮已运行 `python3 scripts/check-documentation.py`（编译并运行双语文档中的所有标记场景）以及 `RUSTDOCFLAGS='-D warnings' cargo test --doc --all-features`；未运行完整集成测试、基准、fuzz 或下游消费者验证。
+- **工作区**：工作树含其他任务拥有的格式改动，未将它们作为本次结论依据。CodeGraph 索引不存在，因此使用定向源码阅读。
 
 **结论先行**：rs-spi 不是“Rust 动态插件框架”的同类替代品，而是一个用于**静态链接应用内、运行时可配置的多后端服务选择器**。它最突出的价值，是将“候选发现（显式注册）—选择（名称/链/自动）—构造（带失败语义的回退）”分成三个阶段，并让同步与异步在选择和错误语义上保持一致。对于文件系统、对象存储、编码器、认证后端这类“应用决定装配、库只依赖抽象”的场景，它比手写 `match` 或仅用 `inventory` 更完整、可观测且并发边界更清楚。
 
@@ -90,10 +90,10 @@ flowchart LR
 
 `inventory` 已是 rs-spi 的可选集成：服务契约 crate 声明与服务族绑定的 collection，
 provider crate 提交 factory，应用用 `use provider_friendly as _;` 等锚点决定链接集合，
-再调用 `build_registry()`。rs-spi 随后完成 ID 冲突校验、选择、快照和 fallback；构建
-失败不会返回部分 registry。`linkme` 仍可作为上层来源，但需要适配为同样的显式构建
-步骤。无论来源为何，条目发现/链接顺序都不是自动选择顺序，后者固定为优先级降序和
-规范 ID 升序。
+再调用 `build_registry()`。rs-spi 随后完成 ID 冲突校验、选择、快照和 fallback；注册
+冲突时构建不会返回部分 registry。factory 和 `descriptor()` panic 原样传播。`linkme`
+仍可作为上层来源，但需要适配为同样的显式构建步骤。无论来源为何，条目发现/链接顺序
+都不是自动选择顺序，后者固定为优先级降序和规范 ID 升序。
 
 动态插件场景也可采用两层结构：ABI 插件层只暴露稳定的 factory/descriptor 协议，宿主把成功加载的适配器注册进 rs-spi。但这是一项新产品能力，需要单独设计 ABI、版本协商、隔离、资源所有权和不可安全卸载等规则；绝不应把现在的 `dyn ProviderDefinition<S>` 当作跨动态库 ABI。
 
@@ -129,7 +129,7 @@ provider crate 提交 factory，应用用 `use provider_friendly as _;` 等锚�
 
 - **应采用 rs-spi**：一个领域服务有 2+ 可选后端，部署/配置决定顺序，且“不可用可回退、配置错误应停下”是业务语义；尤其适用于 Qubit 内多个 domain crate 共享同一选择模型。
 - **应只用 trait 注入**：只有一个实现，或调用点天然知道具体实现；引入 registry 只会制造间接层。
-- **在 rs-spi 上加 `inventory`/`linkme`**：provider 来自多个静态 extension crate，中央应用不想维护长注册列表；仍须保留显式过滤、封存和冲突处理。
+- **启用内置 `inventory`，或另行适配 `linkme`**：provider 来自多个静态 extension crate，中央应用不想维护长注册列表；仍须保留显式锚定、封存和冲突处理。
 - **改用 ABI 插件框架**：用户需要把未在编译期链接的第三方二进制放入目录后加载。此时 rs-spi 可保留为 host 内的选择层，但不能独自完成目标。
 
 ## 7. 阅读路线与研究边界

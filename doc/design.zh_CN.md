@@ -29,10 +29,11 @@
 `register` API 由应用显式注册。
 
 collection 由服务族类型约束并彼此隔离。例如，提交到 `GreeterSpec` collection 的
-条目不能在构建另一种 spec 的注册表时被读取。构建时会逐个遍历发现的条目，并沿用
-普通注册的原子路径。若工厂、描述符、ID 或别名失败，`build_registry()` 返回包含
-源代码位置的 `ProviderInventoryBuildError`，且不返回任何注册表；不会暴露部分构建
-的结果。
+条目不能在构建另一种 spec 的注册表时被读取。构建时会逐个遍历发现的条目，调用每个
+零参数工厂，再沿用普通注册的原子路径注册所得服务提供者。只有注册冲突（规范 ID 或
+别名归属）才会返回带提交源代码位置的 `ProviderInventoryBuildError`，且不会返回部分
+构建的注册表。工厂不返回 `Result`；工厂或 `descriptor()` 的 panic 原样传播，不会被
+转换为 inventory 构建错误。
 
 Cargo 解析依赖不等于链接器将 crate 放入最终二进制。即使 `Cargo.toml` 中列出了
 服务提供者包，在没有符号固定它时仍可能被省略。应用应把这类固定链接集中到

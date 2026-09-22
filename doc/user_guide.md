@@ -356,6 +356,9 @@ impl ServiceProvider<GreeterSpec> for ConfiguredProvider {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = service_contract::providers::build_registry()?;
+    let friendly = registry.resolve_selected(&ProviderSelection::named("friendly")?)?.create()?;
+    assert_eq!("Hello, inventory!", friendly.greet("inventory"));
+
     registry.register(ConfiguredProvider {
         prefix: "Hello".to_owned(),
     })?;
@@ -368,12 +371,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`build_registry()` uses normal atomic registration for every discovered factory.
-If any factory or descriptor fails, it returns an error with the submitting
-source location and no partially built registry. Provider link/discovery order
-does not determine `ProviderSelection::auto()` either: automatic selection is
-always priority descending and canonical ID ascending. This mechanism is not a
-dynamic plugin framework: it does not load shared libraries or find providers
+The first named resolution and assertion happen before the application registers
+`ConfiguredProvider`, so removing the link anchor or provider submission makes
+this exact scenario fail. `build_registry()` uses normal atomic registration for
+every discovered factory. Only a registration conflict returns a
+`ProviderInventoryBuildError` with the submitting source location and no
+partially built registry. The zero-argument factory has no `Result` return;
+factory and `descriptor()` panics propagate unchanged. Provider link/discovery
+order does not determine `ProviderSelection::auto()` either: automatic selection
+is always priority descending and canonical ID ascending. This mechanism is not
+a dynamic plugin framework: it does not load shared libraries or find providers
 after the executable has been linked.
 
 ## Selection, Configuration and Diagnostics
