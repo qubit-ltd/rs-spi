@@ -1,0 +1,14 @@
+[package]
+name = "consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+futures = "^0.3"
+provider-alpha = { path = "../provider-alpha" }
+provider-async = { path = "../provider-async" }
+provider-beta = { path = "../provider-beta" }
+provider-duplicate = { path = "../provider-duplicate" }
+service-contract = { path = "../service-contract" }
+spi = { package = "qubit-spi", path = "../../../..", features = ["inventory"] }

@@ -1,0 +1,9 @@
+[package]
+name = "provider-beta"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+service-contract = { path = "../service-contract" }
+spi = { package = "qubit-spi", path = "../../../..", features = ["inventory"] }

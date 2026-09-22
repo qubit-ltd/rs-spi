@@ -11,6 +11,7 @@ pub(crate) mod async_configurable_provider;
 pub(crate) mod blocking_writer;
 pub(crate) mod configurable_provider;
 pub(crate) mod failing_writer;
+pub(crate) mod inventory_fixture;
 pub(crate) mod self_described_provider;
 pub(crate) mod string_spec;
 pub(crate) mod test_error;

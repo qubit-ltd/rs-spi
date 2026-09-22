@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "service-contract",
+    "provider-alpha",
+    "provider-beta",
+    "provider-duplicate",
+    "provider-async",
+    "consumer",
+]
+resolver = "3"
