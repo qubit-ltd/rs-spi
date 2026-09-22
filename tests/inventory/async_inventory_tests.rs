@@ -45,16 +45,30 @@ declare_async_provider_inventory! {
     }
 }
 
-submit_async_provider! {
-    inventory_entry = duplicate_providers::Entry;
-    spec = StringSpec;
-    provider = define_provider(provider_descriptor!("duplicate"), AsyncConfigurableProvider::success("first"));
+mod alpha_duplicate_submission {
+    use super::AsyncConfigurableProvider;
+    use super::define_provider;
+    use super::provider_descriptor;
+    use super::submit_async_provider;
+
+    submit_async_provider! {
+        inventory_entry = super::duplicate_providers::Entry;
+        spec = super::StringSpec;
+        provider = define_provider(provider_descriptor!("duplicate"), AsyncConfigurableProvider::success("first"));
+    }
 }
 
-submit_async_provider! {
-    inventory_entry = duplicate_providers::Entry;
-    spec = StringSpec;
-    provider = define_provider(provider_descriptor!("duplicate"), AsyncConfigurableProvider::success("second"));
+mod zulu_duplicate_submission {
+    use super::AsyncConfigurableProvider;
+    use super::define_provider;
+    use super::provider_descriptor;
+    use super::submit_async_provider;
+
+    submit_async_provider! {
+        inventory_entry = super::duplicate_providers::Entry;
+        spec = super::StringSpec;
+        provider = define_provider(provider_descriptor!("duplicate"), AsyncConfigurableProvider::success("second"));
+    }
 }
 
 declare_async_provider_inventory! {
@@ -233,9 +247,15 @@ fn test_build_registry_returns_unsealed_registry_that_accepts_explicit_provider(
 #[test]
 fn test_build_registry_reports_source_for_duplicate_provider_id() {
     let error = duplicate_providers::build_registry().expect_err("duplicate provider ID should be rejected");
+    let source = error.source_location();
 
     assert!(matches!(error, ProviderInventoryBuildError::Registration { .. }));
-    assert_eq!(module_path!(), error.source_location().module_path());
+    assert_eq!(
+        concat!(module_path!(), "::zulu_duplicate_submission"),
+        source.module_path()
+    );
+    assert_eq!(env!("CARGO_PKG_NAME"), source.crate_name());
+    assert_eq!(file!(), source.file());
     assert!(error.registration_error().to_string().contains("duplicate"));
 }
 
