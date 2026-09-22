@@ -46,7 +46,7 @@ impl ProviderRegistrationSource {
     /// # Returns
     ///
     /// The static package name recorded for the submission.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn crate_name(self) -> &'static str {
         self.crate_name
@@ -57,7 +57,7 @@ impl ProviderRegistrationSource {
     /// # Returns
     ///
     /// The static module path recorded for the submission.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn module_path(self) -> &'static str {
         self.module_path
@@ -68,7 +68,7 @@ impl ProviderRegistrationSource {
     /// # Returns
     ///
     /// The static source file path recorded for the submission.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn file(self) -> &'static str {
         self.file
@@ -79,7 +79,7 @@ impl ProviderRegistrationSource {
     /// # Returns
     ///
     /// The one-based line number recorded for the submission.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn line(self) -> u32 {
         self.line

@@ -15,6 +15,7 @@ use crate::inventory::ProviderRegistrationSource;
 /// Error raised when a discovered provider cannot be added to a registry.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderInventoryBuildError {
     /// A submitted provider conflicts with registry mutation rules.
     #[error("failed to register provider submitted from {source}: {error}")]
@@ -39,8 +40,8 @@ impl ProviderInventoryBuildError {
     ///
     /// A registration error retaining both the discovery source and mutation
     /// failure.
-    #[must_use]
-    pub fn registration(source: ProviderRegistrationSource, error: RegistryMutationError) -> Self {
+    #[allow(dead_code)] // Used by inventory registry builders introduced in a later implementation stage.
+    pub(crate) fn registration(source: ProviderRegistrationSource, error: RegistryMutationError) -> Self {
         Self::Registration { source, error }
     }
 

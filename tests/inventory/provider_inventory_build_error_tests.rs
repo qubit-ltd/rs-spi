@@ -19,8 +19,11 @@ fn test_inventory_build_error_retains_registration_source_and_cause() {
         existing_provider: "existing".into(),
         provider: "attempted".into(),
     };
-    let error = ProviderInventoryBuildError::registration(source, mutation);
+    let error = ProviderInventoryBuildError::Registration {
+        source,
+        error: mutation.clone(),
+    };
 
     assert_eq!(source, error.source_location());
-    assert_eq!(Some("shared"), error.registration_error().selector());
+    assert_eq!(&mutation, error.registration_error());
 }

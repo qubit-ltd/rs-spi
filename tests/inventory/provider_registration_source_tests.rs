@@ -42,8 +42,5 @@ fn test_registration_source_display_includes_the_complete_declaration_location()
     let source = ProviderRegistrationSource::new("provider-a", "backend", "src/lib.rs", 17);
     let display = source.to_string();
 
-    assert!(display.contains("provider-a"));
-    assert!(display.contains("backend"));
-    assert!(display.contains("src/lib.rs"));
-    assert!(display.contains("17"));
+    assert_eq!("provider-a::backend, src/lib.rs:17", display);
 }
