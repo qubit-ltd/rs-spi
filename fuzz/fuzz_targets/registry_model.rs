@@ -308,7 +308,9 @@ fuzz_target!(|data: &[u8]| {
                 policy: fields[4] % 3,
             };
             let selection = request.selection();
-            registry.set_default_selection(selection.clone());
+            registry
+                .set_default_selection(selection.clone())
+                .expect("model registry remains mutable");
             let (captured_selection, actual) = registry.resolve_default_snapshot();
             assert_eq!(selection, captured_selection);
             match (actual, candidates(&entries, &request)) {
