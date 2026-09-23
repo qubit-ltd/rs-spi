@@ -33,15 +33,18 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual(blocks[0].file, PurePosixPath('app/src/main.rs'))
         self.assertEqual(blocks[0].first_code_line, 3)
 
-    def test_reject_missing_marker_and_unclosed_fence(self):
-        for source in ('```rust\nfn main() {}\n```\n', '```text\nunclosed\n',
-                       '<!-- spi-example: a; file: app/src/main.rs -->\n```rust,ignore\nfn main() {}\n```\n'):
+    def test_unmarked_rust_fences_are_not_executable_examples(self):
+        blocks = self.check.extract_blocks('```rust\nfn main() {}\n```\n', 'README.md')
+        self.assertEqual([], blocks)
+
+    def test_reject_unclosed_fence_and_unused_marker(self):
+        for source in ('```text\nunclosed\n', '<!-- spi-example: a; file: app/src/main.rs -->\n'):
             with self.subTest(source=source), self.assertRaises(ValueError):
                 self.check.extract_blocks(source, 'README.md')
 
-    def test_reject_space_separated_rust_exemptions(self):
+    def test_reject_non_plain_rust_fence_for_marked_examples(self):
         for language in ('rust no_run', 'rust ignore', 'rust,no_run'):
-            source = f'```{language}\nfn main() {{}}\n```\n'
+            source = f'<!-- spi-example: quick-start; file: app/src/main.rs -->\n```{language}\nfn main() {{}}\n```\n'
             with self.subTest(language=language), self.assertRaises(ValueError):
                 self.check.extract_blocks(source, 'README.md')
 
