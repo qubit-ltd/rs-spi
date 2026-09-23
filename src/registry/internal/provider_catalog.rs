@@ -139,10 +139,16 @@ where
         Ok(())
     }
 
+    /// Prevents later catalog mutations while preserving reads and resolution.
     pub(crate) fn seal(&self) {
         self.write_inner().sealed = true;
     }
 
+    /// Reports whether catalog mutation has been disabled.
+    ///
+    /// # Returns
+    ///
+    /// `true` after sealing; otherwise `false`.
     #[must_use]
     pub(crate) fn is_sealed(&self) -> bool {
         self.read_inner().sealed

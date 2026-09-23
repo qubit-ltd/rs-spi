@@ -1,6 +1,52 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Errors raised when mutating a provider registry.
+
 use thiserror::Error;
 
-/// Errors raised when mutating a provider registry.
+/// Error returned when a registry mutation conflicts with its current state.
+///
+/// Duplicate selector errors retain the selector and both provider IDs so an
+/// application can report the registration conflict. A sealed registry
+/// rejects every later mutation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_spi::{
+///     ProviderDescriptor, ProviderId, ProviderMetadata, ProviderRegistry,
+///     ServiceProvider, ServiceSpec, SyncServiceSpec,
+/// };
+/// use qubit_spi::error::{ProviderFailure, RegistryMutationError};
+///
+/// struct Spec;
+/// impl ServiceSpec for Spec {
+///     type Config = ();
+///     type Error = std::io::Error;
+/// }
+/// impl SyncServiceSpec for Spec { type Output = (); }
+/// struct Backend;
+/// impl ProviderMetadata for Backend {
+///     fn descriptor(&self) -> ProviderDescriptor {
+///         ProviderDescriptor::new(ProviderId::new("backend").expect("valid ID"))
+///     }
+/// }
+/// impl ServiceProvider<Spec> for Backend {
+///     fn create_configured(&self, _: &()) -> Result<(), ProviderFailure<std::io::Error>> {
+///         Ok(())
+///     }
+/// }
+/// let registry = ProviderRegistry::<Spec>::default();
+/// registry.register(Backend)?;
+/// let error = registry.register(Backend).expect_err("ID is already registered");
+/// assert!(matches!(error, RegistryMutationError::DuplicateSelector { .. }));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
 #[must_use]
@@ -21,6 +67,17 @@ pub enum RegistryMutationError {
 }
 
 impl RegistryMutationError {
+    /// Creates a duplicate-selector error with both provider identities.
+    ///
+    /// # Parameters
+    ///
+    /// * `selector` - Normalized selector already claimed in the registry.
+    /// * `existing_provider` - Canonical ID that currently owns the selector.
+    /// * `provider` - Canonical ID attempting to claim the selector.
+    ///
+    /// # Returns
+    ///
+    /// A mutation error retaining the conflicting registration details.
     pub(crate) fn duplicate_selector(selector: &str, existing_provider: &str, provider: &str) -> Self {
         Self::DuplicateSelector {
             selector: selector.into(),
