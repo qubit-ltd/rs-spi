@@ -1,6 +1,6 @@
 # Qubit SPI User Guide
 
-[README](../README.md) · [Design](design.md) · [Ecosystem comparison](ecosystem-comparison.md)
+[README](../README.md) · [简体中文指南](user_guide.zh_CN.md) · [Design](design.md) · [Ecosystem comparison](ecosystem-comparison.md)
 
 This guide covers `qubit-spi` 0.13 and Rust 1.94+. It is for domain-library authors,
 provider implementers and application authors who compose them. The goal is for

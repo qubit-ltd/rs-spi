@@ -1,6 +1,6 @@
 # Qubit SPI 用户指南
 
-[README](../README.zh_CN.md) · [设计说明](design.zh_CN.md) · [生态对比](ecosystem-comparison.zh_CN.md)
+[README](../README.zh_CN.md) · [English User Guide](user_guide.md) · [设计说明](design.zh_CN.md) · [生态对比](ecosystem-comparison.zh_CN.md)
 
 本指南适用于 `qubit-spi` 0.13，需要 Rust 1.94 或更高版本。领域库作者、服务提供者
 实现者和应用开发者可以沿同一个示例完成集成：`lib-foo` 使用应用选定的问候服务，
