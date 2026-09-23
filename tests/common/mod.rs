@@ -13,6 +13,7 @@ pub(crate) mod configurable_provider;
 #[cfg(feature = "inventory")]
 pub(crate) mod external_string_spec;
 pub(crate) mod failing_writer;
+#[cfg(feature = "inventory")]
 pub(crate) mod inventory_fixture;
 pub(crate) mod self_described_provider;
 pub(crate) mod string_spec;
