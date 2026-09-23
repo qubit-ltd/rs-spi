@@ -7,11 +7,13 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Qubit SPI lets a reusable Rust library obtain an application-selected service
-without depending on a concrete backend. Applications register available
-providers, choose a default, and pass configuration when creating the service.
-For example, a library can request a greeting service while its application
-installs the implementation appropriate to its deployment.
+Reusable Rust libraries often need a service whose implementation depends on the
+application or deployment. Depending directly on one backend couples the library
+to that choice; repeating provider selection and fallback logic in each consumer
+scatters integration policy. Qubit SPI gives libraries a typed service boundary
+and lets applications register providers, choose a default, and pass configuration
+when creating the service. For example, a library can request a greeting service
+while its application installs the implementation appropriate to its deployment.
 
 ## Installation
 

@@ -7,9 +7,10 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-Qubit SPI 为 Rust 库提供可由应用选择的服务实现。库只依赖服务接口，应用负责注册
-可用的服务提供者、设置默认选择，并在创建服务时传入配置。例如，业务库需要问候
-服务时，可以直接取得应用选定的实现，无需自行决定使用哪个后端。
+Rust 库有时需要使用由应用或部署环境决定的服务实现。如果库直接依赖某个后端，就会
+把具体选择带入库本身；如果每个消费方各自编写选择和回退逻辑，集成策略又容易分散。
+Qubit SPI 为库提供类型化的服务边界，由应用注册服务提供者、设置默认选择，并在创建
+服务时传入配置。例如，业务库可以请求问候服务，而由应用安装适合当前部署的实现。
 
 ## 安装
 
