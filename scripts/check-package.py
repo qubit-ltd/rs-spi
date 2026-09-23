@@ -40,6 +40,13 @@ def run(command: list[str], root: Path, env: dict) -> None:
     subprocess.run(command, cwd=root, env=env, timeout=600, check=True)
 
 
+def package_test_command() -> list[str]:
+    """Test packaged crate sources while leaving nested-workspace tests to docs."""
+    return ['cargo', 'test', '--locked', '--all-features', '--',
+            '--skip', 'inventory::cross_crate_inventory_tests',
+            '--skip', 'inventory::fixture_lock_tests']
+
+
 def check_package(root: Path, allow_dirty: bool) -> None:
     """Package, safely extract, and test the actual publishable files."""
     env = os.environ.copy()
@@ -62,7 +69,7 @@ def check_package(root: Path, allow_dirty: bool) -> None:
         extracted = destination / crate
         env['CARGO_TARGET_DIR'] = str(destination / 'target')
         run(['cargo', 'test', '--locked', '--all-targets', '--all-features', '--no-run'], extracted, env)
-        run(['cargo', 'test', '--locked', '--all-features'], extracted, env)
+        run(package_test_command(), extracted, env)
         run([sys.executable, 'scripts/check-documentation.py'], extracted, env)
     print(f'PASS release archive {crate}; allow_dirty={allow_dirty}', flush=True)
 

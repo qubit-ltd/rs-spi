@@ -61,6 +61,15 @@ class DocumentationTests(unittest.TestCase):
 class ArchiveTests(unittest.TestCase):
     """Archives must be self-contained regular files below the crate root."""
 
+    def test_archive_test_command_excludes_checkout_only_fixtures(self):
+        check = load_script('check-package')
+        command = check.package_test_command()
+        self.assertEqual(command[:4], ['cargo', 'test', '--locked', '--all-features'])
+        self.assertEqual(command[4:], [
+            '--', '--skip', 'inventory::cross_crate_inventory_tests',
+            '--skip', 'inventory::fixture_lock_tests',
+        ])
+
     def test_reject_unsafe_archive_members(self):
         import tarfile
         check = load_script('check-package')
