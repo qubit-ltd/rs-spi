@@ -205,7 +205,7 @@ impl AsyncServiceProvider<StringSpec> for PanicDescriptorProvider {
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
-    ) -> qubit_spi::ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         unreachable!("descriptor panic prevents provider creation")
     }
 }
@@ -242,7 +242,7 @@ impl AsyncServiceProvider<StringSpec> for LifecycleProvider {
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
-    ) -> qubit_spi::ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
         CREATE_CONFIGURED_CALLS.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok("lifecycle".to_owned()) })
     }

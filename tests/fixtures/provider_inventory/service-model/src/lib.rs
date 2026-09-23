@@ -7,24 +7,6 @@
 // =============================================================================
 //! Service model shared by the cross-crate provider fixture.
 
-use std::convert::Infallible;
+mod fixture_spec;
 
-use spi::AsyncServiceSpec;
-use spi::ServiceSpec;
-use spi::SyncServiceSpec;
-
-/// Service family shared by the cross-crate provider fixture.
-pub struct FixtureSpec;
-
-impl ServiceSpec for FixtureSpec {
-    type Config = String;
-    type Error = Infallible;
-}
-
-impl SyncServiceSpec for FixtureSpec {
-    type Output = String;
-}
-
-impl AsyncServiceSpec for FixtureSpec {
-    type Output = String;
-}
+pub use fixture_spec::FixtureSpec;

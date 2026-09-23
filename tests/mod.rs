@@ -11,23 +11,7 @@
 extern crate self as inventory_test_contract;
 
 #[cfg(feature = "inventory")]
-pub struct ExternalStringSpec;
-
-#[cfg(feature = "inventory")]
-impl qubit_spi::ServiceSpec for ExternalStringSpec {
-    type Config = String;
-    type Error = std::convert::Infallible;
-}
-
-#[cfg(feature = "inventory")]
-impl qubit_spi::SyncServiceSpec for ExternalStringSpec {
-    type Output = String;
-}
-
-#[cfg(feature = "inventory")]
-impl qubit_spi::AsyncServiceSpec for ExternalStringSpec {
-    type Output = String;
-}
+pub(crate) use common::external_string_spec::ExternalStringSpec;
 
 mod common;
 mod error;
