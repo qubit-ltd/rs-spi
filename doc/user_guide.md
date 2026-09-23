@@ -7,6 +7,13 @@ provider implementers and application authors who compose them. The goal is for
 `lib-foo` to obtain a greeting service chosen by its application, without depending
 on the concrete provider crate.
 
+The underlying problem is a dependency and integration mismatch: a reusable
+library needs a service, but the application knows which backend fits its
+deployment. A direct dependency fixes that choice too early, while hand-written
+selection and fallback can be duplicated across consumers. This guide shows how
+to keep the service contract in the library, make the choice in the application,
+and report provider creation failures through one typed flow.
+
 ## The Three Stages
 
 | Stage | Input and result | Failure boundary |
