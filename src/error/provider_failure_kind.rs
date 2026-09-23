@@ -39,7 +39,7 @@ impl ProviderFailureKind {
     /// # Returns
     ///
     /// True for unsupported and unavailable providers.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_absence(self) -> bool {
         matches!(self, Self::Unsupported | Self::Unavailable)

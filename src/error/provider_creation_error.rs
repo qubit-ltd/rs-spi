@@ -74,7 +74,6 @@ impl<E> ProviderCreationError<E> {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
-    #[inline(always)]
     pub(crate) fn exhausted(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::Exhausted)
     }
@@ -92,7 +91,6 @@ impl<E> ProviderCreationError<E> {
     /// # Panics
     ///
     /// Panics when `attempts` is empty.
-    #[inline(always)]
     pub(crate) fn stopped_by_policy(attempts: Vec<ProviderAttemptFailure<E>>) -> Self {
         Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
@@ -102,7 +100,7 @@ impl<E> ProviderCreationError<E> {
     /// # Returns
     ///
     /// The nonempty attempt sequence retained by this aggregate.
-    #[inline(always)]
+    #[inline]
     #[must_use = "the attempt slice contains the aggregate failure details"]
     pub const fn attempts(&self) -> &[ProviderAttemptFailure<E>] {
         &self.attempts
@@ -113,7 +111,7 @@ impl<E> ProviderCreationError<E> {
     /// # Returns
     ///
     /// The resolver's traversal termination reason.
-    #[inline(always)]
+    #[inline]
     #[must_use = "the decisive attempt identifies the terminating provider failure"]
     pub const fn termination(&self) -> ProviderCreationTermination {
         self.termination
@@ -154,7 +152,7 @@ impl<E> ProviderCreationError<E> {
     /// # Returns
     ///
     /// The ordered attempts and the reason traversal ended.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
         (self.attempts, self.termination)
@@ -233,7 +231,6 @@ where
     /// # Returns
     ///
     /// The final actual provider failure.
-    #[inline(always)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.decisive_attempt())
     }

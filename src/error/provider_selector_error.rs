@@ -79,7 +79,7 @@ impl ProviderSelectorError {
     /// # Returns
     ///
     /// The input supplied to selector parsing.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn input(&self) -> &str {
         match self {

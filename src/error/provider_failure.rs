@@ -48,7 +48,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// A failure classified as unsupported.
-    #[inline(always)]
+    #[inline]
     pub const fn unsupported(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::Unsupported,
@@ -65,7 +65,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// A failure classified as unavailable.
-    #[inline(always)]
+    #[inline]
     pub const fn unavailable(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::Unavailable,
@@ -82,7 +82,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// A failure classified as invalid configuration.
-    #[inline(always)]
+    #[inline]
     pub const fn invalid_configuration(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::InvalidConfiguration,
@@ -99,7 +99,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// A failure classified as initialization failed.
-    #[inline(always)]
+    #[inline]
     pub const fn initialization_failed(error: E) -> Self {
         Self {
             kind: ProviderFailureKind::InitializationFailed,
@@ -112,7 +112,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// The classification consulted by resolver fallback policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn kind(&self) -> ProviderFailureKind {
         self.kind
@@ -123,7 +123,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// A shared reference to the service-specific diagnostic.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn error(&self) -> &E {
         &self.error
@@ -134,7 +134,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// The service-specific diagnostic.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_error(self) -> E {
         self.error
@@ -145,7 +145,7 @@ impl<E> ProviderFailure<E> {
     /// # Returns
     ///
     /// The fallback classification and service-specific diagnostic.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (ProviderFailureKind, E) {
         (self.kind, self.error)
@@ -183,7 +183,7 @@ where
     /// # Returns
     ///
     /// The service-specific diagnostic supplied by the provider.
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)
     }

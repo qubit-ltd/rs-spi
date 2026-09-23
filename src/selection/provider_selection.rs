@@ -108,7 +108,6 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
-    #[inline(always)]
     pub fn chain<I, T>(values: I) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
@@ -137,7 +136,6 @@ impl ProviderSelection {
     ///
     /// Returns [`ProviderSelectionBuildError`] when any selector is invalid
     /// or when `values` contains no selectors.
-    #[inline(always)]
     pub fn chain_allowing_missing<I, T>(values: I) -> Result<Self, ProviderSelectionBuildError>
     where
         I: IntoIterator<Item = T>,
@@ -152,7 +150,7 @@ impl ProviderSelection {
     ///
     /// A view distinguishing automatic, named, strict-chain, and lenient-chain
     /// targets without allocating.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target(&self) -> ProviderSelectionTargetRef<'_> {
         match &self.target {
@@ -173,7 +171,7 @@ impl ProviderSelection {
     /// # Returns
     ///
     /// The fallback policy stored with this selection.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn fallback_policy(&self) -> FallbackPolicy {
         self.fallback_policy
@@ -188,7 +186,7 @@ impl ProviderSelection {
     /// # Returns
     ///
     /// This selection with its target unchanged and policy replaced.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn with_fallback_policy(mut self, fallback_policy: FallbackPolicy) -> Self {
         self.fallback_policy = fallback_policy;
@@ -200,7 +198,7 @@ impl ProviderSelection {
     /// # Returns
     ///
     /// A shared reference to the invariant-safe private representation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn repr(&self) -> &ProviderSelectionRepr {
         &self.target
@@ -257,7 +255,7 @@ impl Default for ProviderSelection {
     /// # Returns
     ///
     /// An automatic provider selection.
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self::auto()
     }

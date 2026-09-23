@@ -46,7 +46,7 @@ impl ProviderSelectionBuildError {
     ///
     /// The selector parsing failure for [`Self::InvalidSelector`], or `None`
     /// for [`Self::EmptyChain`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
         match self {
@@ -61,7 +61,7 @@ impl ProviderSelectionBuildError {
     ///
     /// The selector position for an invalid chained selection, or `None` for
     /// an invalid named selection and an empty chain.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn selector_index(&self) -> Option<usize> {
         match self {
@@ -75,7 +75,7 @@ impl ProviderSelectionBuildError {
     /// # Returns
     ///
     /// `true` for [`Self::EmptyChain`]; otherwise `false`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_empty_chain(&self) -> bool {
         matches!(self, Self::EmptyChain)

@@ -75,7 +75,7 @@ impl ProviderSelector {
     /// # Returns
     ///
     /// The validated lowercase selector token.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         let Self(value) = self;
@@ -89,7 +89,7 @@ impl AsRef<str> for ProviderSelector {
     /// # Returns
     ///
     /// The normalized selector text.
-    #[inline(always)]
+    #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
@@ -126,7 +126,7 @@ impl fmt::Display for ProviderSelector {
     /// # Errors
     ///
     /// Returns [`fmt::Error`] when the destination formatter rejects the text.
-    #[inline(always)]
+    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
@@ -150,7 +150,6 @@ impl FromStr for ProviderSelector {
     ///
     /// Returns [`ProviderSelectorError`] when the normalized input is empty or
     /// violates selector syntax.
-    #[inline(always)]
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::parse(value)
     }

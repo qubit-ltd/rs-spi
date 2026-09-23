@@ -29,7 +29,7 @@ impl<P: ?Sized> Clone for RegistryEntry<P> {
     /// # Returns
     ///
     /// An owned entry referring to the same provider definition.
-    #[inline(always)]
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             descriptor: Arc::clone(&self.descriptor),

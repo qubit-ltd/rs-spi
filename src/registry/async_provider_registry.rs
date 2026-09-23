@@ -134,7 +134,6 @@ where
     /// Propagates a panic raised while obtaining the provider descriptor. The
     /// attempted registration is not applied. Changes made by reentrant
     /// metadata callbacks are not rolled back.
-    #[inline(always)]
     pub fn register_shared(&self, provider: Arc<dyn AsyncProviderDefinition<S>>) -> Result<(), RegistryMutationError> {
         self.providers.register_shared(provider)
     }
@@ -144,7 +143,6 @@ where
     /// # Returns
     ///
     /// A snapshot of the Registry's current default selection.
-    #[inline(always)]
     #[must_use]
     pub fn default_selection(&self) -> ProviderSelection {
         self.providers.default_selection()
@@ -164,7 +162,6 @@ where
     ///
     /// Returns [`RegistryMutationError::Sealed`] when the registry rejects
     /// further configuration changes.
-    #[inline(always)]
     pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         self.providers.set_default_selection(selection)
     }
@@ -261,7 +258,6 @@ where
     /// # Returns
     ///
     /// Owned descriptor snapshots in registration order.
-    #[inline(always)]
     #[must_use]
     pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
         self.providers.descriptors()
@@ -272,7 +268,6 @@ where
     /// # Returns
     ///
     /// Owned canonical IDs in registration order.
-    #[inline(always)]
     #[must_use]
     pub fn provider_ids(&self) -> Vec<ProviderId> {
         self.providers.provider_ids()
@@ -283,7 +278,6 @@ where
     /// # Returns
     ///
     /// The number of successful registrations.
-    #[inline(always)]
     #[must_use]
     pub fn len(&self) -> usize {
         self.providers.len()
@@ -294,7 +288,6 @@ where
     /// # Returns
     ///
     /// `true` when the Registry contains no provider; otherwise `false`.
-    #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
@@ -311,7 +304,7 @@ where
     /// # Returns
     ///
     /// A Registry facade observing the same catalog state.
-    #[inline(always)]
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             providers: self.providers.clone(),

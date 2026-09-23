@@ -98,7 +98,7 @@ impl ProviderDescriptorError {
     /// # Returns
     ///
     /// The verbatim invalid alias or normalized conflicting alias.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn alias(&self) -> &str {
         match self {

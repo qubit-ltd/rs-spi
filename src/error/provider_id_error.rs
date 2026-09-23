@@ -73,7 +73,7 @@ impl ProviderIdError {
     /// # Returns
     ///
     /// The input rejected by canonical ID validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn input(&self) -> &str {
         match self {

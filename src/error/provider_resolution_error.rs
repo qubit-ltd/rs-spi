@@ -56,7 +56,7 @@ impl ProviderResolutionError {
     ///
     /// The selectors for [`Self::UnknownProviders`] or
     /// [`Self::NoCandidates`], or `None` for [`Self::EmptyRegistry`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn selectors(&self) -> Option<&[ProviderSelector]> {
         match self {
@@ -70,7 +70,7 @@ impl ProviderResolutionError {
     /// # Returns
     ///
     /// `true` for [`Self::UnknownProviders`]; otherwise `false`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_unknown_providers(&self) -> bool {
         matches!(self, Self::UnknownProviders { .. })
@@ -81,7 +81,7 @@ impl ProviderResolutionError {
     /// # Returns
     ///
     /// `true` for [`Self::NoCandidates`]; otherwise `false`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_no_candidates(&self) -> bool {
         matches!(self, Self::NoCandidates { .. })
@@ -92,7 +92,7 @@ impl ProviderResolutionError {
     /// # Returns
     ///
     /// `true` for [`Self::EmptyRegistry`]; otherwise `false`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_empty_registry(&self) -> bool {
         matches!(self, Self::EmptyRegistry)

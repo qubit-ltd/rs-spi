@@ -183,7 +183,6 @@ where
     ///
     /// Panics if `S::Config::default()` or a candidate provider panics.
     /// Provider panics propagate directly and do not trigger fallback.
-    #[inline(always)]
     pub fn create(&self) -> Result<S::Output, ProviderCreationError<S::Error>>
     where
         S::Config: Default,

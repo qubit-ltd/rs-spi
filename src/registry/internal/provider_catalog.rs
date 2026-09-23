@@ -120,7 +120,6 @@ where
     /// # Returns
     ///
     /// An owned snapshot of the current default selection.
-    #[inline(always)]
     #[must_use]
     pub(crate) fn default_selection(&self) -> ProviderSelection {
         self.read_inner().default_selection.clone()
@@ -140,7 +139,6 @@ where
     ///
     /// Returns [`RegistryMutationError::Sealed`] when the catalog no longer
     /// accepts mutations.
-    #[inline(always)]
     pub(crate) fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         let mut inner = self.write_inner();
         Self::ensure_mutable(&inner)?;
@@ -256,7 +254,6 @@ where
     /// # Returns
     ///
     /// The number of successful registrations.
-    #[inline(always)]
     #[must_use]
     pub(crate) fn len(&self) -> usize {
         self.read_inner().entries.len()
@@ -267,7 +264,6 @@ where
     /// # Returns
     ///
     /// `true` when the catalog has no provider; otherwise `false`.
-    #[inline(always)]
     #[must_use]
     pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
@@ -396,7 +392,6 @@ where
     /// # Returns
     ///
     /// A read guard held until the caller drops it.
-    #[inline(always)]
     fn read_inner(&self) -> RwLockReadGuard<'_, RegistryInner<P>> {
         self.inner.read()
     }
@@ -407,7 +402,6 @@ where
     /// # Returns
     ///
     /// A write guard held until the caller drops it.
-    #[inline(always)]
     fn write_inner(&self) -> RwLockWriteGuard<'_, RegistryInner<P>> {
         self.inner.write()
     }
@@ -449,7 +443,7 @@ impl<P: ?Sized> Clone for ProviderCatalog<P> {
     /// # Returns
     ///
     /// A catalog handle observing the same synchronized state.
-    #[inline(always)]
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),

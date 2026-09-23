@@ -65,7 +65,7 @@ impl ProviderDescriptor {
     /// # Returns
     ///
     /// The descriptor's stable provider identity.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn id(&self) -> &ProviderId {
         &self.id
@@ -76,7 +76,7 @@ impl ProviderDescriptor {
     /// # Returns
     ///
     /// The immutable alias slice in descriptor order.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn aliases(&self) -> &[ProviderSelector] {
         &self.aliases
@@ -87,7 +87,7 @@ impl ProviderDescriptor {
     /// # Returns
     ///
     /// The descending automatic-selection sort key.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn priority(&self) -> i32 {
         self.priority
@@ -132,7 +132,7 @@ impl ProviderDescriptor {
     /// # Returns
     ///
     /// This descriptor with the replacement priority.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;

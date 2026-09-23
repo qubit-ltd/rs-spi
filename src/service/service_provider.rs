@@ -75,7 +75,6 @@ where
     /// # Panics
     ///
     /// Panics if `S::Config::default()` or [`Self::create_configured`] panics.
-    #[inline(always)]
     fn create(&self) -> Result<S::Output, ProviderFailure<S::Error>>
     where
         S::Config: Default,
