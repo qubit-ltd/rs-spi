@@ -20,48 +20,217 @@ installs the implementation appropriate to its deployment.
 qubit-spi = "0.13"
 ```
 
-Requires Rust 1.94 or later. The default feature set is empty. Enable the
-optional `inventory` feature only when a service family uses link-time provider
-discovery:
+Requires Rust 1.94 or later. The default feature set is empty.
 
-```toml
-[dependencies]
-qubit-spi = { version = "0.13", features = ["inventory"] }
-```
+## Example: An App-Selected Greeter
 
-## Quick Start
+`lib-foo` needs a Greeter, but the application chooses the implementation.
+The four files show the service contract, consumer, provider and application.
 
-Create a binary crate, add the dependency above, and put this in `src/main.rs`.
-The application registers a provider and chooses it before a consumer resolves
-the service. Run `cargo run`; the program prints `Hello, Rust!`.
+### 1. Service contract and shared registry
 
-<!-- spi-example: quick-start; file: app/src/main.rs -->
+`lib-greeter` owns the business interface and one `LazyLock` registry. All
+participants use the same service-family type and registry instance.
+
+<!-- spi-example: three-crates; file: lib-greeter/src/lib.rs -->
 ```rust
-use qubit_spi::{ProviderDescriptor, ProviderMetadata, ProviderRegistry, ProviderSelection};
-use qubit_spi::{ServiceProvider, ServiceSpec, SyncServiceSpec, provider_descriptor};
-use qubit_spi::error::ProviderFailure;
+// lib-greeter/src/lib.rs
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
-struct Greeting;
-impl ServiceSpec for Greeting { type Config = String; type Error = std::io::Error; }
-impl SyncServiceSpec for Greeting { type Output = String; }
-struct Friendly;
-impl ProviderMetadata for Friendly {
-    fn descriptor(&self) -> ProviderDescriptor { provider_descriptor!("friendly") }
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
+
+/// Business interface implemented by every Greeter service.
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
 }
-impl ServiceProvider<Greeting> for Friendly {
-    fn create_configured(&self, name: &String) -> Result<String, ProviderFailure<std::io::Error>> {
-        Ok(format!("Hello, {name}!"))
+
+/// Configuration passed to a provider when it creates a Greeter.
+#[derive(Clone)]
+pub struct GreeterConfig {
+    /// Text placed before the name in each greeting.
+    pub prefix: String,
+}
+
+impl Default for GreeterConfig {
+    fn default() -> Self {
+        Self {
+            prefix: "Hello".to_owned(),
+        }
     }
 }
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = ProviderRegistry::<Greeting>::default();
-    registry.register(Friendly)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
-    let greeter = registry.resolve()?;
-    println!("{}", greeter.create_configured(&"Rust".to_owned())?);
+
+/// Domain error returned when a Greeter provider cannot create a service.
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
+/// Connects the Greeter configuration and output types to Qubit SPI.
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    // Input accepted by Greeter providers during service creation.
+    type Config = GreeterConfig;
+    // Domain error retained by classified provider failures.
+    type Error = GreeterError;
+}
+
+impl SyncServiceSpec for GreeterSpec {
+    // Service object returned to consumers after successful creation.
+    type Output = Arc<dyn Greeter>;
+}
+
+/// Process-wide Greeter provider registry shared by the App and all libraries.
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+    LazyLock::new(ProviderRegistry::default);
+```
+
+### 2. Independent consumer
+
+`lib-foo` resolves the application-defined default and creates the service. It does not choose a concrete backend.
+
+<!-- spi-example: three-crates; file: lib-foo/src/lib.rs -->
+```rust
+// lib-foo/src/lib.rs
+use lib_greeter::GREETER_REGISTRY;
+
+/// Creates the App-selected default Greeter and prints one greeting.
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
+    println!("{}", greeter.greet("Rust"));
     Ok(())
 }
 ```
+
+### 3. Third-party provider
+
+`lib-friendly-greeter` supplies metadata and construction. Merely linking this crate does not register its provider.
+
+<!-- spi-example: three-crates; file: lib-friendly-greeter/src/lib.rs -->
+```rust
+// lib-friendly-greeter/src/lib.rs
+use std::sync::Arc;
+
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+
+/// Concrete Greeter created by the friendly provider.
+struct FriendlyGreeter {
+    /// Greeting prefix copied from the creation configuration.
+    prefix: String,
+}
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {}!", self.prefix, name)
+    }
+}
+
+/// Self-described provider exported for Apps to register explicitly.
+pub struct FriendlyGreeterProvider;
+
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
+    fn create_configured(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
+        Ok(Arc::new(FriendlyGreeter {
+            prefix: config.prefix.clone(),
+        }))
+    }
+}
+
+impl ProviderMetadata for FriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(ProviderId::new("friendly").expect("static provider ID is valid"))
+            .with_priority(100)
+    }
+}
+```
+
+### 4. Application composition
+
+The application registers providers and sets the default before invoking library consumers. The singleton is owned by the domain crate, not by SPI.
+
+<!-- spi-example: three-crates; file: app/src/main.rs -->
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
+
+// Application composition root: install a provider before calling lib-foo.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY.set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
+}
+```
+
+### Run the example
+
+Put the four files in a Cargo workspace and run `cargo run -p app`; the output is
+`Hello, Rust!`. The [user guide](doc/user_guide.md#run-the-example) has the
+workspace manifest and local dependencies.
+
+## With `inventory`
+
+The same Greeter example can discover linked providers. This adds setup for a
+single provider, but keeps application registration code stable as independently
+maintained provider crates are added. `lib-foo` remains unchanged. In
+`lib-greeter`, declare a collection for `GreeterSpec` and build the shared
+registry from it:
+
+```diff
++qubit_spi::declare_sync_provider_inventory! {
++    pub mod providers {
++        spec = crate::GreeterSpec;
++    }
++}
+
+-    LazyLock::new(ProviderRegistry::default);
++    LazyLock::new(|| providers::build_registry().expect("valid Greeter provider inventory"));
+```
+
+In `lib-friendly-greeter`, submit a factory for the same provider:
+
+```diff
++qubit_spi::submit_sync_provider! {
++    inventory_entry = lib_greeter::providers::Entry;
++    spec = lib_greeter::GreeterSpec;
++    provider = FriendlyGreeterProvider;
++}
+```
+
+The application keeps its provider list in `app/src/greeter_providers.rs`:
+
+```diff
++use lib_friendly_greeter as _;
+```
+
+Add one import for each provider crate included in this application. The file
+serves as an assembly list, similar in purpose to a Spring XML configuration:
+it determines which crates are linked. Each provider still owns its factory
+and metadata, and the application still chooses the default. In
+`app/src/main.rs`, add `mod greeter_providers;` and remove the
+`GREETER_REGISTRY.register(FriendlyGreeterProvider)?` call.
+
+Enable `qubit-spi = { version = "0.13", features = ["inventory"] }` in the
+participating crates. The [complete runnable version](doc/user_guide.md#link-time-discovery-for-the-same-greeter)
+shows all files and explains how to handle inventory conflicts.
 
 ## When to Use It
 
@@ -81,31 +250,9 @@ service crate.
 - Registry clones share runtime changes; resolved candidates retain their captured identity, order and policy.
 - Typed errors retain actual attempts and domain diagnostics. Each create invokes a factory, which may reuse an existing resource.
 
-### Optional linked-provider discovery
-
-With `inventory`, a service-contract crate declares one collection for one
-service family, and provider crates submit factory entries to that collection.
-The application builds the registry from its linked entries, may explicitly
-register stateful providers, selects a default, then seals the registry before
-creating the service. Collections are isolated by service family: a provider
-submitted for one contract cannot appear in another contract's registry.
-
-Discovery happens at link time, not when Cargo resolves dependencies. Listing a
-provider crate in `Cargo.toml` does not guarantee that its inventory entry is in
-the final binary; anchor a provider that has no other symbols with
-`use provider_friendly as _;` in (for example) `linked_providers.rs`.
-
-Each discovered entry is registered through the normal registry path. A
-registration conflict therefore fails `build_registry()` atomically: no partly
-built registry is returned. Discovery/source order also does not decide automatic
-selection; `ProviderSelection::auto()` still orders candidates by priority
-descending and canonical ID ascending. This is static linked-provider discovery,
-not a dynamic-plugin system: it neither loads shared libraries nor discovers
-providers after the program is linked.
-
 ## Learn More
 
-- [User Guide](doc/user_guide.md): explicit and link-time three-crate composition, full configuration, fallback and troubleshooting.
+- [User Guide](doc/user_guide.md): complete explicit and inventory Greeter examples, configuration, fallback and troubleshooting.
 - [中文用户指南](doc/user_guide.zh_CN.md).
 - [Design](doc/design.md) and [中文设计说明](doc/design.zh_CN.md): contracts and implementation decisions.
 - [API reference](https://docs.rs/qubit-spi).

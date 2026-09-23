@@ -18,46 +18,213 @@ Qubit SPI 为 Rust 库提供可由应用选择的服务实现。库只依赖服�
 qubit-spi = "0.13"
 ```
 
-需要 Rust 1.94 或更高版本。默认 feature 集为空。只有服务族需要链接期发现服务
-提供者时，才启用可选的 `inventory` feature：
+需要 Rust 1.94 或更高版本。默认 feature 集为空。
 
-```toml
-[dependencies]
-qubit-spi = { version = "0.13", features = ["inventory"] }
-```
+## 示例：应用选择 Greeter 实现
 
-## 快速开始
+`lib-foo` 需要 Greeter，但由应用决定使用哪个实现。先看服务接口、消费方、
+提供者和应用这四个文件，再看如何运行。
 
-新建二进制 crate，添加上述依赖，将以下代码写入 `src/main.rs`。应用先注册服务
-提供者并设置默认选择，再解析和创建服务。运行 `cargo run`，输出为 `Hello, Rust!`。
+### 1. 服务接口与共享注册表
 
-<!-- spi-example: quick-start; file: app/src/main.rs -->
+`lib-greeter` 定义业务接口，并持有一个 `LazyLock` 注册表。参与集成的各方必须使用同一个服务族类型与注册表实例。
+
+<!-- spi-example: three-crates; file: lib-greeter/src/lib.rs -->
 ```rust
-use qubit_spi::{ProviderDescriptor, ProviderMetadata, ProviderRegistry, ProviderSelection};
-use qubit_spi::{ServiceProvider, ServiceSpec, SyncServiceSpec, provider_descriptor};
-use qubit_spi::error::ProviderFailure;
+// lib-greeter/src/lib.rs
+use std::{
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
-struct Greeting;
-impl ServiceSpec for Greeting { type Config = String; type Error = std::io::Error; }
-impl SyncServiceSpec for Greeting { type Output = String; }
-struct Friendly;
-impl ProviderMetadata for Friendly {
-    fn descriptor(&self) -> ProviderDescriptor { provider_descriptor!("friendly") }
+use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
+
+/// 所有 Greeter Service 都要实现的业务接口。
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: &str) -> String;
 }
-impl ServiceProvider<Greeting> for Friendly {
-    fn create_configured(&self, name: &String) -> Result<String, ProviderFailure<std::io::Error>> {
-        Ok(format!("Hello, {name}!"))
+
+/// Provider 创建 Greeter 时接收的配置。
+#[derive(Clone)]
+pub struct GreeterConfig {
+    /// 每条问候语中放在名字前面的文本。
+    pub prefix: String,
+}
+
+impl Default for GreeterConfig {
+    fn default() -> Self {
+        Self {
+            prefix: "Hello".to_owned(),
+        }
     }
 }
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = ProviderRegistry::<Greeting>::default();
-    registry.register(Friendly)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
-    let greeter = registry.resolve()?;
-    println!("{}", greeter.create_configured(&"Rust".to_owned())?);
+
+/// Greeter Provider 无法创建 Service 时返回的领域错误。
+#[derive(Debug)]
+pub struct GreeterError;
+
+impl fmt::Display for GreeterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("greeter provider failed")
+    }
+}
+
+impl Error for GreeterError {}
+
+/// 向 Qubit SPI 绑定 Greeter 的配置类型和输出类型。
+pub struct GreeterSpec;
+
+impl ServiceSpec for GreeterSpec {
+    // Provider 创建 Greeter 时接收的输入类型。
+    type Config = GreeterConfig;
+    // 分类后的 Provider failure 所保留的领域错误。
+    type Error = GreeterError;
+}
+
+impl SyncServiceSpec for GreeterSpec {
+    // 创建成功后返回给消费者的 Service 类型。
+    type Output = Arc<dyn Greeter>;
+}
+
+/// 供 App 和所有下游库共享的进程级 Greeter Provider Registry。
+pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
+    LazyLock::new(ProviderRegistry::default);
+```
+
+### 2. 独立的消费方
+
+`lib-foo` 解析应用设置的默认选择，再创建服务，不自行决定具体后端。
+
+<!-- spi-example: three-crates; file: lib-foo/src/lib.rs -->
+```rust
+// lib-foo/src/lib.rs
+use lib_greeter::GREETER_REGISTRY;
+
+/// 创建 App 选定的默认 Greeter，并打印一条问候语。
+pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = GREETER_REGISTRY.resolve()?;
+    let greeter = provider.create()?;
+    println!("{}", greeter.greet("Rust"));
     Ok(())
 }
 ```
+
+### 3. 第三方服务提供者
+
+`lib-friendly-greeter` 提供元数据和创建逻辑。仅链接这个 crate 不会自动注册服务提供者。
+
+<!-- spi-example: three-crates; file: lib-friendly-greeter/src/lib.rs -->
+```rust
+// lib-friendly-greeter/src/lib.rs
+use std::sync::Arc;
+
+use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
+use qubit_spi::error::ProviderFailure;
+use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+
+/// friendly Provider 创建的具体 Greeter 实现。
+struct FriendlyGreeter {
+    /// 从创建配置复制得到的问候语前缀。
+    prefix: String,
+}
+
+impl Greeter for FriendlyGreeter {
+    fn greet(&self, name: &str) -> String {
+        format!("{}, {}!", self.prefix, name)
+    }
+}
+
+/// 导出给 App，由 App 显式注册的自描述 Provider。
+pub struct FriendlyGreeterProvider;
+
+impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
+    fn create_configured(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, ProviderFailure<GreeterError>> {
+        Ok(Arc::new(FriendlyGreeter {
+            prefix: config.prefix.clone(),
+        }))
+    }
+}
+
+impl ProviderMetadata for FriendlyGreeterProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(ProviderId::new("friendly").expect("static provider ID is valid"))
+            .with_priority(100)
+    }
+}
+```
+
+### 4. 应用负责组装
+
+应用先完成注册和默认选择，再调用业务库。全局单例属于领域 crate，SPI 自身不持有这样的全局注册表。
+
+<!-- spi-example: three-crates; file: app/src/main.rs -->
+```rust
+// app.rs
+use lib_foo::foo;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::GREETER_REGISTRY;
+use qubit_spi::ProviderSelection;
+
+// 应用装配入口：先安装 Provider，再调用 lib-foo。
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
+    GREETER_REGISTRY.set_default_selection(ProviderSelection::named("friendly")?);
+    foo()
+}
+```
+
+### 运行示例
+
+将四个文件放入 Cargo workspace，运行 `cargo run -p app`，输出为
+`Hello, Rust!`。workspace 清单和本地依赖见[用户指南](doc/user_guide.zh_CN.md#运行示例)。
+
+## 使用 `inventory` 简化注册
+
+同一个 Greeter 示例也可以从已链接的 crate 发现提供者。只有一个提供者时，这会
+增加一些配置；当多个独立维护的提供者加入时，应用无须逐个修改注册调用。
+`lib-foo` 无须改动。先在 `lib-greeter` 为 `GreeterSpec` 声明收集点，并用
+发现到的提供者构建共享注册表：
+
+```diff
++qubit_spi::declare_sync_provider_inventory! {
++    pub mod providers {
++        spec = crate::GreeterSpec;
++    }
++}
+
+-    LazyLock::new(ProviderRegistry::default);
++    LazyLock::new(|| providers::build_registry().expect("valid Greeter provider inventory"));
+```
+
+`lib-friendly-greeter` 向该收集点提交自己的工厂：
+
+```diff
++qubit_spi::submit_sync_provider! {
++    inventory_entry = lib_greeter::providers::Entry;
++    spec = lib_greeter::GreeterSpec;
++    provider = FriendlyGreeterProvider;
++}
+```
+
+应用用 `app/src/greeter_providers.rs` 集中列出要链接的提供者 crate：
+
+```diff
++use lib_friendly_greeter as _;
+```
+
+每增加一个 Greeter 实现，就在这个文件里增加一行导入。它类似一份装配清单，
+有点像 Spring 的 XML 配置：这里只决定哪些 crate 进入程序；工厂和元数据仍由
+提供者实现，默认选择仍由应用设置。在 `app/src/main.rs` 中加入
+`mod greeter_providers;`，移除对
+`GREETER_REGISTRY.register(FriendlyGreeterProvider)?` 的调用。
+
+参与的 crate 启用 `qubit-spi = { version = "0.13", features = ["inventory"] }`。
+[用户指南中的完整可运行版本](doc/user_guide.zh_CN.md#链接期发现简化同一个-greeter-示例)
+列出了全部文件，并说明构建冲突的处理方式。
 
 ## 何时使用
 
@@ -74,26 +241,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 注册表的克隆共享运行时变更；解析后的候选快照保留当时的身份、顺序和策略。
 - 类型化错误保留实际调用记录和领域诊断。每次创建都会调用工厂，但工厂可以复用已有资源。
 
-### 可选的链接服务提供者发现
-
-启用 `inventory` 后，服务契约 crate 为一个服务族声明一个 collection，服务提供者
-crate 向该 collection 提交工厂条目。应用从已链接的条目构建注册表，必要时显式注册
-有状态服务提供者，设置默认选择，最后在创建服务前封存注册表。collection 按服务族
-隔离：提交到一个契约的服务提供者不会出现在另一个契约的注册表中。
-
-发现发生在链接期，不发生在 Cargo 解析依赖时。在 `Cargo.toml` 中列出服务提供者
-crate 并不保证它的 inventory 条目进入最终二进制；若该 crate 没有其他被引用的符号，
-可在例如 `linked_providers.rs` 中用 `use provider_friendly as _;` 固定链接它。
-
-每个发现到的条目仍走普通注册表的注册路径。因此注册冲突会让 `build_registry()` 原子
-失败，不会返回半成品注册表。发现来源的顺序也不决定自动选择；
-`ProviderSelection::auto()` 仍按优先级降序、规范 ID 升序排列候选。它是静态链接的
-服务提供者发现机制，不是动态插件系统：不会加载共享库，也不会在程序链接完成后发现
-新的服务提供者。
-
 ## 延伸阅读
 
-- [中文用户指南](doc/user_guide.zh_CN.md)：显式注册和链接期三 crate 组装、配置、回退与排障。
+- [中文用户指南](doc/user_guide.zh_CN.md)：完整的显式注册和 `inventory` Greeter 示例，以及配置、回退与排障。
 - [English User Guide](doc/user_guide.md)。
 - [中文设计说明](doc/design.zh_CN.md)与 [English Design](doc/design.md)：行为契约与实现决策。
 - [API 文档](https://docs.rs/qubit-spi)。
