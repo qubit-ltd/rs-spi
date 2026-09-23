@@ -197,7 +197,7 @@ qubit_spi::declare_sync_provider_inventory! {
         spec = crate::GreeterSpec;
     }
 }
-```rust
+```
 
 In `lib-friendly-greeter/src/lib.rs`, submit its factory:
 
@@ -207,13 +207,13 @@ qubit_spi::submit_sync_provider! {
     spec = lib_greeter::GreeterSpec;
     provider = FriendlyGreeterProvider;
 }
-```rust
+```
 
 List provider crates in `app/src/greeter_providers.rs`:
 
 ```rust
 use lib_friendly_greeter as _;
-```rust
+```
 
 Add one import for each provider crate included in the application. This file
 serves as an assembly list, similar in purpose to a Spring XML configuration:
@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     registry.set_default_selection(ProviderSelection::named("friendly")?);
     foo(&registry)
 }
-```rust
+```
 
 Enable `qubit-spi = { version = "0.13", features = ["inventory"] }` in the
 participating crates. The [complete runnable version](doc/user_guide.md#link-time-discovery-for-the-same-greeter)

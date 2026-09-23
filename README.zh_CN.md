@@ -192,7 +192,7 @@ qubit_spi::declare_sync_provider_inventory! {
         spec = crate::GreeterSpec;
     }
 }
-```rust
+```
 
 在 `lib-friendly-greeter/src/lib.rs` 中提交工厂：
 
@@ -202,13 +202,13 @@ qubit_spi::submit_sync_provider! {
     spec = lib_greeter::GreeterSpec;
     provider = FriendlyGreeterProvider;
 }
-```rust
+```
 
 在 `app/src/greeter_providers.rs` 中列出要链接的提供者 crate：
 
 ```rust
 use lib_friendly_greeter as _;
-```rust
+```
 
 每增加一个 Greeter 实现，就在这个文件里增加一行导入。它类似一份装配清单，
 有点像 Spring 的 XML 配置：这里只决定哪些 crate 进入程序；工厂和元数据仍由
@@ -230,7 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     registry.set_default_selection(ProviderSelection::named("friendly")?);
     foo(&registry)
 }
-```rust
+```
 
 参与的 crate 启用 `qubit-spi = { version = "0.13", features = ["inventory"] }`。
 [用户指南中的完整可运行版本](doc/user_guide.zh_CN.md#链接期发现简化同一个-greeter-示例)
