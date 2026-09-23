@@ -9,11 +9,14 @@
 use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use qubit_spi::AsyncProviderDefinition;
 use qubit_spi::AsyncServiceProvider;
 use qubit_spi::ProviderDescriptor;
+use qubit_spi::ProviderFuture;
 use qubit_spi::ProviderMetadata;
 use qubit_spi::ProviderSelection;
 use qubit_spi::declare_async_provider_inventory;
@@ -38,10 +41,51 @@ declare_async_provider_inventory! {
     }
 }
 
+declare_async_provider_inventory! {
+    pub mod transform_providers {
+        spec = StringSpec;
+    }
+}
+
 submit_async_provider! {
     inventory_entry = discovered_providers::Entry;
     spec = StringSpec;
     provider = define_provider(provider_descriptor!("discovered", priority: 10), AsyncConfigurableProvider::success("discovered"));
+}
+
+submit_async_provider! {
+    inventory_entry = transform_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("transform-first"), AsyncConfigurableProvider::success("original-first"));
+}
+
+submit_async_provider! {
+    inventory_entry = transform_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("transform-second"), AsyncConfigurableProvider::success("original-second"));
+}
+
+/// Provider adapter that replaces the service result while retaining metadata.
+struct ReplacingProvider {
+    /// Original definition whose descriptor remains registered.
+    inner: Arc<dyn AsyncProviderDefinition<StringSpec>>,
+}
+
+impl ProviderMetadata for ReplacingProvider {
+    /// Returns the original provider descriptor.
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.inner.descriptor()
+    }
+}
+
+impl AsyncServiceProvider<StringSpec> for ReplacingProvider {
+    /// Returns the adapter's replacement result instead of delegating creation.
+    fn create_configured<'a>(
+        &'a self,
+        _config: &'a String,
+    ) -> ProviderFuture<'a, Result<String, ProviderFailure<TestError>>> {
+        Box::pin(async { Ok("transformed".to_owned()) })
+    }
 }
 
 declare_async_provider_inventory! {
@@ -305,18 +349,28 @@ fn test_build_registry_discovers_and_creates_asynchronous_provider() {
     );
 }
 
-/// Verifies that asynchronous registry builders can wrap each provider before registration.
+/// Verifies that asynchronous registry builders can wrap each provider before
+/// registration.
 #[test]
 fn test_build_registry_with_transforms_each_asynchronous_provider() {
     let transformed = Cell::new(0);
-    let registry = discovered_providers::build_registry_with(|provider| {
+    let registry = transform_providers::build_registry_with(|inner| {
         transformed.set(transformed.get() + 1);
-        provider
+        Arc::new(ReplacingProvider { inner }) as Arc<dyn AsyncProviderDefinition<StringSpec>>
     })
     .expect("transformed provider should register");
 
-    assert_eq!(1, transformed.get());
-    assert_eq!(1, registry.len());
+    assert_eq!(2, transformed.get());
+    assert_eq!(2, registry.len());
+    for selector in ["transform-first", "transform-second"] {
+        let resolver = registry
+            .resolve_selected(&ProviderSelection::named(selector).expect("static selector should be valid"))
+            .expect("transformed provider should resolve");
+        assert_eq!(
+            "transformed",
+            futures::executor::block_on(resolver.create()).expect("adapter should replace service result"),
+        );
+    }
 }
 
 /// Verifies that an asynchronous provider expression can call a caller

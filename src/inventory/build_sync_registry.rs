@@ -67,7 +67,8 @@ where
 /// # Parameters
 ///
 /// * `entries` - Discovered entries collected for one concrete service family.
-/// * `transform` - Adapter applied to each created provider before registration.
+/// * `transform` - Adapter applied to each created provider before
+///   registration.
 ///
 /// # Returns
 ///

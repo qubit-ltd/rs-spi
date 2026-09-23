@@ -156,7 +156,10 @@ macro_rules! declare_sync_provider_inventory {
                 $crate::ProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {
-                build_registry_with(|provider| provider)
+                let entries = $crate::__private::inventory::iter::<Entry>
+                    .into_iter()
+                    .map(|entry| &entry.0);
+                $crate::__private::build_sync_registry(entries)
             }
 
             /// Builds a registry after transforming each discovered provider.
@@ -424,7 +427,10 @@ macro_rules! declare_async_provider_inventory {
                 $crate::AsyncProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {
-                build_registry_with(|provider| provider)
+                let entries = $crate::__private::inventory::iter::<Entry>
+                    .into_iter()
+                    .map(|entry| &entry.0);
+                $crate::__private::build_async_registry(entries)
             }
 
             /// Builds a registry after transforming each discovered provider.

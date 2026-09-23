@@ -9,9 +9,11 @@
 use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use qubit_spi::ProviderDefinition;
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderMetadata;
 use qubit_spi::ProviderSelection;
@@ -38,10 +40,48 @@ declare_sync_provider_inventory! {
     }
 }
 
+declare_sync_provider_inventory! {
+    pub mod transform_providers {
+        spec = StringSpec;
+    }
+}
+
 submit_sync_provider! {
     inventory_entry = discovered_providers::Entry;
     spec = StringSpec;
     provider = define_provider(provider_descriptor!("discovered", priority: 10), ConfigurableProvider::success("discovered"));
+}
+
+submit_sync_provider! {
+    inventory_entry = transform_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("transform-first"), ConfigurableProvider::success("original-first"));
+}
+
+submit_sync_provider! {
+    inventory_entry = transform_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("transform-second"), ConfigurableProvider::success("original-second"));
+}
+
+/// Provider adapter that replaces the service result while retaining metadata.
+struct ReplacingProvider {
+    /// Original definition whose descriptor remains registered.
+    inner: Arc<dyn ProviderDefinition<StringSpec>>,
+}
+
+impl ProviderMetadata for ReplacingProvider {
+    /// Returns the original provider descriptor.
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.inner.descriptor()
+    }
+}
+
+impl ServiceProvider<StringSpec> for ReplacingProvider {
+    /// Returns the adapter's replacement result instead of delegating creation.
+    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<TestError>> {
+        Ok("transformed".to_owned())
+    }
 }
 
 declare_sync_provider_inventory! {
@@ -314,18 +354,28 @@ fn test_build_registry_discovers_and_creates_synchronous_provider() {
     );
 }
 
-/// Verifies that registry builders can wrap each discovered provider before registration.
+/// Verifies that registry builders can wrap each discovered provider before
+/// registration.
 #[test]
 fn test_build_registry_with_transforms_each_synchronous_provider() {
     let transformed = Cell::new(0);
-    let registry = discovered_providers::build_registry_with(|provider| {
+    let registry = transform_providers::build_registry_with(|inner| {
         transformed.set(transformed.get() + 1);
-        provider
+        Arc::new(ReplacingProvider { inner }) as Arc<dyn ProviderDefinition<StringSpec>>
     })
     .expect("transformed provider should register");
 
-    assert_eq!(1, transformed.get());
-    assert_eq!(1, registry.len());
+    assert_eq!(2, transformed.get());
+    assert_eq!(2, registry.len());
+    for selector in ["transform-first", "transform-second"] {
+        let resolver = registry
+            .resolve_selected(&ProviderSelection::named(selector).expect("static selector should be valid"))
+            .expect("transformed provider should resolve");
+        assert_eq!(
+            "transformed",
+            resolver.create().expect("adapter should replace service result")
+        );
+    }
 }
 
 /// Verifies that a provider expression can call a caller function named
