@@ -1,10 +1,9 @@
 # rs-spi 整体设计与 Rust 生态方案对比
 
-## 研究基线与结论
+## 版本基线与结论
 
-- **对象**：`qubit-spi` 0.12.0，仓库 [rs-spi](/home/starfish/working/qubit/rust-common/rs-spi)，实现代码基线提交 `4370fc6`；分析日期 2026-09-23。
-- **范围**：标准深度的静态源码、项目文档和公开的上游文档对比。本轮已运行 `python3 scripts/check-documentation.py`（编译并运行双语文档中的所有标记场景）以及 `RUSTDOCFLAGS='-D warnings' cargo test --doc --all-features`；未运行完整集成测试、基准、fuzz 或下游消费者验证。
-- **工作区**：工作树含其他任务拥有的格式改动，未将它们作为本次结论依据。CodeGraph 索引不存在，因此使用定向源码阅读。
+- **对象**：`qubit-spi` 0.13.0；本文对比其当前 API、实现边界与 Rust 生态中的相关方案。
+- **文档范围**：本文用于说明项目定位、架构取舍和适用场景。具体 API 与运行示例以双语 README、用户指南和 Rust API 文档为准。
 
 **结论先行**：rs-spi 不是“Rust 动态插件框架”的同类替代品，而是一个用于**静态链接应用内、运行时可配置的多后端服务选择器**。它最突出的价值，是将“候选发现（显式注册）—选择（名称/链/自动）—构造（带失败语义的回退）”分成三个阶段，并让同步与异步在选择和错误语义上保持一致。对于文件系统、对象存储、编码器、认证后端这类“应用决定装配、库只依赖抽象”的场景，它比手写 `match` 或仅用 `inventory` 更完整、可观测且并发边界更清楚。
 
@@ -16,9 +15,9 @@
 
 ## 1. 项目定位与边界
 
-Rust 没有标准库版的 Java `ServiceLoader`。rs-spi 以一个服务族的零大小标记类型 `S` 为中心：`ServiceSpec` 绑定通用配置类型和领域错误类型，`SyncServiceSpec` 或 `AsyncServiceSpec` 另行绑定输出类型。[`ServiceSpec`](/home/starfish/working/qubit/rust-common/rs-spi/src/service/service_spec.rs:32) 允许 `Config: ?Sized`，但错误必须是 `Error + Send + Sync + 'static`；这让 provider 的错误保留领域诊断，而不是被擦除为字符串。
+Rust 没有标准库版的 Java `ServiceLoader`。rs-spi 以一个服务族的零大小标记类型 `S` 为中心：`ServiceSpec` 绑定通用配置类型和领域错误类型，`SyncServiceSpec` 或 `AsyncServiceSpec` 另行绑定输出类型。[`ServiceSpec`](../src/service/service_spec.rs#L32) 允许 `Config: ?Sized`，但错误必须是 `Error + Send + Sync + 'static`；这让 provider 的错误保留领域诊断，而不是被擦除为字符串。
 
-应用注册具体 provider、设置默认选择；被复用的库解析并构造服务。README 也明确表示：单一且不需要选择的实现应直接用构造函数；URI、凭据、缓存与输出身份校验属于领域适配层，而非 SPI 核心。[设计文档](/home/starfish/working/qubit/rust-common/rs-spi/doc/design.md:15)
+应用注册具体 provider、设置默认选择；被复用的库解析并构造服务。README 也明确表示：单一且不需要选择的实现应直接用构造函数；URI、凭据、缓存与输出身份校验属于领域适配层，而非 SPI 核心。[设计文档](design.md#responsibilities)
 
 不覆盖的能力：插件二进制发现/加载、卸载、依赖注入图、服务运行期故障切换、自动缓存、provider 健康探测与配置协议。这是刻意克制的边界，而不是现有实现缺口。
 
@@ -38,7 +37,7 @@ flowchart LR
   G -->|终止| H[ProviderCreationError]
 ```
 
-这不是一个把 provider 当作最终服务的容器；解析结果是组合式 resolver。解析先固定候选身份、顺序和回退策略，创建时才传入配置并依次调用工厂。同步实现的循环可直接见 [`ResolvingServiceProvider::create_configured`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/resolving_service_provider.rs:122)。因此，同一 resolver 不会因后续注册或默认选择变更而改变候选集合，但 provider 内部状态仍可变——快照不是深拷贝。
+这不是一个把 provider 当作最终服务的容器；解析结果是组合式 resolver。解析先固定候选身份、顺序和回退策略，创建时才传入配置并依次调用工厂。同步实现的循环可直接见 [`ResolvingServiceProvider::create_configured`](../src/registry/resolving_service_provider.rs#L122)。因此，同一 resolver 不会因后续注册或默认选择变更而改变候选集合，但 provider 内部状态仍可变——快照不是深拷贝。
 
 ### 2.2 组件职责
 
@@ -51,13 +50,13 @@ flowchart LR
 | `ResolvingServiceProvider` / async 版本 | 持有候选快照、按策略创建 | 不在锁内执行用户代码或 await |
 | `ProviderFailure` / `ProviderCreationError` | 叶子失败分类和聚合诊断 | 保留实际尝试的 provider ID 及领域错误 |
 
-目录内部维护三套互补视图：按 canonical ID 的条目及自动排序索引、selector 到 canonical ID 的映射、成功注册顺序；默认选择与 `sealed` 状态同样在锁内。[`RegistryInner`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/registry_inner.rs:25) 因而它能同时提供按名称查找、别名查找、稳定的优先级自动选择和注册序枚举。
+目录内部维护三套互补视图：按 canonical ID 的条目及自动排序索引、selector 到 canonical ID 的映射、成功注册顺序；默认选择与 `sealed` 状态同样在锁内。[`RegistryInner`](../src/registry/internal/registry_inner.rs#L25) 因而它能同时提供按名称查找、别名查找、稳定的优先级自动选择和注册序枚举。
 
 ### 2.3 并发与一致性边界
 
-注册先在锁外调用不受信任的 `descriptor()`，随后在一个写锁内检查所有 canonical ID/alias 冲突，并写入所有索引；冲突时本次 provider 不部分可见。[`ProviderCatalog::register_shared`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:71) 这避免了元数据回调重入造成的死锁，也实现了本次注册的原子性；但回调本身已经完成的重入修改不会回滚——这是合理且已文档化的边界。
+注册先在锁外调用不受信任的 `descriptor()`，随后在一个写锁内检查所有 canonical ID/alias 冲突，并写入所有索引；冲突时本次 provider 不部分可见。[`ProviderCatalog::register_shared`](../src/registry/internal/provider_catalog.rs#L71) 这避免了元数据回调重入造成的死锁，也实现了本次注册的原子性；但回调本身已经完成的重入修改不会回滚——这是合理且已文档化的边界。
 
-解析也在一个读快照内完成；`resolve_default_snapshot()` 同时捕获 default selection 和候选，避免“先读默认值、后解析”在并发修改下混配。[`ProviderCatalog::resolve_default_snapshot`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:180) 更重要的是，factory 调用和异步 future 的轮询发生在锁外；异步 resolver 在每个候选完成后才决定是否尝试下一项。[`AsyncResolvingServiceProvider::create_configured`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/async_resolving_service_provider.rs:120)
+解析也在一个读快照内完成；`resolve_default_snapshot()` 同时捕获 default selection 和候选，避免“先读默认值、后解析”在并发修改下混配。[`ProviderCatalog::resolve_default_snapshot`](../src/registry/internal/provider_catalog.rs#L180) 更重要的是，factory 调用和异步 future 的轮询发生在锁外；异步 resolver 在每个候选完成后才决定是否尝试下一项。[`AsyncResolvingServiceProvider::create_configured`](../src/registry/async_resolving_service_provider.rs#L120)
 
 ## 3. 值得肯定的设计选择
 
@@ -67,9 +66,9 @@ flowchart LR
    明确、部署差异大的基础设施库，也使测试可在局部 registry 中完成。
 2. **选择与构造分离。** `named`/`chain`/`auto` 解决“试谁、按何顺序”；`Never`/`OnAbsence`/`OnAnyError` 解决“失败后是否继续”。普通 registry 往往把这两层混成单个 `get()`，从而无法解释为什么没有尝试下一个 provider。
 3. **失败分类不是布尔回退。** `Unsupported`、`Unavailable`、`InvalidConfiguration`、`InitializationFailed` 使默认 `OnAbsence` 不会把用户配置错误掩盖成“换个后端试试”。这把可靠性策略显式放进 API，但要求每个 provider 正确分类。
-4. **可复现的选择和诊断。** `auto` 的顺序是 priority 降序、canonical ID 升序，不依赖哈希遍历；链式选择对重复 provider 去重并保留首次顺序。[`resolve_from_inner`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:267) 这对配置审计、测试和故障复现很有价值。
-5. **同步/异步语义同构且不绑 executor。** async API 只要求 `Send` 的 boxed future，输出为 `Send + 'static`，没有把 Tokio、async-std 等运行时漏进公共 ABI。[`ProviderFuture`](/home/starfish/working/qubit/rust-common/rs-spi/src/service/provider_future.rs:13) 这是一种库基础设施应有的克制。
-6. **初始化完成后可封存。** 当前代码提供共享、幂等的 `seal()`，阻止后续注册及默认选择修改；这对启动后配置冻结很实用。此前设计文档的版本号和封存说明已在本次修订中与 0.12 实现对齐。
+4. **可复现的选择和诊断。** `auto` 的顺序是 priority 降序、canonical ID 升序，不依赖哈希遍历；链式选择对重复 provider 去重并保留首次顺序。[`resolve_from_inner`](../src/registry/internal/provider_catalog.rs#L267) 这对配置审计、测试和故障复现很有价值。
+5. **同步/异步语义同构且不绑 executor。** async API 只要求 `Send` 的 boxed future，输出为 `Send + 'static`，没有把 Tokio、async-std 等运行时漏进公共 ABI。[`ProviderFuture`](../src/service/provider_future.rs#L13) 这是一种库基础设施应有的克制。
+6. **初始化完成后可封存。** 当前代码提供共享、幂等的 `seal()`，阻止后续注册及默认选择修改；这对启动后配置冻结很实用。版本与 API 约束应以 0.13 的 README、用户指南及 Rust API 文档为准。
 
 ## 4. 与主流 Rust 方案的比较
 
@@ -101,29 +100,29 @@ provider crate 提交 factory，应用用 `use provider_friendly as _;` 等锚�
 
 ### 流程 A：注册与封存
 
-`provider.descriptor()`（锁外） → 获取写锁 → 检查 `sealed` → 校验 ID 与全部 alias 的所有权 → 同时写 selector 索引、自动排序索引和注册序 → 返回。任何 selector 冲突都不插入本 provider；`seal()` 后注册与默认选择变更均返回 `RegistryMutationError::Sealed`。代码在进入 `descriptor()` 前后都检查封存状态，因而并发 `seal` 不会留下绕过封存的插入窗口。[`ProviderCatalog`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:71)
+`provider.descriptor()`（锁外） → 获取写锁 → 检查 `sealed` → 校验 ID 与全部 alias 的所有权 → 同时写 selector 索引、自动排序索引和注册序 → 返回。任何 selector 冲突都不插入本 provider；`seal()` 后注册与默认选择变更均返回 `RegistryMutationError::Sealed`。代码在进入 `descriptor()` 前后都检查封存状态，因而并发 `seal` 不会留下绕过封存的插入窗口。[`ProviderCatalog`](../src/registry/internal/provider_catalog.rs#L71)
 
 ### 流程 B：选择快照
 
-`named` 从 selector 索引得到一个条目；严格 chain 聚合所有未知 selector 并报错，宽松 chain 忽略未知但不允许最终为空；`auto` 遍历有序索引。[`resolve_from_inner`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/internal/provider_catalog.rs:267) 所得 resolver 拥有 `Box<[RegistryEntry]>`，所以目录变更仅影响未来解析，不会改变历史 resolver。
+`named` 从 selector 索引得到一个条目；严格 chain 聚合所有未知 selector 并报错，宽松 chain 忽略未知但不允许最终为空；`auto` 遍历有序索引。[`resolve_from_inner`](../src/registry/internal/provider_catalog.rs#L267) 所得 resolver 拥有 `Box<[RegistryEntry]>`，所以目录变更仅影响未来解析，不会改变历史 resolver。
 
 ### 流程 C：构造与回退
 
-工厂返回第一个成功 output 即结束。失败则记录 canonical ID 与 `ProviderFailure<E>`；若没有候选剩余，返回 exhausted 聚合错误；仍有候选但 policy 不许可时返回 stopped-by-policy；否则继续。provider panic 不会被转成可回退失败。异步版本一次只 await 一个 provider future；取消会 drop 当前 future，不执行下一次 fallback，也不承诺回滚外部副作用。[设计契约](/home/starfish/working/qubit/rust-common/rs-spi/doc/design.md:84)
+工厂返回第一个成功 output 即结束。失败则记录 canonical ID 与 `ProviderFailure<E>`；若没有候选剩余，返回 exhausted 聚合错误；仍有候选但 policy 不许可时返回 stopped-by-policy；否则继续。provider panic 不会被转成可回退失败。异步版本一次只 await 一个 provider future；取消会 drop 当前 future，不执行下一次 fallback，也不承诺回滚外部副作用。[设计契约](design.md#selection-and-failure-state-machine)
 
 ## 6. 成本、风险和建议的收敛方向
 
 ### 目前的主要限制
 
 1. **服务族配置模型偏统一。** 一个 `ServiceSpec` 只有一个 `Config` 和一个 `Error`。这对共同配置很干净，但 provider 特有配置、多个错误域或运行时 capability 协商只能由上层定义 enum/配置视图/适配器承担。不要急于在 SPI 中加入 `Any` 配置；那会破坏它最重要的静态契约。
-2. **异步对象安全的成本。** `ProviderFuture` 是 `Pin<Box<dyn Future + Send>>`，每次异步构造通常有一次堆分配，且 `Config: Sync`、future/输出 `Send` 排除了 local executor 和 `!Send` 资源。[`AsyncServiceSpec`](/home/starfish/working/qubit/rust-common/rs-spi/src/service/async_service_spec.rs:25) 对跨线程基础设施这是可接受的默认；对极端热路径或单线程 UI/嵌入式系统则不一定合适。
+2. **异步对象安全的成本。** `ProviderFuture` 是 `Pin<Box<dyn Future + Send>>`，每次异步构造通常有一次堆分配，且 `Config: Sync`、future/输出 `Send` 排除了 local executor 和 `!Send` 资源。[`AsyncServiceSpec`](../src/service/async_service_spec.rs#L25) 对跨线程基础设施这是可接受的默认；对极端热路径或单线程 UI/嵌入式系统则不一定合适。
 3. **回退的正确性依赖 provider 作者。** 将“请求不支持/资源不可用”误标为 `InitializationFailed` 会过早终止；把错误误标为 absence 又可能掩盖真实配置问题。应在每个领域 SPI 包中给出错误分类规范和契约测试，而不是把类别继续泛化。
 4. **目录是共享可变状态。** `Arc<RwLock<_>>` 和 snapshot 已处理内部一致性，但不替调用者决定 registry 的作用域。长期运行的应用应在 composition root 创建实例、完成注册后 `seal()`，并避免把可写 registry 当隐式全局单例。
 5. **未观测运行表现。** 项目有 Criterion bench 和 fuzz target，但本评估没有执行，不能宣称锁竞争、解析或 boxed future 的实际性能。设计文档中的性能结论应视作项目作者给出的历史测量，需要在目标平台复测后才可用于容量决策。
 
-### 已处理的文档一致性问题
+### 文档版本一致性
 
-源码公开了 `seal()` / `is_sealed()`，且测试覆盖封存行为；此前设计文档和用户指南仍写 0.11、声称没有 freeze。现已将英文/中文设计文档和用户指南统一到 0.12，并明确：没有 `unregister` 或 `unseal`，但支持启动配置完成后的不可逆 `seal()`。[`ProviderRegistry::seal`](/home/starfish/working/qubit/rust-common/rs-spi/src/registry/provider_registry.rs:163)
+本项目的 README、用户指南和设计说明以 0.13 API 为基线。注册表支持启动配置完成后的不可逆 `seal()`，没有 `unregister` 或 `unseal`；相关行为以 [`ProviderRegistry::seal`](../src/registry/provider_registry.rs#L174) 及其 Rustdoc 为准。
 
 ### 采用判断
 
@@ -134,4 +133,4 @@ provider crate 提交 factory，应用用 `use provider_friendly as _;` 等锚�
 
 ## 7. 阅读路线与研究边界
 
-建议后续阅读顺序：先读 [`README.md`](/home/starfish/working/qubit/rust-common/rs-spi/README.md:1) 了解使用者模型，再读 [`doc/design.md`](/home/starfish/working/qubit/rust-common/rs-spi/doc/design.md:1) 的契约，再沿 `ProviderCatalog → ResolvingServiceProvider → FallbackState` 追实现，最后看 `tests/registry` 与 `tests/selection` 验证边界。未逐行审阅 fuzz oracle、全部测试和 benchmark，也未检查下游 `rs-fs` 等消费者；它们是下一轮最有价值的证据，用于验证领域适配层是否确实没有把 SPI 职责重新实现一遍。
+建议后续阅读顺序：先读 [README](../README.zh_CN.md) 了解使用者模型，再读[设计说明](design.zh_CN.md) 的契约，然后沿 `ProviderCatalog → ResolvingServiceProvider → FallbackState` 追实现，最后看 `tests/registry` 与 `tests/selection` 验证边界。下游消费者可用于进一步验证领域适配层如何使用 SPI，同时保持业务专用职责位于适配层。
