@@ -27,10 +27,10 @@ Requires Rust 1.94 or later. The default feature set is empty.
 `lib-foo` needs a Greeter, but the application chooses the implementation.
 The four files show the service contract, consumer, provider and application.
 
-### 1. Service contract and shared registry
+### 1. Service contract
 
-`lib-greeter` owns the business interface and one `LazyLock` registry. All
-participants use the same service-family type and registry instance.
+`lib-greeter` owns the business interface. The application creates the registry
+and passes it to consumers, so startup errors can be returned normally.
 
 <!-- spi-example: three-crates; file: lib-greeter/src/lib.rs -->
 ```rust
@@ -38,10 +38,10 @@ participants use the same service-family type and registry instance.
 use std::{
     error::Error,
     fmt,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 
-use qubit_spi::{ProviderRegistry, ServiceSpec, SyncServiceSpec};
+use qubit_spi::{ServiceSpec, SyncServiceSpec};
 
 /// Business interface implemented by every Greeter service.
 pub trait Greeter: Send + Sync {
@@ -89,10 +89,6 @@ impl SyncServiceSpec for GreeterSpec {
     // Service object returned to consumers after successful creation.
     type Output = Arc<dyn Greeter>;
 }
-
-/// Process-wide Greeter provider registry shared by the App and all libraries.
-pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
-    LazyLock::new(ProviderRegistry::default);
 ```
 
 ### 2. Independent consumer
@@ -102,11 +98,12 @@ pub static GREETER_REGISTRY: LazyLock<ProviderRegistry<GreeterSpec>> =
 <!-- spi-example: three-crates; file: lib-foo/src/lib.rs -->
 ```rust
 // lib-foo/src/lib.rs
-use lib_greeter::GREETER_REGISTRY;
+use lib_greeter::GreeterSpec;
+use qubit_spi::{ProviderRegistry, ServiceProvider};
 
 /// Creates the App-selected default Greeter and prints one greeting.
-pub fn foo() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = GREETER_REGISTRY.resolve()?;
+pub fn foo(registry: &ProviderRegistry<GreeterSpec>) -> Result<(), Box<dyn std::error::Error>> {
+    let provider = registry.resolve()?;
     let greeter = provider.create()?;
     println!("{}", greeter.greet("Rust"));
     Ok(())
@@ -124,7 +121,7 @@ use std::sync::Arc;
 
 use lib_greeter::{Greeter, GreeterConfig, GreeterError, GreeterSpec};
 use qubit_spi::error::ProviderFailure;
-use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
+use qubit_spi::{provider_descriptor, ProviderDescriptor, ProviderMetadata, ServiceProvider};
 
 /// Concrete Greeter created by the friendly provider.
 struct FriendlyGreeter {
@@ -154,29 +151,29 @@ impl ServiceProvider<GreeterSpec> for FriendlyGreeterProvider {
 
 impl ProviderMetadata for FriendlyGreeterProvider {
     fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(ProviderId::new("friendly").expect("static provider ID is valid"))
-            .with_priority(100)
+        provider_descriptor!("friendly", priority: 100)
     }
 }
 ```
 
 ### 4. Application composition
 
-The application registers providers and sets the default before invoking library consumers. The singleton is owned by the domain crate, not by SPI.
+The application creates the registry, registers providers and sets the default before invoking library consumers.
 
 <!-- spi-example: three-crates; file: app/src/main.rs -->
 ```rust
-// app.rs
+// app/src/main.rs
 use lib_foo::foo;
 use lib_friendly_greeter::FriendlyGreeterProvider;
-use lib_greeter::GREETER_REGISTRY;
-use qubit_spi::ProviderSelection;
+use lib_greeter::GreeterSpec;
+use qubit_spi::{ProviderRegistry, ProviderSelection};
 
-// Application composition root: install a provider before calling lib-foo.
+// The application owns the registry and passes it to its library consumer.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    GREETER_REGISTRY.register(FriendlyGreeterProvider)?;
-    GREETER_REGISTRY.set_default_selection(ProviderSelection::named("friendly")?);
-    foo()
+    let registry = ProviderRegistry::<GreeterSpec>::default();
+    registry.register(FriendlyGreeterProvider)?;
+    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    foo(&registry)
 }
 ```
 
@@ -188,45 +185,59 @@ workspace manifest and local dependencies.
 
 ## With `inventory`
 
-The same Greeter example can discover linked providers. This adds setup for a
-single provider, but keeps application registration code stable as independently
-maintained provider crates are added. `lib-foo` remains unchanged. In
-`lib-greeter`, declare a collection for `GreeterSpec` and build the shared
-registry from it:
+The same Greeter example can discover linked providers. `lib-foo` stays
+unchanged. Each provider crate submits a factory, and the application builds
+one registry from the providers it links.
 
-```diff
-+qubit_spi::declare_sync_provider_inventory! {
-+    pub mod providers {
-+        spec = crate::GreeterSpec;
-+    }
-+}
+In `lib-greeter/src/lib.rs`, declare the collection:
 
--    LazyLock::new(ProviderRegistry::default);
-+    LazyLock::new(|| providers::build_registry().expect("valid Greeter provider inventory"));
+```
+qubit_spi::declare_sync_provider_inventory! {
+    pub mod providers {
+        spec = crate::GreeterSpec;
+    }
+}
 ```
 
-In `lib-friendly-greeter`, submit a factory for the same provider:
+In `lib-friendly-greeter/src/lib.rs`, submit its factory:
 
-```diff
-+qubit_spi::submit_sync_provider! {
-+    inventory_entry = lib_greeter::providers::Entry;
-+    spec = lib_greeter::GreeterSpec;
-+    provider = FriendlyGreeterProvider;
-+}
+```
+qubit_spi::submit_sync_provider! {
+    inventory_entry = lib_greeter::providers::Entry;
+    spec = lib_greeter::GreeterSpec;
+    provider = FriendlyGreeterProvider;
+}
 ```
 
-The application keeps its provider list in `app/src/greeter_providers.rs`:
+List provider crates in `app/src/greeter_providers.rs`:
 
-```diff
-+use lib_friendly_greeter as _;
+```
+use lib_friendly_greeter as _;
 ```
 
-Add one import for each provider crate included in this application. The file
+Add one import for each provider crate included in the application. This file
 serves as an assembly list, similar in purpose to a Spring XML configuration:
 it determines which crates are linked. Each provider still owns its factory
-and metadata, and the application still chooses the default. In
-`app/src/main.rs`, add `mod greeter_providers;` and remove the
-`GREETER_REGISTRY.register(FriendlyGreeterProvider)?` call.
+and metadata, and the application still chooses the default. A Cargo dependency
+alone does not guarantee that an otherwise unused provider crate is linked.
+
+In `app/src/main.rs`, include that file and build the registry. This replaces
+the explicit `register` call from the first example:
+
+```
+// app/src/main.rs
+mod greeter_providers;
+
+use lib_foo::foo;
+use lib_greeter::providers;
+use qubit_spi::ProviderSelection;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let registry = providers::build_registry()?;
+    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    foo(&registry)
+}
+```
 
 Enable `qubit-spi = { version = "0.13", features = ["inventory"] }` in the
 participating crates. The [complete runnable version](doc/user_guide.md#link-time-discovery-for-the-same-greeter)
