@@ -12,8 +12,8 @@ use std::fmt;
 /// link-time discovery.
 ///
 /// Sources sort lexicographically by crate name, module path, and file, then
-/// by numeric line number. Discovery uses that order before invoking provider factories,
-/// so linker inventory traversal cannot choose registration order.
+/// by numeric line number. Discovery uses that order before invoking provider
+/// factories, so linker inventory traversal cannot choose registration order.
 ///
 /// # Examples
 ///
