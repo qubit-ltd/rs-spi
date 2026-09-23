@@ -1,6 +1,6 @@
 # Qubit SPI User Guide
 
-[中文版](user_guide.zh_CN.md) · [README](../README.md) · [Design](design.md)
+[README](../README.md) · [Design](design.md) · [Ecosystem comparison](ecosystem-comparison.md)
 
 This guide covers `qubit-spi` 0.13 and Rust 1.94+. It is for domain-library authors,
 provider implementers and application authors who compose them. The goal is for
@@ -673,10 +673,11 @@ crates/providers. Successful output is returned directly without metadata wrappi
 Use `register_shared` for an existing `Arc` provider, or expose a domain-specific
 facade around the registry as shown by the explicit registration example. Consult the
 [API reference](https://docs.rs/qubit-spi) for exact signatures and error variants,
-and the [design](design.md) for lock, snapshot and performance decisions.
+the [design](design.md) for lock, snapshot and performance decisions, and the
+[ecosystem comparison](ecosystem-comparison.md) for scope and trade-offs against related approaches.
 
 From this repository, run `python3 scripts/check-documentation.py` to compile and
 run every marked Rust block independently for each language. Then run
 `./align-ci.sh` and `SPI_PACKAGE_ALLOW_DIRTY=1 ./ci-check.sh` while reviewing local
 uncommitted changes; a clean CI checkout uses `./ci-check.sh` without that opt-in.
-[README](../README.md) · [中文指南](user_guide.zh_CN.md)
+[README](../README.md)

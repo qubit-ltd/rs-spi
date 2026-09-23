@@ -264,10 +264,9 @@ service crate.
 ## Learn More
 
 - [User Guide](doc/user_guide.md): complete explicit and inventory Greeter examples, configuration, fallback and troubleshooting.
-- [中文用户指南](doc/user_guide.zh_CN.md).
-- [Design](doc/design.md) and [中文设计说明](doc/design.zh_CN.md): contracts and implementation decisions.
+- [Design](doc/design.md): contracts and implementation decisions.
+- [Ecosystem comparison](doc/ecosystem-comparison.md): scope and trade-offs against related Rust approaches.
 - [API reference](https://docs.rs/qubit-spi).
-- [中文 README](README.zh_CN.md).
 
 ## Testing
 

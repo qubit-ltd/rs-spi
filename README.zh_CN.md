@@ -254,10 +254,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## 延伸阅读
 
 - [中文用户指南](doc/user_guide.zh_CN.md)：完整的显式注册和 `inventory` Greeter 示例，以及配置、回退与排障。
-- [English User Guide](doc/user_guide.md)。
-- [中文设计说明](doc/design.zh_CN.md)与 [English Design](doc/design.md)：行为契约与实现决策。
+- [中文设计说明](doc/design.zh_CN.md)：行为契约与实现决策。
+- [生态对比](doc/ecosystem-comparison.zh_CN.md)：与 Rust 生态相关方案的职责和取舍。
 - [API 文档](https://docs.rs/qubit-spi)。
-- [English README](README.md)。
 
 ## 测试
 
