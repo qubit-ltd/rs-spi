@@ -44,6 +44,13 @@ submission source location; no partially built registry is returned. Factories
 do not return `Result`, and factory or `descriptor()` panics propagate unchanged
 rather than being converted into inventory build errors.
 
+When a domain adapter must validate or wrap each submitted provider before
+registration, the contract can expose `build_registry_with(transform)` instead.
+The transform runs after each factory and before registration; the ordinary
+`build_registry()` uses the identity transform. This keeps domain-specific
+output checks outside SPI while allowing the inventory path to preserve the
+same adapter behavior as explicit registration.
+
 Cargo dependency resolution is not linker reachability. A provider package in
 `Cargo.toml` may be omitted from the final binary when no symbol anchors it.
 Applications should keep such anchors together in a module such as

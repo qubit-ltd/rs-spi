@@ -35,6 +35,11 @@ collection 由服务族类型约束并彼此隔离。例如，提交到 `Greeter
 构建的注册表。工厂不返回 `Result`；工厂或 `descriptor()` 的 panic 原样传播，不会被
 转换为 inventory 构建错误。
 
+如果领域适配层需要在注册前校验或包装每个已提交的服务提供者，契约也可以提供
+`build_registry_with(transform)`。转换函数在工厂之后、注册之前执行；普通的
+`build_registry()` 使用恒等转换。这样领域特有的输出校验仍留在 SPI 之外，同时 inventory
+路径也能保留显式注册时使用的适配行为。
+
 Cargo 解析依赖不等于链接器将 crate 放入最终二进制。即使 `Cargo.toml` 中列出了
 服务提供者包，在没有符号固定它时仍可能被省略。应用应把这类固定链接集中到
 `linked_providers.rs` 一类模块，并在调用契约 crate 的 `build_registry()` 前写入
