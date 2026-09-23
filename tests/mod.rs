@@ -24,6 +24,11 @@ impl qubit_spi::SyncServiceSpec for ExternalStringSpec {
     type Output = String;
 }
 
+#[cfg(feature = "inventory")]
+impl qubit_spi::AsyncServiceSpec for ExternalStringSpec {
+    type Output = String;
+}
+
 mod common;
 mod error;
 #[cfg(feature = "inventory")]

@@ -27,6 +27,10 @@ use crate::common::test_error::TestError;
 use crate::common::test_provider_definition::TestProviderDefinition;
 use crate::common::test_provider_definition::define_provider;
 
+mod macro_path_support {
+    pub(crate) use crate::common::string_spec::StringSpec as OrdinarySpec;
+}
+
 declare_async_provider_inventory! {
     pub mod discovered_providers {
         spec = StringSpec;
@@ -58,6 +62,18 @@ submit_async_provider! {
     inventory_entry = caller_factory_providers::Entry;
     spec = StringSpec;
     provider = factory();
+}
+
+declare_async_provider_inventory! {
+    pub mod absolute_entry_providers {
+        spec = StringSpec;
+    }
+}
+
+submit_async_provider! {
+    inventory_entry = ::inventory_test_contract::inventory::async_inventory_tests::absolute_entry_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("absolute-entry"), AsyncConfigurableProvider::success("absolute-entry"));
 }
 
 declare_async_provider_inventory! {
@@ -207,6 +223,30 @@ declare_async_provider_inventory! {
     }
 }
 
+declare_async_provider_inventory! {
+    pub mod local_path_providers {
+        spec = self::macro_path_support::OrdinarySpec;
+    }
+}
+
+declare_async_provider_inventory! {
+    pub mod self_path_providers {
+        spec = self::StringSpec;
+    }
+}
+
+declare_async_provider_inventory! {
+    pub mod crate_path_providers {
+        spec = crate::common::string_spec::StringSpec;
+    }
+}
+
+declare_async_provider_inventory! {
+    pub mod absolute_external_path_providers {
+        spec = ::inventory_test_contract::ExternalStringSpec;
+    }
+}
+
 mod nested_path_declarations {
     use qubit_spi::declare_async_provider_inventory;
 
@@ -232,7 +272,7 @@ mod zulu_submission {
     submit_async_provider! {
         inventory_entry = super::ordered_providers::Entry;
         spec = super::StringSpec;
-        provider = define_provider(provider_descriptor!("zulu"), AsyncConfigurableProvider::success("zulu"));
+        provider = define_provider(provider_descriptor!("zulu", priority: 10), AsyncConfigurableProvider::success("zulu"));
     }
 }
 
@@ -245,7 +285,7 @@ mod alpha_submission {
     submit_async_provider! {
         inventory_entry = super::ordered_providers::Entry;
         spec = super::StringSpec;
-        provider = define_provider(provider_descriptor!("alpha"), AsyncConfigurableProvider::success("alpha"));
+        provider = define_provider(provider_descriptor!("alpha", priority: -10), AsyncConfigurableProvider::success("alpha"));
     }
 }
 
@@ -276,6 +316,21 @@ fn test_submit_provider_preserves_caller_factory_name_resolution() {
     assert_eq!(
         "caller-factory",
         futures::executor::block_on(resolver.create()).expect("caller factory provider should create its service"),
+    );
+}
+
+/// Verifies that an asynchronous submission can name its inventory entry with
+/// a leading absolute path.
+#[test]
+fn test_submit_provider_accepts_absolute_inventory_entry_path() {
+    let registry = absolute_entry_providers::build_registry().expect("absolute entry provider should register");
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::named("absolute-entry").expect("static selector should be valid"))
+        .expect("absolute entry provider should resolve");
+
+    assert_eq!(
+        "absolute-entry",
+        futures::executor::block_on(resolver.create()).expect("absolute entry provider should create its service"),
     );
 }
 
@@ -373,17 +428,38 @@ fn test_build_registry_samples_each_descriptor_once_without_creating_services() 
     assert_eq!(0, CREATE_CONFIGURED_CALLS.load(Ordering::SeqCst));
 }
 
-/// Verifies that root and nested declarations resolve their service-spec paths.
+/// Verifies that every supported declaration path resolves at the declaration
+/// site.
 #[test]
-fn test_declare_inventory_resolves_root_and_nested_spec_paths() {
+fn test_declare_inventory_resolves_relative_and_absolute_spec_paths() {
     assert!(
         root_path_providers::build_registry()
             .expect("root path should compile and build")
             .is_empty()
     );
     assert!(
+        local_path_providers::build_registry()
+            .expect("local multi-segment path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        self_path_providers::build_registry()
+            .expect("self path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        crate_path_providers::build_registry()
+            .expect("crate path should compile and build")
+            .is_empty()
+    );
+    assert!(
         nested_path_declarations::providers::build_registry()
             .expect("nested super path should compile and build")
+            .is_empty()
+    );
+    assert!(
+        absolute_external_path_providers::build_registry()
+            .expect("absolute external path should compile and build")
             .is_empty()
     );
 }
@@ -397,5 +473,13 @@ fn test_build_registry_sorts_entries_by_submission_source() {
     assert_eq!(
         vec!["alpha", "zulu"],
         registry.provider_ids().iter().map(|id| id.as_str()).collect::<Vec<_>>(),
+    );
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::auto())
+        .expect("automatic selection should resolve the higher-priority provider");
+
+    assert_eq!(
+        "zulu",
+        futures::executor::block_on(resolver.create()).expect("automatic provider should create its service"),
     );
 }

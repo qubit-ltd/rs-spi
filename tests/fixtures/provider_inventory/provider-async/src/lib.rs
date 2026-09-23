@@ -36,7 +36,7 @@ impl AsyncServiceProvider<service_contract::FixtureSpec> for AsyncProvider {
 }
 
 spi::submit_async_provider! {
-    inventory_entry = service_contract::async_providers::Entry;
+    inventory_entry = ::service_contract::async_providers::Entry;
     spec = service_contract::FixtureSpec;
     provider = AsyncProvider;
 }

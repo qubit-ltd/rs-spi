@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "service-model",
     "service-contract",
     "provider-alpha",
     "provider-beta",

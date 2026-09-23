@@ -32,7 +32,7 @@ impl ServiceProvider<service_contract::FixtureSpec> for AlphaProvider {
 }
 
 spi::submit_sync_provider! {
-    inventory_entry = service_contract::sync_providers::Entry;
+    inventory_entry = ::service_contract::sync_providers::Entry;
     spec = service_contract::FixtureSpec;
     provider = AlphaProvider;
 }

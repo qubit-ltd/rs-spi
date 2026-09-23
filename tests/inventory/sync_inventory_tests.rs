@@ -65,6 +65,18 @@ submit_sync_provider! {
 }
 
 declare_sync_provider_inventory! {
+    pub mod absolute_entry_providers {
+        spec = StringSpec;
+    }
+}
+
+submit_sync_provider! {
+    inventory_entry = ::inventory_test_contract::inventory::sync_inventory_tests::absolute_entry_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("absolute-entry"), ConfigurableProvider::success("absolute-entry"));
+}
+
+declare_sync_provider_inventory! {
     pub mod internal_factory_name_providers {
         spec = StringSpec;
     }
@@ -90,16 +102,54 @@ declare_sync_provider_inventory! {
     }
 }
 
-submit_sync_provider! {
-    inventory_entry = duplicate_providers::Entry;
-    spec = StringSpec;
-    provider = define_provider(provider_descriptor!("duplicate"), ConfigurableProvider::success("first"));
+mod alpha_duplicate_submission {
+    use super::ConfigurableProvider;
+    use super::define_provider;
+    use super::provider_descriptor;
+    use super::submit_sync_provider;
+
+    submit_sync_provider! {
+        inventory_entry = super::duplicate_providers::Entry;
+        spec = super::StringSpec;
+        provider = define_provider(provider_descriptor!("duplicate"), ConfigurableProvider::success("first"));
+    }
+}
+
+mod zulu_duplicate_submission {
+    use super::ConfigurableProvider;
+    use super::define_provider;
+    use super::provider_descriptor;
+    use super::submit_sync_provider;
+
+    pub(crate) const SUBMISSION_LINE: u32 = line!() + 1;
+    submit_sync_provider! {
+        inventory_entry = super::duplicate_providers::Entry;
+        spec = super::StringSpec;
+        provider = define_provider(provider_descriptor!("duplicate"), ConfigurableProvider::success("second"));
+    }
+}
+
+declare_sync_provider_inventory! {
+    pub mod alias_collision_providers {
+        spec = StringSpec;
+    }
 }
 
 submit_sync_provider! {
-    inventory_entry = duplicate_providers::Entry;
+    inventory_entry = alias_collision_providers::Entry;
     spec = StringSpec;
-    provider = define_provider(provider_descriptor!("duplicate"), ConfigurableProvider::success("second"));
+    provider = define_provider(
+        provider_descriptor!("alias-owner")
+            .with_aliases(["taken"])
+            .expect("static alias should be valid"),
+        ConfigurableProvider::success("first"),
+    );
+}
+
+submit_sync_provider! {
+    inventory_entry = alias_collision_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("taken"), ConfigurableProvider::success("second"));
 }
 
 declare_sync_provider_inventory! {
@@ -182,8 +232,8 @@ submit_sync_provider! {
 }
 
 declare_sync_provider_inventory! {
-    pub mod ordinary_path_providers {
-        spec = macro_path_support::OrdinarySpec;
+    pub mod local_path_providers {
+        spec = self::macro_path_support::OrdinarySpec;
     }
 }
 
@@ -230,7 +280,7 @@ mod zulu_submission {
     submit_sync_provider! {
         inventory_entry = super::ordered_providers::Entry;
         spec = super::StringSpec;
-        provider = define_provider(provider_descriptor!("zulu"), ConfigurableProvider::success("zulu"));
+        provider = define_provider(provider_descriptor!("zulu", priority: 10), ConfigurableProvider::success("zulu"));
     }
 }
 
@@ -243,7 +293,7 @@ mod alpha_submission {
     submit_sync_provider! {
         inventory_entry = super::ordered_providers::Entry;
         spec = super::StringSpec;
-        provider = define_provider(provider_descriptor!("alpha"), ConfigurableProvider::success("alpha"));
+        provider = define_provider(provider_descriptor!("alpha", priority: -10), ConfigurableProvider::success("alpha"));
     }
 }
 
@@ -277,6 +327,23 @@ fn test_submit_provider_preserves_caller_factory_name_resolution() {
         resolver
             .create()
             .expect("caller factory provider should create its service"),
+    );
+}
+
+/// Verifies that a submission can name its inventory entry with a leading
+/// absolute path.
+#[test]
+fn test_submit_provider_accepts_absolute_inventory_entry_path() {
+    let registry = absolute_entry_providers::build_registry().expect("absolute entry provider should register");
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::named("absolute-entry").expect("static selector should be valid"))
+        .expect("absolute entry provider should resolve");
+
+    assert_eq!(
+        "absolute-entry",
+        resolver
+            .create()
+            .expect("absolute entry provider should create its service"),
     );
 }
 
@@ -323,10 +390,47 @@ fn test_build_registry_returns_unsealed_registry_that_accepts_explicit_provider(
 #[test]
 fn test_build_registry_reports_source_for_duplicate_provider_id() {
     let error = duplicate_providers::build_registry().expect_err("duplicate provider ID should be rejected");
+    let source = error.source_location();
 
     assert!(matches!(error, ProviderInventoryBuildError::Registration { .. }));
-    assert_eq!(module_path!(), error.source_location().module_path());
+    assert_eq!(
+        concat!(module_path!(), "::zulu_duplicate_submission"),
+        source.module_path()
+    );
+    assert_eq!(env!("CARGO_PKG_NAME"), source.crate_name());
+    assert_eq!(file!(), source.file());
+    assert_eq!(zulu_duplicate_submission::SUBMISSION_LINE, source.line());
     assert!(error.registration_error().to_string().contains("duplicate"));
+}
+
+/// Verifies that an alias owned by one discovered provider conflicts with a
+/// later provider's canonical ID.
+#[test]
+fn test_build_registry_reports_alias_to_id_collision() {
+    let error = alias_collision_providers::build_registry()
+        .expect_err("canonical ID should not reuse an earlier provider alias");
+    let registration = error.registration_error();
+
+    assert_eq!(Some("taken"), registration.selector());
+    assert_eq!(Some("alias-owner"), registration.existing_provider());
+    assert_eq!(Some("taken"), registration.provider());
+}
+
+/// Verifies that a discovered registry rejects later registrations after the
+/// application seals it.
+#[test]
+fn test_build_registry_rejects_explicit_registration_after_seal() {
+    let registry = discovered_providers::build_registry().expect("discovered provider should register");
+
+    registry.seal();
+    let error = registry
+        .register(define_provider(
+            provider_descriptor!("after-seal"),
+            ConfigurableProvider::success("after-seal"),
+        ))
+        .expect_err("sealed inventory registry should reject explicit providers");
+
+    assert!(error.is_sealed());
 }
 
 /// Verifies that a provider factory panic remains observable to the caller.
@@ -363,8 +467,8 @@ fn test_build_registry_samples_each_descriptor_once() {
 #[test]
 fn test_declare_inventory_resolves_relative_and_absolute_spec_paths() {
     assert!(
-        ordinary_path_providers::build_registry()
-            .expect("ordinary relative path should compile and build")
+        local_path_providers::build_registry()
+            .expect("local multi-segment path should compile and build")
             .is_empty()
     );
     assert!(
@@ -398,5 +502,13 @@ fn test_build_registry_sorts_entries_by_submission_source() {
     assert_eq!(
         vec!["alpha", "zulu"],
         registry.provider_ids().iter().map(|id| id.as_str()).collect::<Vec<_>>(),
+    );
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::auto())
+        .expect("automatic selection should resolve the higher-priority provider");
+
+    assert_eq!(
+        "zulu",
+        resolver.create().expect("automatic provider should create its service")
     );
 }

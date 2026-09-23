@@ -13,6 +13,11 @@ use crate::error::RegistryMutationError;
 use crate::inventory::ProviderRegistrationSource;
 
 /// Error raised when a discovered provider cannot be added to a registry.
+///
+/// This error is produced only by a service family's generated
+/// `build_registry()` function. Applications should handle it at startup using
+/// the source and registration-error accessors; they do not construct it
+/// directly.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 #[must_use]

@@ -5,4 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
+service-model = { path = "../service-model" }
 spi = { package = "qubit-spi", path = "../../../..", features = ["inventory"] }

@@ -10,6 +10,20 @@ use std::fmt;
 
 /// Identifies the source location of a provider registration submitted through
 /// link-time discovery.
+///
+/// Sources sort lexicographically by crate name, module path, and file, then
+/// by numeric line number. Discovery uses that order before invoking provider factories,
+/// so linker inventory traversal cannot choose registration order.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_spi::ProviderRegistrationSource;
+///
+/// let alpha = ProviderRegistrationSource::new("app", "providers::alpha", "src/lib.rs", 10);
+/// let zulu = ProviderRegistrationSource::new("app", "providers::zulu", "src/lib.rs", 1);
+/// assert!(alpha < zulu);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ProviderRegistrationSource {
     crate_name: &'static str,

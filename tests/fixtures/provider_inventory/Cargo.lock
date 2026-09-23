@@ -275,6 +275,14 @@ name = "service-contract"
 version = "0.0.0"
 dependencies = [
  "qubit-spi",
+ "service-model",
+]
+
+[[package]]
+name = "service-model"
+version = "0.0.0"
+dependencies = [
+ "qubit-spi",
 ]
 
 [[package]]
