@@ -21,7 +21,9 @@ pub struct SyncProviderInventoryEntry<S>
 where
     S: SyncServiceSpec,
 {
+    /// Factory invoked when the inventory builder creates this provider.
     factory: fn() -> Arc<dyn ProviderDefinition<S>>,
+    /// Declaration location used to order submissions and report failures.
     source: ProviderRegistrationSource,
 }
 

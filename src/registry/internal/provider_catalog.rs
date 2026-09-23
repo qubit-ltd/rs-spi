@@ -131,6 +131,15 @@ where
     /// # Parameters
     ///
     /// * `selection` - New default selection stored in the catalog.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after storing the selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistryMutationError::Sealed`] when the catalog no longer
+    /// accepts mutations.
     #[inline(always)]
     pub(crate) fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         let mut inner = self.write_inner();
@@ -154,6 +163,21 @@ where
         self.read_inner().sealed
     }
 
+    /// Rejects a catalog mutation after the shared registry has been sealed.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Catalog state currently protected by the caller's write
+    ///   lock.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the catalog still accepts mutations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistryMutationError::Sealed`] when startup configuration has
+    /// already been finalized.
     fn ensure_mutable(inner: &RegistryInner<P>) -> Result<(), RegistryMutationError> {
         if inner.sealed {
             Err(RegistryMutationError::Sealed)

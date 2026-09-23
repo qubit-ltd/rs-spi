@@ -26,9 +26,13 @@ use std::fmt;
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ProviderRegistrationSource {
+    /// Package name used as the first key in deterministic source ordering.
     crate_name: &'static str,
+    /// Fully qualified submission module used after the crate name.
     module_path: &'static str,
+    /// Source file path used after the module path.
     file: &'static str,
+    /// One-based declaration line used as the final ordering key.
     line: u32,
 }
 

@@ -158,8 +158,12 @@ where
     ///
     /// # Returns
     ///
-    /// `Ok(())` when the selection is stored, or [`RegistryMutationError`]
-    /// when the registry has been sealed.
+    /// `Ok(())` after the selection is stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistryMutationError::Sealed`] when the registry rejects
+    /// further configuration changes.
     #[inline(always)]
     pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         self.providers.set_default_selection(selection)

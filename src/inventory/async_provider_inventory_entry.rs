@@ -22,7 +22,9 @@ where
     S: AsyncServiceSpec,
     S::Config: Sync,
 {
+    /// Factory invoked when the inventory builder creates this provider.
     factory: fn() -> Arc<dyn AsyncProviderDefinition<S>>,
+    /// Declaration location used to order submissions and report failures.
     source: ProviderRegistrationSource,
 }
 
