@@ -1,4 +1,3 @@
-#![allow(unused_must_use)]
 // =============================================================================
 //    Copyright (c) 2025 - 2026 Haixing Hu.
 //
@@ -6,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
+#![allow(unused_must_use)]
 //! Creation benchmarks include traversal, diagnostics and async executor
 //! polling.
 

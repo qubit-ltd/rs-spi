@@ -1,4 +1,3 @@
-#![allow(unused_must_use)]
 // =============================================================================
 //    Copyright (c) 2026 Haixing Hu.
 //
@@ -6,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
+#![allow(unused_must_use)]
 
 use std::fmt::Write;
 use std::sync::Arc;
