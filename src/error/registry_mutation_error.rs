@@ -87,6 +87,10 @@ impl RegistryMutationError {
     }
 
     /// Returns the duplicate selector, or [`None`] when the registry is sealed.
+    ///
+    /// # Returns
+    ///
+    /// The normalized selector in a duplicate conflict; otherwise, `None`.
     #[must_use]
     pub fn selector(&self) -> Option<&str> {
         match self {
@@ -97,6 +101,10 @@ impl RegistryMutationError {
 
     /// Returns the provider that already owns the selector, or [`None`] when
     /// the registry is sealed.
+    ///
+    /// # Returns
+    ///
+    /// The canonical ID that currently owns the selector; otherwise, `None`.
     #[must_use]
     pub fn existing_provider(&self) -> Option<&str> {
         match self {
@@ -107,6 +115,10 @@ impl RegistryMutationError {
 
     /// Returns the provider that attempted to claim the selector, or [`None`]
     /// when the registry is sealed.
+    ///
+    /// # Returns
+    ///
+    /// The canonical ID that attempted the claim; otherwise, `None`.
     #[must_use]
     pub fn provider(&self) -> Option<&str> {
         match self {
@@ -116,6 +128,10 @@ impl RegistryMutationError {
     }
 
     /// Returns `true` when the registry has been sealed and rejects mutations.
+    ///
+    /// # Returns
+    ///
+    /// `true` for a sealed-registry error; otherwise, `false`.
     #[must_use]
     pub const fn is_sealed(&self) -> bool {
         matches!(self, Self::Sealed)

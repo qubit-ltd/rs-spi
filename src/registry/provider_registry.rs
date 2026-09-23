@@ -154,17 +154,28 @@ where
     /// # Parameters
     ///
     /// * `selection` - New default selection stored by the Registry.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the selection is stored, or [`RegistryMutationError`]
+    /// when the registry has been sealed.
     #[inline(always)]
     pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         self.providers.set_default_selection(selection)
     }
 
     /// Seals this registry against further mutation.
+    ///
+    /// Existing registrations remain available for reads and resolution.
     pub fn seal(&self) {
         self.providers.seal();
     }
 
     /// Returns whether this registry is sealed.
+    ///
+    /// # Returns
+    ///
+    /// `true` when further mutations are rejected; otherwise, `false`.
     #[must_use]
     pub fn is_sealed(&self) -> bool {
         self.providers.is_sealed()
