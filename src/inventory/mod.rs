@@ -16,6 +16,8 @@ mod sync_provider_inventory_entry;
 
 pub use async_provider_inventory_entry::AsyncProviderInventoryEntry;
 pub use build_async_registry::build_async_registry;
+pub use build_async_registry::build_async_registry_with;
 pub use build_sync_registry::build_sync_registry;
+pub use build_sync_registry::build_sync_registry_with;
 pub use provider_registration_source::ProviderRegistrationSource;
 pub use sync_provider_inventory_entry::SyncProviderInventoryEntry;

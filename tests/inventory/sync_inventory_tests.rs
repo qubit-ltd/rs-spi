@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
 use std::sync::atomic::AtomicUsize;
@@ -311,6 +312,20 @@ fn test_build_registry_discovers_and_creates_synchronous_provider() {
             .create()
             .expect("discovered provider should create its service"),
     );
+}
+
+/// Verifies that registry builders can wrap each discovered provider before registration.
+#[test]
+fn test_build_registry_with_transforms_each_synchronous_provider() {
+    let transformed = Cell::new(0);
+    let registry = discovered_providers::build_registry_with(|provider| {
+        transformed.set(transformed.get() + 1);
+        provider
+    })
+    .expect("transformed provider should register");
+
+    assert_eq!(1, transformed.get());
+    assert_eq!(1, registry.len());
 }
 
 /// Verifies that a provider expression can call a caller function named

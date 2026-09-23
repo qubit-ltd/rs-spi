@@ -156,10 +156,46 @@ macro_rules! declare_sync_provider_inventory {
                 $crate::ProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {
+                build_registry_with(|provider| provider)
+            }
+
+            /// Builds a registry after transforming each discovered provider.
+            ///
+            /// The transform runs in stable declaration-source order after
+            /// each provider factory and before registration. Service-family
+            /// registries can use it to install validation or other adapters.
+            ///
+            /// # Parameters
+            ///
+            /// * `transform` - Adapter applied to each provider before it is
+            ///   inserted into the registry.
+            ///
+            /// # Returns
+            ///
+            /// An unsealed registry containing every successfully transformed
+            /// provider.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error identifying the source of a provider whose
+            /// transformed descriptor conflicts with an earlier entry.
+            ///
+            /// # Panics
+            ///
+            /// Propagates panics raised by provider factories, the transform,
+            /// or provider descriptor callbacks.
+            pub fn build_registry_with(
+                transform: impl FnMut(
+                    ::std::sync::Arc<dyn $crate::ProviderDefinition<$spec>>,
+                ) -> ::std::sync::Arc<dyn $crate::ProviderDefinition<$spec>>,
+            ) -> Result<
+                $crate::ProviderRegistry<$spec>,
+                $crate::error::ProviderInventoryBuildError,
+            > {
                 let entries = $crate::__private::inventory::iter::<Entry>
                     .into_iter()
                     .map(|entry| &entry.0);
-                $crate::__private::build_sync_registry(entries)
+                $crate::__private::build_sync_registry_with(entries, transform)
             }
         }
     };
@@ -388,10 +424,47 @@ macro_rules! declare_async_provider_inventory {
                 $crate::AsyncProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {
+                build_registry_with(|provider| provider)
+            }
+
+            /// Builds a registry after transforming each discovered provider.
+            ///
+            /// The transform runs in stable declaration-source order after
+            /// each provider factory and before registration. Service-family
+            /// registries can use it to install validation or other adapters.
+            /// This method never creates asynchronous services.
+            ///
+            /// # Parameters
+            ///
+            /// * `transform` - Adapter applied to each provider before it is
+            ///   inserted into the registry.
+            ///
+            /// # Returns
+            ///
+            /// An unsealed registry containing every successfully transformed
+            /// provider.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error identifying the source of a provider whose
+            /// transformed descriptor conflicts with an earlier entry.
+            ///
+            /// # Panics
+            ///
+            /// Propagates panics raised by provider factories, the transform,
+            /// or provider descriptor callbacks.
+            pub fn build_registry_with(
+                transform: impl FnMut(
+                    ::std::sync::Arc<dyn $crate::AsyncProviderDefinition<$spec>>,
+                ) -> ::std::sync::Arc<dyn $crate::AsyncProviderDefinition<$spec>>,
+            ) -> Result<
+                $crate::AsyncProviderRegistry<$spec>,
+                $crate::error::ProviderInventoryBuildError,
+            > {
                 let entries = $crate::__private::inventory::iter::<Entry>
                     .into_iter()
                     .map(|entry| &entry.0);
-                $crate::__private::build_async_registry(entries)
+                $crate::__private::build_async_registry_with(entries, transform)
             }
         }
     };
