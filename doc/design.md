@@ -2,7 +2,7 @@
 
 [中文版](design.zh_CN.md) · [User Guide](user_guide.md) · [README](../README.md)
 
-This document describes the 0.12 API and its implementation contracts. It is for
+This document describes the 0.13 API and its implementation contracts. It is for
 maintainers and domain-crate authors. The user guide contains runnable integration
 examples; this document records why registration, selection and creation remain
 separate and what future changes must preserve.

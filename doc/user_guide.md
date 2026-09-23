@@ -2,7 +2,7 @@
 
 [中文版](user_guide.zh_CN.md) · [README](../README.md) · [Design](design.md)
 
-This guide covers `qubit-spi` 0.12 and Rust 1.94+. It is for domain-library authors,
+This guide covers `qubit-spi` 0.13 and Rust 1.94+. It is for domain-library authors,
 provider implementers and application authors who compose them. The goal is for
 `lib-foo` to obtain a greeting service chosen by its application, without depending
 on the concrete provider crate.
@@ -24,7 +24,7 @@ creation methods and returns `ProviderCreationError<E>`. It is not itself a leaf
 
 Create a Cargo workspace with members `lib-greeter`, `lib-foo`,
 `lib-friendly-greeter` and `app`. Give each package version `0.1.0`, edition `2024`,
-and add `qubit-spi = "0.12"` to each package's dependencies. The workspace root is:
+and add `qubit-spi = "0.13"` to each package's dependencies. The workspace root is:
 
 ```toml
 [workspace]
@@ -214,7 +214,7 @@ default feature set is empty, so this is an opt-in capability:
 
 ```toml
 [dependencies]
-qubit-spi = { version = "0.12", features = ["inventory"] }
+qubit-spi = { version = "0.13", features = ["inventory"] }
 ```
 
 The following `inventory-providers` workspace has exactly three crates:

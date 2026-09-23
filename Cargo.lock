@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-spi"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "criterion",
  "futures",

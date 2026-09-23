@@ -2,7 +2,7 @@
 
 [English](user_guide.md) · [README](../README.zh_CN.md) · [设计说明](design.zh_CN.md)
 
-本指南适用于 `qubit-spi` 0.12，需要 Rust 1.94 或更高版本。领域库作者、服务提供者
+本指南适用于 `qubit-spi` 0.13，需要 Rust 1.94 或更高版本。领域库作者、服务提供者
 实现者和应用开发者可以沿同一个示例完成集成：`lib-foo` 使用应用选定的问候服务，
 但不依赖具体的服务提供者 crate。
 
@@ -23,7 +23,7 @@
 
 新建 Cargo workspace，包含 `lib-greeter`、`lib-foo`、`lib-friendly-greeter` 和
 `app` 四个成员。每个包使用版本 `0.1.0`、edition `2024`，并在依赖中加入
-`qubit-spi = "0.12"`。workspace 根目录的 `Cargo.toml` 为：
+`qubit-spi = "0.13"`。workspace 根目录的 `Cargo.toml` 为：
 
 ```toml
 [workspace]
@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-qubit-spi = { version = "0.12", features = ["inventory"] }
+qubit-spi = { version = "0.13", features = ["inventory"] }
 ```
 
 下面的 `inventory-providers` workspace 恰好包含三个 crate：`service-contract`、

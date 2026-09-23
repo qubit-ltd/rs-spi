@@ -17,7 +17,7 @@ installs the implementation appropriate to its deployment.
 
 ```toml
 [dependencies]
-qubit-spi = "0.12"
+qubit-spi = "0.13"
 ```
 
 Requires Rust 1.94 or later. The default feature set is empty. Enable the
@@ -26,7 +26,7 @@ discovery:
 
 ```toml
 [dependencies]
-qubit-spi = { version = "0.12", features = ["inventory"] }
+qubit-spi = { version = "0.13", features = ["inventory"] }
 ```
 
 ## Quick Start
