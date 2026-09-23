@@ -40,7 +40,7 @@ def extract_blocks(text: str, document: str) -> list[ExampleBlock]:
         stripped = line.strip()
         if fence is not None:
             if re.fullmatch(re.escape(fence[0]) + '{' + str(len(fence)) + ',}', stripped):
-                if rust:
+                if rust and marker:
                     scenario, file = marker
                     blocks.append(ExampleBlock(scenario, validate_relative_file(file), ''.join(code), document, start))
                 fence, marker = None, None
@@ -58,8 +58,8 @@ def extract_blocks(text: str, document: str) -> list[ExampleBlock]:
             fence, language = opening.groups()
             language = language.strip()
             rust = re.match(r'rust(?:\s|,|$)', language) is not None
-            if rust and (marker is None or language != 'rust'):
-                raise ValueError(f'{document}:{number}: Rust fence requires a marker and no exemptions')
+            if rust and marker and language != 'rust':
+                raise ValueError(f'{document}:{number}: marked Rust examples must use the plain rust language tag')
             if marker and not rust:
                 raise ValueError(f'{document}:{number}: example marker requires a Rust fence')
             code, start = [], number + 1
