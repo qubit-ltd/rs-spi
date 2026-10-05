@@ -653,7 +653,7 @@ SPI 不保证每次输出都对应新分配的底层资源。服务创建成功�
 [生态对比](ecosystem-comparison.zh_CN.md) 说明本 crate 与相关方案的职责和取舍。
 
 在本仓库运行 `python3 scripts/check-documentation.py`，会按语言分别编译和运行
-全部带标记的 Rust 代码块。随后执行 `./align-ci.sh`；验证本地未提交变更时运行
-`SPI_PACKAGE_ALLOW_DIRTY=1 ./ci-check.sh`，干净的 CI checkout 直接运行
-`./ci-check.sh`，不设置该变量。
+全部带标记的 Rust 代码块。随后执行 `./.infra/bin/align-ci.sh`；验证本地未提交变更时运行
+`SPI_PACKAGE_ALLOW_DIRTY=1 ./.infra/bin/ci-check.sh`，干净的 CI checkout 直接运行
+`./.infra/bin/ci-check.sh`，不设置该变量。
 [README](../README.zh_CN.md)

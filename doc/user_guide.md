@@ -685,6 +685,6 @@ the [design](design.md) for lock, snapshot and performance decisions, and the
 
 From this repository, run `python3 scripts/check-documentation.py` to compile and
 run every marked Rust block independently for each language. Then run
-`./align-ci.sh` and `SPI_PACKAGE_ALLOW_DIRTY=1 ./ci-check.sh` while reviewing local
-uncommitted changes; a clean CI checkout uses `./ci-check.sh` without that opt-in.
+`./.infra/bin/align-ci.sh` and `SPI_PACKAGE_ALLOW_DIRTY=1 ./.infra/bin/ci-check.sh` while reviewing local
+uncommitted changes; a clean CI checkout uses `./.infra/bin/ci-check.sh` without that opt-in.
 [README](../README.md)
