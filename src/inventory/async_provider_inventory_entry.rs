@@ -45,6 +45,7 @@ where
     /// An entry retaining the factory and its declaration source.
     #[doc(hidden)]
     #[must_use]
+    #[inline]
     pub const fn new(factory: fn() -> Arc<dyn AsyncProviderDefinition<S>>, source: ProviderRegistrationSource) -> Self {
         Self { factory, source }
     }
@@ -56,6 +57,7 @@ where
     /// The declaration location used to order discovery entries.
     #[doc(hidden)]
     #[must_use]
+    #[inline]
     pub const fn source(&self) -> ProviderRegistrationSource {
         self.source
     }
@@ -71,6 +73,7 @@ where
     /// Propagates any panic raised by the submitted factory.
     #[doc(hidden)]
     #[must_use]
+    #[inline]
     pub fn create_provider(&self) -> Arc<dyn AsyncProviderDefinition<S>> {
         (self.factory)()
     }

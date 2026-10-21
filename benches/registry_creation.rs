@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-#![allow(unused_must_use)]
 //! Creation benchmarks include traversal, diagnostics and async executor
 //! polling.
 
@@ -174,7 +173,7 @@ fn benchmark_concurrent_read_write(criterion: &mut Criterion) {
                     ready.wait();
                     start.wait();
                     for index in 0..iterations {
-                        registry.set_default_selection(ProviderSelection::auto().with_fallback_policy(
+                        let _ = registry.set_default_selection(ProviderSelection::auto().with_fallback_policy(
                             if index % 2 == 0 {
                                 FallbackPolicy::Never
                             } else {

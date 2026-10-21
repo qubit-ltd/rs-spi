@@ -65,12 +65,13 @@ where
     ///
     /// # Returns
     ///
-    /// The complete `S::Output` handle created from `S::Config::default()`.
+    /// The `S::Output` value created from `S::Config::default()`.
     ///
     /// # Errors
     ///
-    /// Returns ProviderFailure when the provider cannot create the service
-    /// from the default configuration.
+    /// Returns [`ProviderFailure`] when the provider cannot create the
+    /// service from the default configuration. The failure retains the
+    /// provider's domain error for registry diagnostics.
     ///
     /// # Panics
     ///
@@ -90,13 +91,14 @@ where
     ///
     /// # Returns
     ///
-    /// The complete `S::Output` handle.
+    /// The `S::Output` value created from `config`.
     ///
     /// # Errors
     ///
-    /// Returns ProviderFailure when this provider cannot create the requested
-    /// service. Registry resolvers aggregate this leaf failure with provider
-    /// identity and fallback termination diagnostics.
+    /// Returns [`ProviderFailure`] when this provider cannot create the
+    /// requested service. The failure retains the provider's domain error;
+    /// registry resolvers aggregate it with provider identity and fallback
+    /// termination diagnostics.
     ///
     /// # Panics
     ///

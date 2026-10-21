@@ -142,6 +142,7 @@ where
     /// # Returns
     ///
     /// A snapshot of the Registry's current default selection.
+    #[inline]
     #[must_use]
     pub fn default_selection(&self) -> ProviderSelection {
         self.providers.default_selection()
@@ -168,6 +169,7 @@ where
     /// Seals this registry against further mutation.
     ///
     /// Existing registrations remain available for reads and resolution.
+    #[inline]
     pub fn seal(&self) {
         self.providers.seal();
     }
@@ -177,6 +179,7 @@ where
     /// # Returns
     ///
     /// `true` when further mutations are rejected; otherwise, `false`.
+    #[inline]
     #[must_use]
     pub fn is_sealed(&self) -> bool {
         self.providers.is_sealed()
@@ -255,6 +258,7 @@ where
     /// # Returns
     ///
     /// Owned descriptor snapshots in registration order.
+    #[inline]
     #[must_use]
     pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
         self.providers.descriptors()
@@ -265,6 +269,7 @@ where
     /// # Returns
     ///
     /// Owned canonical IDs in registration order.
+    #[inline]
     #[must_use]
     pub fn provider_ids(&self) -> Vec<ProviderId> {
         self.providers.provider_ids()
@@ -275,6 +280,7 @@ where
     /// # Returns
     ///
     /// The number of successful registrations.
+    #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
         self.providers.len()
@@ -285,6 +291,7 @@ where
     /// # Returns
     ///
     /// `true` when the Registry contains no provider; otherwise `false`.
+    #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()

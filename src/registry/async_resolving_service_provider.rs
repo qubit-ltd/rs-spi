@@ -74,29 +74,6 @@ where
     S: AsyncServiceSpec,
     S::Config: Sync,
 {
-    /// Returns provider descriptors in the deterministic candidate attempt
-    /// order.
-    ///
-    /// # Returns
-    ///
-    /// An exact-size, double-ended iterator borrowing the candidate
-    /// descriptors.
-    #[must_use]
-    pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
-        self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())
-    }
-
-    /// Returns the policy that determines whether a failed candidate permits
-    /// fallback.
-    ///
-    /// # Returns
-    ///
-    /// The fallback policy captured when this resolver was created.
-    #[must_use]
-    pub const fn fallback_policy(&self) -> FallbackPolicy {
-        self.fallback_policy
-    }
-
     /// Creates an asynchronous resolver from resolved candidates.
     ///
     /// # Parameters
@@ -125,6 +102,31 @@ where
             candidates,
             fallback_policy,
         }
+    }
+
+    /// Returns provider descriptors in the deterministic candidate attempt
+    /// order.
+    ///
+    /// # Returns
+    ///
+    /// An exact-size, double-ended iterator borrowing the candidate
+    /// descriptors.
+    #[must_use]
+    #[inline]
+    pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
+        self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())
+    }
+
+    /// Returns the policy that determines whether a failed candidate permits
+    /// fallback.
+    ///
+    /// # Returns
+    ///
+    /// The fallback policy captured when this resolver was created.
+    #[must_use]
+    #[inline]
+    pub const fn fallback_policy(&self) -> FallbackPolicy {
+        self.fallback_policy
     }
 
     /// Creates a service output from the supplied configuration.

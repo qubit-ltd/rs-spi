@@ -11,6 +11,11 @@ use crate::ServiceSpec;
 
 /// Type-level output contract for asynchronously created services.
 ///
+/// The configuration must be `Sync` so providers can borrow it while
+/// constructing sendable asynchronous futures. The associated output is
+/// `Send + 'static` so it can be returned across asynchronous execution
+/// boundaries without borrowing the provider call.
+///
 /// # Examples
 ///
 /// ```rust

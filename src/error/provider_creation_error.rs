@@ -95,6 +95,32 @@ impl<E> ProviderCreationError<E> {
         Self::new(attempts, ProviderCreationTermination::StoppedByPolicy)
     }
 
+    /// Creates an aggregate with an explicit traversal termination.
+    ///
+    /// # Parameters
+    ///
+    /// * `attempts` - Nonempty provider failures in encounter order.
+    /// * `termination` - Reason traversal ended without a service.
+    ///
+    /// # Returns
+    ///
+    /// An aggregate creation error retaining all attempts.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `attempts` is empty.
+    #[inline]
+    fn new(attempts: Vec<ProviderAttemptFailure<E>>, termination: ProviderCreationTermination) -> Self {
+        assert!(
+            !attempts.is_empty(),
+            "provider creation errors require at least one attempt",
+        );
+        Self {
+            attempts: attempts.into_boxed_slice(),
+            termination,
+        }
+    }
+
     /// Returns ordered actual provider failures.
     ///
     /// # Returns
@@ -157,32 +183,6 @@ impl<E> ProviderCreationError<E> {
     pub fn into_parts(self) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
         (self.attempts, self.termination)
     }
-
-    /// Creates an aggregate with an explicit traversal termination.
-    ///
-    /// # Parameters
-    ///
-    /// * `attempts` - Nonempty provider failures in encounter order.
-    /// * `termination` - Reason traversal ended without a service.
-    ///
-    /// # Returns
-    ///
-    /// An aggregate creation error retaining all attempts.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `attempts` is empty.
-    #[inline]
-    fn new(attempts: Vec<ProviderAttemptFailure<E>>, termination: ProviderCreationTermination) -> Self {
-        assert!(
-            !attempts.is_empty(),
-            "provider creation errors require at least one attempt",
-        );
-        Self {
-            attempts: attempts.into_boxed_slice(),
-            termination,
-        }
-    }
 }
 
 impl<E> fmt::Display for ProviderCreationError<E>
@@ -230,7 +230,8 @@ where
     ///
     /// # Returns
     ///
-    /// The final actual provider failure.
+    /// `Some` contains the final actual provider failure. `None` is never
+    /// returned because this aggregate requires at least one attempt.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.decisive_attempt())
     }

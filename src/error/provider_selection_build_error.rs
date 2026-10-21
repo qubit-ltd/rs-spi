@@ -47,7 +47,6 @@ impl ProviderSelectionBuildError {
     /// The selector parsing failure for [`Self::InvalidSelector`], or `None`
     /// for [`Self::EmptyChain`].
     #[inline]
-    #[must_use]
     pub const fn selector_error(&self) -> Option<&ProviderSelectorError> {
         match self {
             Self::InvalidSelector { source, .. } => Some(source),
@@ -62,7 +61,6 @@ impl ProviderSelectionBuildError {
     /// The selector position for an invalid chained selection, or `None` for
     /// an invalid named selection and an empty chain.
     #[inline]
-    #[must_use]
     pub const fn selector_index(&self) -> Option<usize> {
         match self {
             Self::InvalidSelector { selector_index, .. } => *selector_index,

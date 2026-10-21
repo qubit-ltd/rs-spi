@@ -12,6 +12,8 @@ use crate::AsyncServiceSpec;
 use crate::ProviderMetadata;
 
 /// Marker combining asynchronous creation with registration metadata.
+/// The service configuration must be `Sync` so providers can borrow it while
+/// creating sendable asynchronous futures.
 ///
 /// # Type Parameters
 ///

@@ -121,7 +121,11 @@ macro_rules! declare_sync_provider_inventory {
         #[doc = "Link-time provider inventory for one concrete service family."]
         $visibility mod $module {
             #[doc(hidden)]
-            pub struct Entry($crate::__private::SyncProviderInventoryEntry<$spec>);
+            #[doc = "Submission payload consumed by the synchronous inventory macro."]
+            pub struct Entry(
+                #[doc = "The provider factory and registration source stored in this entry."]
+                $crate::__private::SyncProviderInventoryEntry<$spec>,
+            );
 
             impl Entry {
                 /// Creates an inventory entry submitted by a provider crate.
@@ -392,7 +396,11 @@ macro_rules! declare_async_provider_inventory {
         #[doc = "Link-time provider inventory for one concrete service family."]
         $visibility mod $module {
             #[doc(hidden)]
-            pub struct Entry($crate::__private::AsyncProviderInventoryEntry<$spec>);
+            #[doc = "Submission payload consumed by the asynchronous inventory macro."]
+            pub struct Entry(
+                #[doc = "The provider factory and registration source stored in this entry."]
+                $crate::__private::AsyncProviderInventoryEntry<$spec>,
+            );
 
             impl Entry {
                 /// Creates an inventory entry submitted by a provider crate.

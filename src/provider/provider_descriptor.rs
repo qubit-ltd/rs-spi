@@ -60,6 +60,33 @@ impl ProviderDescriptor {
         }
     }
 
+    /// Creates a descriptor from literals validated by
+    /// [`crate::provider_descriptor!`].
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - Compile-time-validated canonical provider ID.
+    /// * `aliases` - Compile-time-validated canonical aliases.
+    /// * `priority` - Automatic-selection priority.
+    ///
+    /// # Returns
+    ///
+    /// The descriptor represented by the validated static metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called directly with an invalid ID, invalid alias, or
+    /// duplicate selector. The public macro validates these conditions at
+    /// compile time.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn __from_static_literals(id: &str, aliases: &[&str], priority: i32) -> Self {
+        Self::new(ProviderId::new(id).expect("provider_descriptor! validates static literals at compile time"))
+            .with_aliases(aliases.iter().copied())
+            .expect("provider_descriptor! validates static literals at compile time")
+            .with_priority(priority)
+    }
+
     /// Returns the canonical provider ID.
     ///
     /// # Returns
@@ -177,33 +204,6 @@ impl ProviderDescriptor {
             alias_index += 1;
         }
         true
-    }
-
-    /// Creates a descriptor from literals validated by
-    /// [`crate::provider_descriptor!`].
-    ///
-    /// # Parameters
-    ///
-    /// * `id` - Compile-time-validated canonical provider ID.
-    /// * `aliases` - Compile-time-validated canonical aliases.
-    /// * `priority` - Automatic-selection priority.
-    ///
-    /// # Returns
-    ///
-    /// The descriptor represented by the validated static metadata.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called directly with an invalid ID, invalid alias, or
-    /// duplicate selector. The public macro validates these conditions at
-    /// compile time.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn __from_static_literals(id: &str, aliases: &[&str], priority: i32) -> Self {
-        Self::new(ProviderId::new(id).expect("provider_descriptor! validates static literals at compile time"))
-            .with_aliases(aliases.iter().copied())
-            .expect("provider_descriptor! validates static literals at compile time")
-            .with_priority(priority)
     }
 }
 

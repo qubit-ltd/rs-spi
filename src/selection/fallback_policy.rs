@@ -7,6 +7,8 @@
 // =============================================================================
 //! Policies controlling fallback after provider creation failures.
 
+use crate::error::ProviderFailureKind;
+
 /// Controls which provider creation failures permit another candidate.
 ///
 /// This policy applies to automatic and chained selection after a provider
@@ -46,7 +48,7 @@ impl FallbackPolicy {
     /// `true` when a resolver may continue to its next candidate.
     #[inline]
     #[must_use]
-    pub const fn should_continue_after(self, kind: crate::error::ProviderFailureKind) -> bool {
+    pub const fn should_continue_after(self, kind: ProviderFailureKind) -> bool {
         match self {
             Self::Never => false,
             Self::OnAbsence => kind.is_absence(),

@@ -124,6 +124,7 @@ impl ProviderInventoryBuildError {
     ///
     /// The source location retained by this error.
     #[must_use]
+    #[inline]
     pub const fn source_location(&self) -> ProviderRegistrationSource {
         match self {
             Self::Registration { source, .. } => *source,
@@ -135,6 +136,8 @@ impl ProviderInventoryBuildError {
     /// # Returns
     ///
     /// The underlying registration failure retained by this error.
+    #[inline]
+    #[must_use = "the registration error contains the reason provider registration failed"]
     pub const fn registration_error(&self) -> &RegistryMutationError {
         match self {
             Self::Registration { error, .. } => error,

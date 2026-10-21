@@ -217,6 +217,7 @@ where
     ///
     /// The captured selection paired with its resolved candidates or resolution
     /// error, both computed while the same read guard is held.
+    #[must_use = "the snapshot is needed to use the resolved default selection"]
     pub(crate) fn resolve_default_snapshot(
         &self,
     ) -> (

@@ -94,6 +94,7 @@ where
     ///
     /// The fallback policy captured when this resolver was created.
     #[must_use]
+    #[inline]
     pub const fn fallback_policy(&self) -> FallbackPolicy {
         self.fallback_policy
     }
