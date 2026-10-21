@@ -50,20 +50,26 @@ fn test_static_literal_descriptor_constructor_builds_metadata() {
 
 #[test]
 fn test_static_literal_validation_rejects_invalid_and_conflicting_metadata() {
-    assert!(ProviderDescriptor::__are_valid_static_literals(
-        "provider",
-        &["alias", "other"],
-    ));
-    assert!(!ProviderDescriptor::__are_valid_static_literals("Provider", &[],));
-    assert!(!ProviderDescriptor::__are_valid_static_literals("provider", &["Alias"],));
-    assert!(!ProviderDescriptor::__are_valid_static_literals(
-        "provider",
-        &["provider"],
-    ));
-    assert!(!ProviderDescriptor::__are_valid_static_literals(
-        "provider",
-        &["alias", "alias"],
-    ));
+    assert!(
+        ProviderDescriptor::__are_valid_static_literals("provider", &["alias", "other"],),
+        "canonical ID with distinct aliases should be valid"
+    );
+    assert!(
+        !ProviderDescriptor::__are_valid_static_literals("Provider", &[],),
+        "uppercase provider ID should be rejected",
+    );
+    assert!(
+        !ProviderDescriptor::__are_valid_static_literals("provider", &["Alias"],),
+        "uppercase aliases should be rejected",
+    );
+    assert!(
+        !ProviderDescriptor::__are_valid_static_literals("provider", &["provider"],),
+        "an alias matching the provider ID should be rejected"
+    );
+    assert!(
+        !ProviderDescriptor::__are_valid_static_literals("provider", &["alias", "alias"],),
+        "duplicate aliases should be rejected"
+    );
 }
 
 /// Verifies that a descriptor retains typed ID, alias, and priority metadata.

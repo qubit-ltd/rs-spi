@@ -27,6 +27,8 @@ use qubit_spi::error::ProviderFailure;
 use qubit_spi::error::ProviderResolutionError;
 
 use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::registry_contract_provider::SharedOutputProvider;
+use crate::common::registry_contract_provider::SharedOutputSpec;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_error::TestError;
 use crate::common::test_error::TestProviderFailure;
@@ -646,11 +648,6 @@ impl ServiceProvider<StringSpec> for PanickingProvider {
 /// shared.
 #[test]
 fn test_resolver_clone_preserves_provider_identity_without_caching_outputs() {
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::SharedOutputProvider;
-    use crate::common::registry_contract_provider::SharedOutputSpec;
     let registry = ProviderRegistry::<SharedOutputSpec>::default();
     let output = Arc::new("shared allocation".to_owned());
     let calls = Arc::new(AtomicUsize::new(0));

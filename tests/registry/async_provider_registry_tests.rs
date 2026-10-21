@@ -191,7 +191,10 @@ fn test_async_registry_default_snapshot_keeps_failed_resolution() {
     registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
 
     let (selection, result) = registry.resolve_default_snapshot();
-    assert_eq!(ProviderSelection::named("missing").unwrap(), selection);
+    assert_eq!(
+        ProviderSelection::named("missing").expect("test selection should be valid"),
+        selection
+    );
     let error = result.expect_err("missing default provider should fail");
 
     register_provider(

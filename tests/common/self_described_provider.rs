@@ -31,6 +31,7 @@ impl SelfDescribedProvider {
     /// # Returns
     ///
     /// A provider containing both registration and creation state.
+    #[must_use]
     pub(crate) fn new(descriptor: ProviderDescriptor, output: impl Into<Box<str>>) -> Self {
         Self {
             descriptor,
