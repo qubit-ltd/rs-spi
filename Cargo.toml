@@ -44,7 +44,7 @@ harness = false
 [dependencies]
 inventory = { version = "^0.3", optional = true }
 parking_lot = "^0.12"
-qubit-collections = { version = "0.2" }
+qubit-collections = "^0.2"
 thiserror = "^2.0"
 
 [dev-dependencies]
