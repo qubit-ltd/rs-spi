@@ -26,7 +26,9 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::{MissingProviderPolicy, ProviderSelection, ProviderSelectionTargetRef};
+/// use qubit_spi::MissingProviderPolicy;
+/// use qubit_spi::ProviderSelection;
+/// use qubit_spi::ProviderSelectionTargetRef;
 /// let selection = ProviderSelection::chain_allowing_missing(["optional", "local"])?;
 /// assert!(matches!(selection.target(), ProviderSelectionTargetRef::Chain {
 ///     missing_policy: MissingProviderPolicy::Ignore, ..

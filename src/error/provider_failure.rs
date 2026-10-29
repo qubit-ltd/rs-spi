@@ -24,7 +24,8 @@ use super::ProviderFailureKind;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::error::{ProviderFailure, ProviderFailureKind};
+/// use qubit_spi::error::ProviderFailure;
+/// use qubit_spi::error::ProviderFailureKind;
 /// let failure = ProviderFailure::unavailable(std::io::Error::other("backend offline"));
 /// assert_eq!(ProviderFailureKind::Unavailable, failure.kind());
 /// assert_eq!("backend offline", failure.error().to_string());
@@ -113,7 +114,7 @@ impl<E> ProviderFailure<E> {
     ///
     /// The classification consulted by resolver fallback policy.
     #[inline]
-    #[must_use]
+    #[must_use = "use the classification to select the provider fallback policy"]
     pub const fn kind(&self) -> ProviderFailureKind {
         self.kind
     }
@@ -146,7 +147,7 @@ impl<E> ProviderFailure<E> {
     ///
     /// The fallback classification and service-specific diagnostic.
     #[inline]
-    #[must_use]
+    #[must_use = "use both the classification and domain error when handling the failure"]
     pub fn into_parts(self) -> (ProviderFailureKind, E) {
         (self.kind, self.error)
     }

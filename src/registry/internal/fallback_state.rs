@@ -58,6 +58,7 @@ impl<E> FallbackState<E> {
     ///
     /// `Some(error)` when traversal is exhausted or stopped by policy;
     /// otherwise, `None` to permit the next candidate.
+    #[must_use]
     pub(crate) fn record_failure(
         &mut self,
         provider_id: ProviderId,

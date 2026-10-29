@@ -43,6 +43,7 @@ use crate::ProviderSelector;
 /// # Ok::<(), qubit_spi::error::ProviderSelectionBuildError>(())
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
 #[non_exhaustive]
 pub enum ProviderSelectionTargetRef<'a> {
     /// Providers are selected in deterministic automatic order.

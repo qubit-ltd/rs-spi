@@ -151,7 +151,6 @@ impl ProviderSelection {
     /// A view distinguishing automatic, named, strict-chain, and lenient-chain
     /// targets without allocating.
     #[inline]
-    #[must_use]
     pub const fn target(&self) -> ProviderSelectionTargetRef<'_> {
         match &self.target {
             ProviderSelectionRepr::Auto => ProviderSelectionTargetRef::Auto,

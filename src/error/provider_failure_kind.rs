@@ -21,6 +21,7 @@
 /// assert!(!ProviderFailureKind::InvalidConfiguration.is_absence());
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[must_use]
 #[non_exhaustive]
 pub enum ProviderFailureKind {
     /// The provider does not support this otherwise valid request.

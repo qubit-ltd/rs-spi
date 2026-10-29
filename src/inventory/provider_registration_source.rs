@@ -50,6 +50,7 @@ impl ProviderRegistrationSource {
     ///
     /// A source location retaining the supplied static declaration details.
     #[must_use]
+    #[inline]
     pub const fn new(crate_name: &'static str, module_path: &'static str, file: &'static str, line: u32) -> Self {
         Self {
             crate_name,

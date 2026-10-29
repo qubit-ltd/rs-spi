@@ -92,7 +92,6 @@ impl RegistryMutationError {
     ///
     /// The normalized selector in a duplicate conflict; otherwise, `None`.
     #[inline]
-    #[must_use]
     pub fn selector(&self) -> Option<&str> {
         match self {
             Self::DuplicateSelector { selector, .. } => Some(selector),
@@ -107,7 +106,6 @@ impl RegistryMutationError {
     ///
     /// The canonical ID that currently owns the selector; otherwise, `None`.
     #[inline]
-    #[must_use]
     pub fn existing_provider(&self) -> Option<&str> {
         match self {
             Self::DuplicateSelector { existing_provider, .. } => Some(existing_provider),
@@ -122,7 +120,6 @@ impl RegistryMutationError {
     ///
     /// The canonical ID that attempted the claim; otherwise, `None`.
     #[inline]
-    #[must_use]
     pub fn provider(&self) -> Option<&str> {
         match self {
             Self::DuplicateSelector { provider, .. } => Some(provider),

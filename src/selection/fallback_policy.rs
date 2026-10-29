@@ -19,7 +19,8 @@ use crate::error::ProviderFailureKind;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::{FallbackPolicy, error::ProviderFailureKind};
+/// use qubit_spi::error::ProviderFailureKind;
+/// use qubit_spi::FallbackPolicy;
 /// assert!(FallbackPolicy::OnAbsence.should_continue_after(ProviderFailureKind::Unavailable));
 /// assert!(!FallbackPolicy::OnAbsence.should_continue_after(ProviderFailureKind::InitializationFailed));
 /// assert!(FallbackPolicy::OnAnyError.should_continue_after(ProviderFailureKind::InitializationFailed));

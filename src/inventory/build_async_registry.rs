@@ -45,6 +45,7 @@ use crate::inventory::AsyncProviderInventoryEntry;
 /// Propagates a panic raised by a submitted factory or by provider descriptor
 /// evaluation during registration.
 #[doc(hidden)]
+#[inline]
 pub fn build_async_registry<'a, S>(
     entries: impl IntoIterator<Item = &'a AsyncProviderInventoryEntry<S>>,
 ) -> Result<AsyncProviderRegistry<S>, ProviderInventoryBuildError>

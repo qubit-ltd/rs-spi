@@ -115,7 +115,6 @@ impl ProviderResolutionError {
     /// The selectors for [`Self::UnknownProviders`] or
     /// [`Self::NoCandidates`], or `None` for [`Self::EmptyRegistry`].
     #[inline]
-    #[must_use]
     pub fn selectors(&self) -> Option<&[ProviderSelector]> {
         match self {
             Self::UnknownProviders { selectors } | Self::NoCandidates { selectors } => Some(selectors),

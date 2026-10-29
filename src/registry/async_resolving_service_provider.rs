@@ -111,7 +111,6 @@ where
     ///
     /// An exact-size, double-ended iterator borrowing the candidate
     /// descriptors.
-    #[must_use]
     #[inline]
     pub fn candidate_descriptors(&self) -> impl DoubleEndedIterator<Item = &ProviderDescriptor> + ExactSizeIterator {
         self.candidates.iter().map(|candidate| candidate.descriptor.as_ref())

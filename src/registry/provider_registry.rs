@@ -133,6 +133,7 @@ where
     /// Propagates a panic raised while obtaining the provider descriptor. The
     /// attempted registration is not applied. Changes made by reentrant
     /// metadata callbacks are not rolled back.
+    #[inline]
     pub fn register_shared(&self, provider: Arc<dyn ProviderDefinition<S>>) -> Result<(), RegistryMutationError> {
         self.providers.register_shared(provider)
     }
@@ -162,6 +163,7 @@ where
     ///
     /// Returns [`RegistryMutationError::Sealed`] when the registry rejects
     /// further configuration changes.
+    #[inline]
     pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         self.providers.set_default_selection(selection)
     }
@@ -224,6 +226,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
+    #[must_use = "the captured selection and resolver must be inspected"]
     pub fn resolve_default_snapshot(
         &self,
     ) -> (

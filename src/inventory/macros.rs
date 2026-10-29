@@ -131,6 +131,7 @@ macro_rules! declare_sync_provider_inventory {
                 /// Creates an inventory entry submitted by a provider crate.
                 #[doc(hidden)]
                 #[must_use]
+                #[inline]
                 pub const fn __new(
                     factory: fn() -> ::std::sync::Arc<dyn $crate::ProviderDefinition<$spec>>,
                     source: $crate::ProviderRegistrationSource,
@@ -406,6 +407,7 @@ macro_rules! declare_async_provider_inventory {
                 /// Creates an inventory entry submitted by a provider crate.
                 #[doc(hidden)]
                 #[must_use]
+                #[inline]
                 pub const fn __new(
                     factory: fn() -> ::std::sync::Arc<dyn $crate::AsyncProviderDefinition<$spec>>,
                     source: $crate::ProviderRegistrationSource,

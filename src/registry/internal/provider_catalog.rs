@@ -125,6 +125,16 @@ where
         self.read_inner().default_selection.clone()
     }
 
+    /// Reports whether catalog mutation has been disabled.
+    ///
+    /// # Returns
+    ///
+    /// `true` after sealing; otherwise `false`.
+    #[must_use]
+    pub(crate) fn is_sealed(&self) -> bool {
+        self.read_inner().sealed
+    }
+
     /// Replaces the selection used for future default resolutions.
     ///
     /// # Parameters
@@ -149,16 +159,6 @@ where
     /// Prevents later catalog mutations while preserving reads and resolution.
     pub(crate) fn seal(&self) {
         self.write_inner().sealed = true;
-    }
-
-    /// Reports whether catalog mutation has been disabled.
-    ///
-    /// # Returns
-    ///
-    /// `true` after sealing; otherwise `false`.
-    #[must_use]
-    pub(crate) fn is_sealed(&self) -> bool {
-        self.read_inner().sealed
     }
 
     /// Rejects a catalog mutation after the shared registry has been sealed.

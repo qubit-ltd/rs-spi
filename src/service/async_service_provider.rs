@@ -28,8 +28,13 @@ use crate::error::ProviderFailure;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::{ServiceSpec, AsyncServiceSpec, AsyncServiceProvider, ProviderFuture};
-/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata};
+/// use qubit_spi::AsyncServiceProvider;
+/// use qubit_spi::AsyncServiceSpec;
+/// use qubit_spi::ProviderFuture;
+/// use qubit_spi::ProviderDescriptor;
+/// use qubit_spi::ProviderId;
+/// use qubit_spi::ProviderMetadata;
+/// use qubit_spi::ServiceSpec;
 /// use qubit_spi::error::ProviderFailure;
 /// struct Spec;
 /// impl ServiceSpec for Spec { type Config = String; type Error = std::io::Error; }

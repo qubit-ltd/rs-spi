@@ -22,6 +22,7 @@ use crate::registry::internal::RegistryEntry;
 /// # Type Parameters
 ///
 /// * `P` - Possibly unsized provider definition stored by the catalog.
+#[must_use = "the registry state must be retained to use the catalog"]
 pub(crate) struct RegistryInner<P: ?Sized> {
     /// Entries indexed by canonical ID and automatic-selection order.
     pub(crate) entries: OrderedIndexMap<ProviderId, (Reverse<i32>, ProviderId), RegistryEntry<P>>,

@@ -136,8 +136,8 @@ impl ProviderInventoryBuildError {
     /// # Returns
     ///
     /// The underlying registration failure retained by this error.
-    #[inline]
     #[must_use = "the registration error contains the reason provider registration failed"]
+    #[inline]
     pub const fn registration_error(&self) -> &RegistryMutationError {
         match self {
             Self::Registration { error, .. } => error,
