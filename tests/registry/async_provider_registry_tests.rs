@@ -10,6 +10,8 @@
 
 use std::fmt::Write;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 
@@ -26,6 +28,7 @@ use qubit_spi::error::RegistryMutationError;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
+use crate::common::registry_contract_provider::RegistryContractProvider;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
@@ -144,6 +147,107 @@ fn test_async_registry_seal_is_shared_by_clones() {
             .expect_err("sealed registry rejects selection mutation")
             .is_sealed()
     );
+}
+
+#[test]
+fn test_async_registry_descriptor_seal_rejects_shared_registration_after_callback() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    let callback_registry = registry.clone();
+    let provider = RegistryContractProvider {
+        metadata: Box::new(move || {
+            callback_registry.seal();
+            ProviderDescriptor::new(ProviderId::new("rejected-after-seal").expect("valid provider ID"))
+        }),
+        on_drop: None,
+    };
+    let provider: Arc<dyn qubit_spi::AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
+
+    let error = registry
+        .register_shared(provider)
+        .expect_err("descriptor sealed the registry");
+
+    assert!(error.is_sealed());
+    assert!(registry.is_sealed());
+    assert!(registry.is_empty());
+}
+
+#[test]
+fn test_async_registry_sealed_shared_registration_skips_descriptor() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    register_provider(
+        &registry,
+        "existing",
+        &[],
+        0,
+        AsyncConfigurableProvider::success("existing"),
+    );
+    let selection = ProviderSelection::named("existing").expect("valid selection");
+    registry
+        .set_default_selection(selection.clone())
+        .expect("default should be configurable");
+    registry.seal();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed_calls = Arc::clone(&calls);
+    let provider = RegistryContractProvider {
+        metadata: Box::new(move || {
+            observed_calls.fetch_add(1, Ordering::SeqCst);
+            ProviderDescriptor::new(ProviderId::new("late").expect("valid provider ID"))
+        }),
+        on_drop: None,
+    };
+    let provider: Arc<dyn qubit_spi::AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
+
+    let error = registry
+        .register_shared(provider)
+        .expect_err("sealed registry rejects provider");
+
+    assert!(error.is_sealed());
+    assert_eq!(0, calls.load(Ordering::SeqCst));
+    assert_eq!(
+        vec!["existing"],
+        registry
+            .provider_ids()
+            .iter()
+            .map(ProviderId::as_str)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(selection, registry.default_selection());
+}
+
+#[test]
+fn test_async_registry_resolvers_remain_usable_after_seal() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    register_provider(&registry, "existing", &[], 0, AsyncConfigurableProvider::echo());
+    let selection = ProviderSelection::named("existing").expect("valid selection");
+    registry
+        .set_default_selection(selection.clone())
+        .expect("default should be configurable");
+    let old_resolver = registry.resolve().expect("resolver should exist");
+    registry.clone().seal();
+
+    assert_eq!(
+        "old",
+        block_on(old_resolver.create_configured(&"old".to_owned())).expect("old resolver should create"),
+    );
+    assert_eq!(
+        "new",
+        block_on(
+            registry
+                .resolve()
+                .expect("sealed registry should still resolve")
+                .create_configured(&"new".to_owned()),
+        )
+        .expect("new resolver should create"),
+    );
+    assert!(
+        registry
+            .set_default_selection(ProviderSelection::auto())
+            .expect_err("sealed default selection is immutable")
+            .is_sealed()
+    );
+    assert_eq!(selection, registry.default_selection());
+    registry.seal();
+    assert!(registry.is_sealed());
 }
 
 /// Verifies a successful asynchronous default snapshot keeps its candidates

@@ -170,6 +170,108 @@ fn test_registry_seal_is_idempotent_and_shared_by_clones() {
     assert!(error.is_sealed());
 }
 
+#[test]
+fn test_registry_descriptor_seal_rejects_registration_after_callback() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    let callback_registry = registry.clone();
+    let provider = RegistryContractProvider {
+        metadata: Box::new(move || {
+            callback_registry.seal();
+            ProviderDescriptor::new(ProviderId::new("rejected-after-seal").expect("valid provider ID"))
+        }),
+        on_drop: None,
+    };
+
+    let error = registry.register(provider).expect_err("descriptor sealed the registry");
+
+    assert!(error.is_sealed());
+    assert!(registry.is_sealed());
+    assert!(registry.is_empty());
+}
+
+#[test]
+fn test_registry_sealed_shared_registration_skips_descriptor() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("existing").expect("valid provider ID")),
+            ConfigurableProvider::success("existing"),
+        ))
+        .expect("baseline provider should register");
+    let selection = ProviderSelection::named("existing").expect("valid selection");
+    registry
+        .set_default_selection(selection.clone())
+        .expect("default should be configurable");
+    registry.seal();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed_calls = Arc::clone(&calls);
+    let provider = RegistryContractProvider {
+        metadata: Box::new(move || {
+            observed_calls.fetch_add(1, Ordering::SeqCst);
+            ProviderDescriptor::new(ProviderId::new("late").expect("valid provider ID"))
+        }),
+        on_drop: None,
+    };
+
+    let provider: Arc<dyn qubit_spi::ProviderDefinition<StringSpec>> = Arc::new(provider);
+    let error = registry
+        .register_shared(provider)
+        .expect_err("sealed registry rejects provider");
+
+    assert!(error.is_sealed());
+    assert_eq!(0, calls.load(Ordering::SeqCst));
+    assert_eq!(
+        vec!["existing"],
+        registry
+            .provider_ids()
+            .iter()
+            .map(ProviderId::as_str)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(selection, registry.default_selection());
+}
+
+#[test]
+fn test_registry_resolvers_remain_usable_after_seal() {
+    let registry = ProviderRegistry::<StringSpec>::default();
+    registry
+        .register(define_provider(
+            ProviderDescriptor::new(ProviderId::new("existing").expect("valid provider ID")),
+            ConfigurableProvider::echo(),
+        ))
+        .expect("provider should register");
+    let selection = ProviderSelection::named("existing").expect("valid selection");
+    registry
+        .set_default_selection(selection.clone())
+        .expect("default should be configurable");
+    let old_resolver = registry.resolve().expect("resolver should exist");
+    registry.clone().seal();
+
+    assert_eq!(
+        "old",
+        old_resolver
+            .create_configured(&"old".to_owned())
+            .expect("old resolver should create")
+    );
+    assert_eq!(
+        "new",
+        registry
+            .resolve()
+            .expect("sealed registry should still resolve")
+            .create_configured(&"new".to_owned())
+            .expect("new resolver should create"),
+    );
+    assert!(
+        registry
+            .set_default_selection(ProviderSelection::auto())
+            .expect_err("sealed default selection is immutable")
+            .is_sealed()
+    );
+    assert_eq!(selection, registry.default_selection());
+    registry.seal();
+    assert!(registry.is_sealed());
+}
+
 /// Verifies reading and replacing the registry's default selection.
 #[test]
 fn test_registry_uses_and_updates_default_selection() {
