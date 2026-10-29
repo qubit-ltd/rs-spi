@@ -73,6 +73,7 @@ struct ReplacingProvider {
 
 impl ProviderMetadata for ReplacingProvider {
     /// Returns the original provider descriptor.
+    #[inline]
     fn descriptor(&self) -> ProviderDescriptor {
         self.inner.descriptor()
     }

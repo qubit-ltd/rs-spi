@@ -9,11 +9,18 @@
 #![allow(unused_must_use)]
 
 use std::fmt::Write;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::sync::Arc;
+use std::sync::Barrier;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 
 use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
 use qubit_spi::ProviderDefinition;
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
@@ -24,7 +31,9 @@ use qubit_spi::error::RegistryMutationError;
 
 use crate::common::blocking_writer::BlockingWriter;
 use crate::common::configurable_provider::ConfigurableProvider;
+use crate::common::registry_contract_provider::RegistryContractProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
 /// Verifies that a registry accepts a self-described provider after creation.
@@ -371,11 +380,6 @@ fn test_registry_length_matches_emptiness_and_registration_count() {
 /// selectors.
 #[test]
 fn test_descriptor_is_sampled_once_and_owned_by_registry() {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     let registry = ProviderRegistry::<StringSpec>::default();
     let calls = Arc::new(AtomicUsize::new(0));
     let changed = Arc::new(AtomicBool::new(false));
@@ -420,10 +424,6 @@ fn test_descriptor_is_sampled_once_and_owned_by_registry() {
 /// Metadata and rejected-provider destruction must run outside catalog locks.
 #[test]
 fn test_descriptor_and_rejected_drop_can_reenter_registry() {
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     if !crate::common::subprocess_case::enter() {
         return;
     }
@@ -462,10 +462,6 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
 /// registration.
 #[test]
 fn test_descriptor_panic_does_not_mutate_or_poison_registry() {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     let registry = ProviderRegistry::<StringSpec>::default();
     let before_ids = registry.provider_ids();
     let before_descriptors = registry.descriptors();
@@ -493,11 +489,6 @@ fn test_default_snapshot_is_consistent_during_concurrent_updates() {
     if !crate::common::subprocess_case::enter() {
         return;
     }
-    use std::sync::Barrier;
-
-    use qubit_spi::ProviderCreationTermination;
-
-    use crate::common::test_error::TestProviderFailure;
     let registry = ProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
@@ -591,7 +582,6 @@ fn test_registry_rejects_cross_kind_selector_collisions_atomically() {
 /// Registration reentered from metadata wins before the outer conflict check.
 #[test]
 fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     if !crate::common::subprocess_case::enter() {
         return;
     }
@@ -628,10 +618,6 @@ fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
 /// registration.
 #[test]
 fn test_descriptor_panic_preserves_reentrant_registration() {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     if !crate::common::subprocess_case::enter() {
         return;
     }

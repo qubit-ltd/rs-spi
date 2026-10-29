@@ -7,4 +7,4 @@
 // =============================================================================
 //! Synchronous beta provider that consumers deliberately leave unlinked.
 
-mod provider;
+mod beta_provider;

@@ -49,7 +49,7 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         .expect_err("both providers should fail");
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
-    assert!(error.is_absence());
+    assert!(error.is_absence(), "absence failures should exhaust the fallback chain");
     assert_eq!(
         "second",
         error
@@ -59,15 +59,30 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
             .provider_id()
             .as_str()
     );
-    assert!(std::ptr::eq(
-        error.attempts().last().expect("aggregate should have a final attempt"),
-        error.decisive_attempt(),
-    ));
-    assert!(Error::source(&error).is_some());
+    assert!(
+        std::ptr::eq(
+            error.attempts().last().expect("aggregate should have a final attempt"),
+            error.decisive_attempt(),
+        ),
+        "the final attempt should be the decisive failure",
+    );
+    assert!(
+        Error::source(&error).is_some(),
+        "the aggregate should expose its source"
+    );
     let display = error.to_string();
-    assert!(display.contains("no provider succeeded after 2 attempt(s)"));
-    assert!(display.contains("attempt 1: provider first"));
-    assert!(display.contains("attempt 2: provider second"));
+    assert!(
+        display.contains("no provider succeeded after 2 attempt(s)"),
+        "the aggregate diagnostic should report exhaustion after two attempts",
+    );
+    assert!(
+        display.contains("attempt 1: provider first"),
+        "the aggregate diagnostic should preserve the first provider attempt",
+    );
+    assert!(
+        display.contains("attempt 2: provider second"),
+        "the aggregate diagnostic should preserve the second provider attempt",
+    );
 }
 
 /// Verifies diagnostics when fallback policy stops after one decisive failure.
@@ -95,12 +110,21 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         .expect_err("invalid configuration should stop absence fallback");
 
     assert_eq!(ProviderCreationTermination::StoppedByPolicy, error.termination(),);
-    assert!(!error.is_absence());
+    assert!(
+        !error.is_absence(),
+        "invalid configuration should not be classified as absence"
+    );
     assert_eq!("invalid", error.decisive_attempt().provider_id().as_str());
-    assert!(Error::source(&error).is_some());
+    assert!(
+        Error::source(&error).is_some(),
+        "the stopped error should expose its source"
+    );
     let mut display = String::new();
     write!(&mut display, "{error}").expect("display formatting should succeed");
-    assert!(display.contains("provider creation stopped by fallback policy after 1 attempt(s)"));
+    assert!(
+        display.contains("provider creation stopped by fallback policy after 1 attempt(s)"),
+        "the diagnostic should explain why fallback stopped after one attempt",
+    );
 }
 
 /// Verifies that singleton exhaustion has one unambiguous source.
@@ -117,11 +141,17 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
         .expect_err("selected provider should fail");
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
-    assert!(std::ptr::eq(
-        error.attempts().last().expect("aggregate should have a final attempt"),
-        error.decisive_attempt(),
-    ));
-    assert!(Error::source(&error).is_some());
+    assert!(
+        std::ptr::eq(
+            error.attempts().last().expect("aggregate should have a final attempt"),
+            error.decisive_attempt(),
+        ),
+        "the singleton attempt should be the decisive failure",
+    );
+    assert!(
+        Error::source(&error).is_some(),
+        "the exhausted error should expose its source"
+    );
 }
 
 /// Verifies that aggregate diagnostics propagate formatter failures.

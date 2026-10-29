@@ -7,6 +7,7 @@
 // =============================================================================
 
 use std::error::Error;
+use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
 use std::sync::Arc;
@@ -14,6 +15,8 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
+use std::task::Context;
+use std::task::Poll;
 use std::thread;
 
 use futures::channel::oneshot;
@@ -32,6 +35,10 @@ use qubit_spi::error::ProviderFailure;
 use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::async_configurable_provider::AsyncConfigurableProvider;
+use crate::common::async_drop_provider::AsyncAction;
+use crate::common::async_drop_provider::AsyncDropProvider;
+use crate::common::registry_contract_provider::SharedOutputProvider;
+use crate::common::registry_contract_provider::SharedOutputSpec;
 use crate::common::string_spec::StringSpec;
 use crate::common::test_error::TestError;
 use crate::common::test_error::TestProviderFailure;
@@ -338,12 +345,6 @@ impl AsyncServiceProvider<StringSpec> for AsyncCountingProvider {
 /// fallback.
 #[test]
 fn test_async_resolver_cancellation_never_invokes_later_candidates() {
-    use std::future::Future;
-    use std::task::Context;
-    use std::task::Poll;
-
-    use crate::common::async_drop_provider::AsyncAction;
-    use crate::common::async_drop_provider::AsyncDropProvider;
     for (polled, first_absent) in [(false, false), (true, false), (true, true)] {
         let registry = AsyncProviderRegistry::<StringSpec>::default();
         let calls = Arc::new(Mutex::new(Vec::new()));
@@ -413,8 +414,6 @@ fn test_async_resolver_cancellation_never_invokes_later_candidates() {
 /// fallback.
 #[test]
 fn test_async_resolver_propagates_panic_before_future_construction() {
-    use crate::common::async_drop_provider::AsyncAction;
-    use crate::common::async_drop_provider::AsyncDropProvider;
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     let calls = Arc::new(Mutex::new(Vec::new()));
     let drops = Arc::new(AtomicUsize::new(0));
@@ -444,11 +443,6 @@ fn test_async_resolver_propagates_panic_before_future_construction() {
 /// shared.
 #[test]
 fn test_resolver_clone_preserves_provider_identity_without_caching_outputs() {
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::SharedOutputProvider;
-    use crate::common::registry_contract_provider::SharedOutputSpec;
     let registry = AsyncProviderRegistry::<SharedOutputSpec>::default();
     let output = Arc::new("shared allocation".to_owned());
     let calls = Arc::new(AtomicUsize::new(0));

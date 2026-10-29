@@ -7,12 +7,12 @@
 // =============================================================================
 
 use provider_alpha as _;
+use service_contract::sync_providers::build_registry;
 use spi::ProviderSelection;
 
 /// Builds the synchronous registry after explicitly anchoring alpha.
 fn main() {
-    let registry =
-        service_contract::sync_providers::build_registry().expect("alpha should register");
+    let registry = build_registry().expect("alpha should register");
     let resolver = registry
         .resolve_selected(
             &ProviderSelection::named("alpha").expect("alpha selector should be valid"),

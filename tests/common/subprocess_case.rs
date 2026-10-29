@@ -15,6 +15,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 /// Runs one exact test in a child, returning true only in that child's body.
+#[must_use]
 pub(crate) fn enter() -> bool {
     let thread = thread::current();
     let name = thread.name().expect("test thread must have a name");

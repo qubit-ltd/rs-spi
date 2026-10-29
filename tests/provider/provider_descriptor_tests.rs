@@ -6,8 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::cell::Cell;
+
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
+use qubit_spi::error::ProviderDescriptorError;
 use qubit_spi::provider_descriptor;
 
 /// Verifies that the static-descriptor macro preserves validated metadata.
@@ -75,11 +78,11 @@ fn test_static_literal_validation_rejects_invalid_and_conflicting_metadata() {
 /// Verifies that a descriptor retains typed ID, alias, and priority metadata.
 #[test]
 fn test_descriptor_keeps_typed_metadata() {
-    let descriptor =
-        ProviderDescriptor::new(ProviderId::new("file-command").expect("test provider ID should be valid"))
-            .with_aliases(["file", "command"])
-            .expect("test aliases should be valid")
-            .with_priority(20);
+    let provider_id = ProviderId::new("file-command").expect("test provider ID should be valid");
+    let descriptor = ProviderDescriptor::new(provider_id)
+        .with_aliases(["file", "command"])
+        .expect("test aliases should be valid")
+        .with_priority(20);
 
     assert_eq!("file-command", descriptor.id().as_str());
     assert_eq!(20, descriptor.priority());
@@ -96,9 +99,6 @@ fn test_descriptor_keeps_typed_metadata() {
 /// Invalid aliases stop consuming a caller's iterator immediately.
 #[test]
 fn test_with_aliases_stops_consuming_after_first_invalid_input() {
-    use std::cell::Cell;
-
-    use qubit_spi::error::ProviderDescriptorError;
     let consumed = Cell::new(0);
     let aliases = ["invalid alias", "valid", "unused"]
         .into_iter()
@@ -116,7 +116,6 @@ fn test_with_aliases_stops_consuming_after_first_invalid_input() {
 /// Successful alias validation consumes every item and retains encounter order.
 #[test]
 fn test_with_aliases_consumes_all_successful_inputs_in_order() {
-    use std::cell::Cell;
     let consumed = Cell::new(0);
     let aliases = [" FIRST ", "Second", "third"]
         .into_iter()

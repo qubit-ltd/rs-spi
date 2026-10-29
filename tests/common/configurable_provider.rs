@@ -18,6 +18,7 @@ use super::string_spec::StringSpec;
 use super::test_error::TestError;
 
 /// Provider fixture supporting success, echo, failure, and call recording.
+#[must_use]
 pub(crate) struct ConfigurableProvider {
     output: Option<Box<str>>,
     error: Option<ProviderFailure<TestError>>,

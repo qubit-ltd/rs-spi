@@ -30,6 +30,7 @@ impl ProviderMetadata for DescribedAsyncProvider {
 }
 
 impl AsyncServiceProvider<StringSpec> for DescribedAsyncProvider {
+    #[inline]
     fn create_configured<'a>(
         &'a self,
         config: &'a String,

@@ -8,12 +8,12 @@
 
 use provider_alpha as _;
 use provider_beta as _;
+use service_contract::sync_providers::build_registry;
 use spi::ProviderSelection;
 
 /// Proves macro-generated code remains valid when qubit-spi is named `spi`.
 fn main() {
-    let registry =
-        service_contract::sync_providers::build_registry().expect("alpha should register");
+    let registry = build_registry().expect("alpha should register");
     assert_eq!(
         vec!["alpha", "beta"],
         registry

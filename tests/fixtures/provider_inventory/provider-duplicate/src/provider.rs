@@ -19,6 +19,9 @@ use spi::provider_descriptor;
 use spi::submit_sync_provider;
 
 /// Provider that conflicts with alpha during registry construction.
+///
+/// This fixture registers the same provider key as the alpha fixture so the
+/// inventory tests can verify duplicate-key rejection.
 struct DuplicateProvider;
 
 impl ProviderMetadata for DuplicateProvider {

@@ -26,8 +26,8 @@ impl FailingWriter {
     /// # Returns
     ///
     /// A formatter sink with the requested failure point.
-    #[inline]
     #[must_use]
+    #[inline]
     pub(crate) const fn new(remaining_successes: usize) -> Self {
         Self { remaining_successes }
     }

@@ -19,18 +19,41 @@ use spi::error::ProviderFailure;
 use spi::provider_descriptor;
 use spi::submit_async_provider;
 
-/// Provider producing the asynchronous fixture output.
+/// Provider that supplies the fixed output used by the asynchronous inventory
+/// fixture.
 struct AsyncProvider;
 
 impl ProviderMetadata for AsyncProvider {
-    /// Returns the asynchronous provider's stable registration descriptor.
+    /// Describes the asynchronous fixture provider for inventory registration.
+    ///
+    /// # Returns
+    ///
+    /// A descriptor with the fixture's stable `async` identifier.
     fn descriptor(&self) -> ProviderDescriptor {
         provider_descriptor!("async")
     }
 }
 
 impl AsyncServiceProvider<FixtureSpec> for AsyncProvider {
-    /// Returns a future that creates the asynchronous fixture output.
+    /// Creates the fixed asynchronous fixture output.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `'a` - Lifetime shared by the provider, configuration, and future.
+    ///
+    /// # Parameters
+    ///
+    /// * `_config` - Fixture configuration, which does not affect the fixed
+    ///   output.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to the literal `async` output.
+    ///
+    /// # Errors
+    ///
+    /// This fixture cannot produce a provider failure because its error type
+    /// is `Infallible`.
     fn create_configured<'a>(
         &'a self,
         _config: &'a String,
