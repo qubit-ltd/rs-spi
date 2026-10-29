@@ -35,7 +35,7 @@ pub(crate) fn run(binary: &str) -> Output {
     let fixture_root = fixture_root();
     let target = TemporaryTargetDir::new(binary);
     Command::new("cargo")
-        .args(["run", "--quiet", "--locked", "--offline", "--bin", binary])
+        .args(["run", "--quiet", "--offline", "--bin", binary])
         .current_dir(&fixture_root)
         .env("CARGO_TARGET_DIR", target.path())
         .output()
