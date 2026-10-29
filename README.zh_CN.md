@@ -170,7 +170,7 @@ use qubit_spi::{ProviderRegistry, ProviderSelection};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = ProviderRegistry::<GreeterSpec>::default();
     registry.register(FriendlyGreeterProvider)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```
@@ -228,7 +228,7 @@ use qubit_spi::ProviderSelection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = providers::build_registry()?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```

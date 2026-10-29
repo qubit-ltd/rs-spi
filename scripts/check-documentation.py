@@ -78,6 +78,17 @@ def validate_blocks(blocks: list[ExampleBlock], expected: dict, document: str) -
         raise ValueError(f'{document}: example inventory mismatch; expected {sorted(required)}, got {actual}')
 
 
+def example_source(file: PurePosixPath, code: str) -> str:
+    """Deny ignored must-use results in generated Rust crate roots."""
+    if file.name not in ('main.rs', 'lib.rs') or file.parent.name != 'src':
+        return code
+    attribute = '#![deny(unused_must_use)]\n'
+    if code.startswith('#!') and not code.startswith('#!['):
+        first, separator, rest = code.partition('\n')
+        return first + '\n' + attribute + (rest if separator else '')
+    return attribute + code
+
+
 def cargo_environment(target: Path) -> dict:
     """Isolate example builds from parent coverage instrumentation and target locks."""
     env = os.environ.copy()
@@ -100,7 +111,7 @@ def run_scenario(root: Path, blocks: list[ExampleBlock], scenario: dict, workspa
         if file.exists():
             raise ValueError(f'{block.document}: source overwrites manifest: {block.file}')
         file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(block.code, encoding='utf-8')
+        file.write_text(example_source(block.file, block.code), encoding='utf-8')
     command = ['cargo', 'run', '--quiet', '-p', 'app']
     result = subprocess.run(command, cwd=workspace, env=cargo_environment(workspace / 'target'),
                             timeout=180, capture_output=True, text=True)

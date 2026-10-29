@@ -178,7 +178,7 @@ use qubit_spi::{ProviderRegistry, ProviderSelection};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = ProviderRegistry::<GreeterSpec>::default();
     registry.register(FriendlyGreeterProvider)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```
@@ -381,7 +381,7 @@ use qubit_spi::ProviderSelection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = providers::build_registry()?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```
@@ -399,6 +399,13 @@ register stateful providers before calling `seal()`. Entries are found at link
 time; discovery order does not set provider priority or the default. This
 mechanism does not load shared libraries at runtime.
 
+Entries are sorted by their registration source. Each source location must be
+unique within a service-family collection; duplicate locations fail before any
+factory runs. If multiple submissions originate from one macro expansion, split
+them across source lines or named modules. `registration_error()` returns
+`Some` for a registration conflict and `None` for an ambiguous source, so
+callers must handle both error kinds.
+
 ## Selection, Configuration and Diagnostics
 
 Registry default selection and service configuration are independent. A new
@@ -406,7 +413,8 @@ registry defaults to automatic selection with `OnAbsence`; changing that default
 affects later resolutions, not existing candidate snapshots. Use
 `resolve_default_snapshot()` when configuration validation depends on the exact
 default captured by resolution. Its returned selection and result share one
-read snapshot. `resolve()` returns only the result of that operation.
+read snapshot. `resolve()` returns only the result of that operation. After
+`seal()`, the default selection cannot be changed.
 
 | Selection | Meaning |
 | --- | --- |
@@ -502,11 +510,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config = String::from("Rust");
     let chain = ProviderSelection::chain([" NETWORK ", "disk", "local"])?
         .with_fallback_policy(FallbackPolicy::OnAbsence);
-    registry.set_default_selection(chain.clone());
+    registry.set_default_selection(chain.clone())?;
     let (captured, result) = registry.resolve_default_snapshot();
     assert_eq!(chain, captured);
     let snapshot = result?;
-    registry.set_default_selection(ProviderSelection::named("remote")?);
+    registry.set_default_selection(ProviderSelection::named("remote")?)?;
     assert_eq!("Hello, Rust!", snapshot.create_configured(&config)?);
 
     let error = match registry.resolve()?.create_configured(&config) {

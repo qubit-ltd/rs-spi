@@ -92,7 +92,7 @@
 //! registry.register(EnglishProvider {
 //!     descriptor: ProviderDescriptor::new(ProviderId::new("english")?),
 //! })?;
-//! registry.set_default_selection(ProviderSelection::named("english")?);
+//! registry.set_default_selection(ProviderSelection::named("english")?)?;
 //!
 //! let greeter = registry.resolve()?.create()?;
 //! assert_eq!("hello", greeter.greet());

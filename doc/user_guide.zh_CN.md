@@ -174,7 +174,7 @@ use qubit_spi::{ProviderRegistry, ProviderSelection};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = ProviderRegistry::<GreeterSpec>::default();
     registry.register(FriendlyGreeterProvider)?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```
@@ -371,7 +371,7 @@ use qubit_spi::ProviderSelection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = providers::build_registry()?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?);
+    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
     foo(&registry)
 }
 ```
@@ -387,12 +387,17 @@ workspace 成员和本地依赖与前例相同。运行 `cargo run -p app`，输
 的注册表，应用可以先注册有状态的提供者，再调用 `seal()`。条目在链接期发现，
 发现顺序不决定优先级或默认选择；这一机制也不会在运行时加载共享库。
 
+条目按注册来源排序。同一 service-family collection 内的来源位置必须唯一；重复来源会在
+任何工厂执行前失败。如果多个提交来自同一次宏展开，请将它们拆到不同行或具名子模块。
+`registration_error()` 对注册冲突返回 `Some`，对歧义来源返回 `None`，调用方必须处理两类错误。
+
 ## 选择、配置与诊断
 
 注册表的默认选择与服务配置相互独立。新注册表默认采用自动选择和 `OnAbsence`
 策略；修改默认值只影响后续解析，不改变已有候选快照。若配置校验需要知道本次
 解析究竟使用了哪个默认值，应调用 `resolve_default_snapshot()`：返回的选择配置
 与解析结果来自同一次读快照。`resolve()` 仅返回该操作的解析结果。
+调用 `seal()` 后，默认选择也不能再修改。
 
 | 选择方式 | 含义 |
 | --- | --- |
@@ -484,11 +489,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config = String::from("Rust");
     let chain = ProviderSelection::chain([" NETWORK ", "disk", "local"])?
         .with_fallback_policy(FallbackPolicy::OnAbsence);
-    registry.set_default_selection(chain.clone());
+    registry.set_default_selection(chain.clone())?;
     let (captured, result) = registry.resolve_default_snapshot();
     assert_eq!(chain, captured);
     let snapshot = result?;
-    registry.set_default_selection(ProviderSelection::named("remote")?);
+    registry.set_default_selection(ProviderSelection::named("remote")?)?;
     assert_eq!("Hello, Rust!", snapshot.create_configured(&config)?);
 
     let error = match registry.resolve()?.create_configured(&config) {

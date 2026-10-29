@@ -184,9 +184,22 @@ intentional. Neither candidate introduced a production dependency or runtime fea
   require the declared inventory, and run real Cargo scenarios. Missing scenarios,
   ignored fences and stale methods fail validation. Rust examples must not be
   replaced by unrelated duplicate source fixtures.
-- The documentation scenarios include a real three-crate `inventory-providers`
-  workspace: the contract declares a collection, a provider submits a factory,
-  and the app anchors that provider, builds, augments, selects, seals and creates.
+- The executable `inventory-greeter` documentation workspace contains four
+  crates: the service contract, consumer, provider and application. It verifies
+  the linked-provider build, default selection and service creation shown in
+  the guide. Runtime augmentation and sealing are covered by
+  [registry integration tests](../tests/registry/) and
+  [inventory integration tests](../tests/inventory/), not by this scenario.
+- Inventory entries are sorted by source location, which must be unique within
+  each service-family collection. Duplicate locations fail before any factory
+  runs. Split submissions across source lines or named modules so their source
+  keys differ. `ProviderInventoryBuildError::registration_error()` returns
+  `Some` for registration conflicts and `None` for ambiguous sources; callers
+  must handle both cases. The return type is `Option` so this breaking API
+  change can represent both inventory ambiguity and registration conflicts.
+  Existing direct callers such as `rs-fs-registry`'s error formatter and
+  `rs-event-bus`'s discovery-conflict tests must handle the optional result;
+  this change belongs in `0.14.0`, not a `0.13.x` patch release.
 - Package validation uses an actual Cargo archive and builds/tests its extracted
   contents without a checkout path patch. This prevents tests from depending on
   excluded fuzz sources or shared CI submodules.
@@ -196,9 +209,9 @@ intentional. Neither candidate introduced a production dependency or runtime fea
 
 There is no unregister or unseal operation. Applications may call `seal()` after
 startup registration and default-selection configuration; subsequent registry
-mutations are rejected. Do not add a successful-output metadata wrapper,
-dependency-injection container, or dynamic plugin loader without a concrete
-domain need.
+mutations, including default-selection changes, are rejected. Do not add a
+successful-output metadata wrapper, dependency-injection container, or dynamic
+plugin loader without a concrete domain need.
 Keep the catalog and failure state machine shared; keep domain-specific validation
 in adapters. Any future public API change must update both languages, executable
 examples and affected downstream crates together.

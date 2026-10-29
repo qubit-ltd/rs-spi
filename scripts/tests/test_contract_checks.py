@@ -33,6 +33,17 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual(blocks[0].file, PurePosixPath('app/src/main.rs'))
         self.assertEqual(blocks[0].first_code_line, 3)
 
+    def test_example_source_denies_unused_must_use_only_at_crate_roots(self):
+        source = self.check.example_source
+        attribute = '#![deny(unused_must_use)]\n'
+        self.assertEqual(attribute + 'fn main() {}\n', source(PurePosixPath('app/src/main.rs'), 'fn main() {}\n'))
+        self.assertEqual(attribute + 'pub fn greet() {}\n', source(PurePosixPath('lib/src/lib.rs'), 'pub fn greet() {}\n'))
+        self.assertEqual('pub fn greet() {}\n', source(PurePosixPath('app/src/providers.rs'), 'pub fn greet() {}\n'))
+        self.assertEqual(attribute + '#![allow(dead_code)]\nfn main() {}\n',
+                         source(PurePosixPath('app/src/main.rs'), '#![allow(dead_code)]\nfn main() {}\n'))
+        self.assertEqual('#!/usr/bin/env rustx\n' + attribute + 'fn main() {}\n',
+                         source(PurePosixPath('app/src/main.rs'), '#!/usr/bin/env rustx\nfn main() {}\n'))
+
     def test_unmarked_rust_fences_are_not_executable_examples(self):
         blocks = self.check.extract_blocks('```rust\nfn main() {}\n```\n', 'README.md')
         self.assertEqual([], blocks)
@@ -136,6 +147,21 @@ fn main() { let _ = diagnostic; }
             invalid = check.ExampleBlock('probe', block.file, code.replace('attempt.failure()', 'attempt.error()'), 'probe.md', 3)
             with self.assertRaisesRegex(ValueError, 'E0599'):
                 check.run_scenario(root, [invalid], scenario, Path(directory) / 'invalid')
+
+    def test_unused_result_in_example_is_a_compile_error(self):
+        import tempfile
+        check = load_script('check-documentation')
+        root = Path(__file__).resolve().parents[2]
+        scenario = {'manifests': {
+            'Cargo.toml': '[workspace]\nmembers = ["app"]\nresolver = "3"\n',
+            'app/Cargo.toml': '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\nqubit-spi = { path = "$SPI_ROOT" }\n',
+        }, 'stdout': ''}
+        code = 'fn main() { std::fs::read("missing"); }\n'
+        with tempfile.TemporaryDirectory(prefix='spi-unused-result-') as directory:
+            block = check.ExampleBlock('probe', PurePosixPath('app/src/main.rs'), code, 'probe.md', 3)
+            with self.assertRaisesRegex(ValueError, 'unused') as error:
+                check.run_scenario(root, [block], scenario, Path(directory) / 'invalid')
+            self.assertIn('Result', str(error.exception))
 
 if __name__ == '__main__':
     unittest.main()
