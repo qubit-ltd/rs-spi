@@ -7,6 +7,7 @@
 // =============================================================================
 
 use std::cell::Cell;
+use std::iter::repeat_n;
 
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
@@ -103,6 +104,20 @@ fn test_with_aliases_stops_consuming_after_first_invalid_input() {
     let aliases = ["invalid alias", "valid", "unused"]
         .into_iter()
         .inspect(|_| consumed.set(consumed.get() + 1));
+    let error = ProviderDescriptor::new(ProviderId::new("provider").expect("valid ID"))
+        .with_aliases(aliases)
+        .expect_err("first alias is invalid");
+    assert!(matches!(
+        error,
+        ProviderDescriptorError::InvalidAlias { alias_index: 0, .. }
+    ));
+    assert_eq!(1, consumed.get());
+}
+
+#[test]
+fn test_with_aliases_large_hint_still_reports_first_invalid_input() {
+    let consumed = Cell::new(0);
+    let aliases = repeat_n("invalid/path", usize::MAX).inspect(|_| consumed.set(consumed.get() + 1));
     let error = ProviderDescriptor::new(ProviderId::new("provider").expect("valid ID"))
         .with_aliases(aliases)
         .expect_err("first alias is invalid");

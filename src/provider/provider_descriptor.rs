@@ -256,14 +256,16 @@ const fn static_tokens_equal(left: &str, right: &str) -> bool {
 ///
 /// Returns [`ProviderDescriptorError`] when an alias is invalid, duplicates the
 /// canonical provider ID, or duplicates an earlier normalized alias.
+///
+/// Alias containers grow as inputs are successfully validated; their capacity
+/// is not reserved from the iterator's unconsumed size hint.
 fn normalize_aliases<I>(id: &ProviderId, inputs: I) -> Result<Box<[ProviderSelector]>, ProviderDescriptorError>
 where
     I: Iterator<Item = Result<ProviderSelector, ProviderSelectorError>>,
 {
     let canonical_selector = ProviderSelector::from(id);
-    let (minimum, _) = inputs.size_hint();
-    let mut seen = HashSet::with_capacity(minimum);
-    let mut normalized = Vec::with_capacity(minimum);
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::new();
     for (alias_index, input) in inputs.enumerate() {
         let alias = match input {
             Ok(alias) => alias,
