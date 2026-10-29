@@ -212,7 +212,7 @@ fn assert_creation(
             error
                 .attempts()
                 .iter()
-                .map(|attempt| (attempt.provider_id().as_str().to_owned(), attempt.failure().kind()))
+                .map(|attempt| { (attempt.provider_id().as_str().to_owned(), attempt.failure().kind(),) })
                 .collect::<Vec<_>>()
         );
     }
