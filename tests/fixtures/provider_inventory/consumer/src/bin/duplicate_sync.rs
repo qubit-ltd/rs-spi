@@ -18,6 +18,10 @@ fn main() {
         .expect_err("duplicate alpha provider should fail registry construction");
 
     assert_eq!("provider-duplicate", error.source_location().crate_name());
-    assert!(error.registration_error().to_string().contains("alpha"));
+    assert!(error
+        .registration_error()
+        .expect("selector conflict has a registration error")
+        .to_string()
+        .contains("alpha"));
     println!("provider-duplicate");
 }

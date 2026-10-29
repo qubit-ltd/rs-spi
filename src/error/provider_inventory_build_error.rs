@@ -16,8 +16,8 @@ use crate::inventory::ProviderRegistrationSource;
 ///
 /// This error is produced only by a service family's generated
 /// `build_registry()` function. Applications should handle it at startup using
-/// the source and registration-error accessors; they do not construct it
-/// directly.
+/// the source and optional registration-error accessors; they do not construct
+/// it directly.
 ///
 /// # Examples
 ///
@@ -78,10 +78,36 @@ use crate::inventory::ProviderRegistrationSource;
 ///     provider = Second;
 /// }
 ///
+/// qubit_spi::declare_sync_provider_inventory! {
+///     pub mod ambiguous_providers {
+///         spec = Spec;
+///     }
+/// }
+///
+/// macro_rules! submit_ambiguous_providers {
+///     () => {
+///         qubit_spi::submit_sync_provider! {
+///             inventory_entry = ambiguous_providers::Entry;
+///             spec = Spec;
+///             provider = First;
+///         }
+///         qubit_spi::submit_sync_provider! {
+///             inventory_entry = ambiguous_providers::Entry;
+///             spec = Spec;
+///             provider = Second;
+///         }
+///     };
+/// }
+/// submit_ambiguous_providers!();
+///
 /// pub fn run() {
 ///     let error = providers::build_registry().expect_err("duplicate IDs conflict");
 ///     assert!(error.source_location().line() > 0);
-///     assert!(matches!(error.registration_error(), RegistryMutationError::DuplicateSelector { .. }));
+///     assert!(matches!(error.registration_error(), Some(RegistryMutationError::DuplicateSelector { .. })));
+///
+///     let error = ambiguous_providers::build_registry().expect_err("macro submissions share a source");
+///     assert!(error.source_location().line() > 0);
+///     assert!(error.registration_error().is_none());
 /// }
 /// }
 /// example::run();
@@ -90,6 +116,12 @@ use crate::inventory::ProviderRegistrationSource;
 #[non_exhaustive]
 #[must_use]
 pub enum ProviderInventoryBuildError {
+    /// Multiple discovered entries use the same declaration source.
+    #[error("provider registration source {location} is shared by multiple inventory entries; no factories were run")]
+    AmbiguousSource {
+        /// Declaration location shared by the ambiguous submissions.
+        location: ProviderRegistrationSource,
+    },
     /// A submitted provider conflicts with registry mutation rules.
     #[error("failed to register provider submitted from {source}: {error}")]
     Registration {
@@ -102,6 +134,19 @@ pub enum ProviderInventoryBuildError {
 }
 
 impl ProviderInventoryBuildError {
+    /// Creates an error for multiple entries with the same declaration source.
+    ///
+    /// # Parameters
+    ///
+    /// * `source` - Declaration location shared by the discovered entries.
+    ///
+    /// # Returns
+    ///
+    /// An ambiguity error identifying the source whose factories were skipped.
+    pub(crate) fn ambiguous_source(source: ProviderRegistrationSource) -> Self {
+        Self::AmbiguousSource { location: source }
+    }
+
     /// Creates an error for a discovered provider rejected during registration.
     ///
     /// # Parameters
@@ -113,34 +158,37 @@ impl ProviderInventoryBuildError {
     ///
     /// A registration error retaining both the discovery source and mutation
     /// failure.
-    #[allow(dead_code)] // Used by inventory registry builders introduced in a later implementation stage.
+    #[allow(dead_code)] // Used only when inventory support is enabled.
     pub(crate) fn registration(source: ProviderRegistrationSource, error: RegistryMutationError) -> Self {
         Self::Registration { source, error }
     }
 
-    /// Returns the declaration location of the registration that failed.
+    /// Returns the declaration source associated with this build error.
     ///
     /// # Returns
     ///
-    /// The source location retained by this error.
+    /// The source location retained for diagnostics.
     #[must_use]
     #[inline]
     pub const fn source_location(&self) -> ProviderRegistrationSource {
         match self {
+            Self::AmbiguousSource { location } => *location,
             Self::Registration { source, .. } => *source,
         }
     }
 
-    /// Returns the registry mutation error that rejected the registration.
+    /// Returns the registry mutation error when registration was attempted.
     ///
     /// # Returns
     ///
-    /// The underlying registration failure retained by this error.
-    #[must_use = "the registration error contains the reason provider registration failed"]
+    /// The underlying registration failure, or `None` when duplicate sources
+    /// prevented factories from running.
+    #[must_use = "check whether registry mutation caused this inventory build error"]
     #[inline]
-    pub const fn registration_error(&self) -> &RegistryMutationError {
+    pub const fn registration_error(&self) -> Option<&RegistryMutationError> {
         match self {
-            Self::Registration { error, .. } => error,
+            Self::AmbiguousSource { .. } => None,
+            Self::Registration { error, .. } => Some(error),
         }
     }
 }

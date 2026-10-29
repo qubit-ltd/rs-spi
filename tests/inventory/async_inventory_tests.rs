@@ -13,11 +13,14 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use qubit_spi::__private::AsyncProviderInventoryEntry;
+use qubit_spi::__private::build_async_registry_with;
 use qubit_spi::AsyncProviderDefinition;
 use qubit_spi::AsyncServiceProvider;
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderFuture;
 use qubit_spi::ProviderMetadata;
+use qubit_spi::ProviderRegistrationSource;
 use qubit_spi::ProviderSelection;
 use qubit_spi::declare_async_provider_inventory;
 use qubit_spi::error::ProviderFailure;
@@ -30,6 +33,136 @@ use crate::common::string_spec::StringSpec;
 use crate::common::test_error::TestError;
 use crate::common::test_provider_definition::TestProviderDefinition;
 use crate::common::test_provider_definition::define_provider;
+
+static AMBIGUOUS_SOURCE_FACTORY_CALLS: AtomicUsize = AtomicUsize::new(0);
+static SOURCE_PRIORITY_FACTORY_CALLS: AtomicUsize = AtomicUsize::new(0);
+static SAME_MACRO_FACTORY_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn ambiguous_source_factory() -> Arc<dyn AsyncProviderDefinition<StringSpec>> {
+    AMBIGUOUS_SOURCE_FACTORY_CALLS.fetch_add(1, Ordering::SeqCst);
+    Arc::new(define_provider(
+        provider_descriptor!("ambiguous-source"),
+        AsyncConfigurableProvider::success("ambiguous-source"),
+    ))
+}
+
+fn second_ambiguous_source_factory() -> Arc<dyn AsyncProviderDefinition<StringSpec>> {
+    AMBIGUOUS_SOURCE_FACTORY_CALLS.fetch_add(1, Ordering::SeqCst);
+    Arc::new(define_provider(
+        provider_descriptor!("second-ambiguous-source"),
+        AsyncConfigurableProvider::success("second-ambiguous-source"),
+    ))
+}
+
+fn source_priority_factory() -> Arc<dyn AsyncProviderDefinition<StringSpec>> {
+    SOURCE_PRIORITY_FACTORY_CALLS.fetch_add(1, Ordering::SeqCst);
+    Arc::new(define_provider(
+        provider_descriptor!("source-priority"),
+        AsyncConfigurableProvider::success("source-priority"),
+    ))
+}
+
+fn second_source_priority_factory() -> Arc<dyn AsyncProviderDefinition<StringSpec>> {
+    SOURCE_PRIORITY_FACTORY_CALLS.fetch_add(1, Ordering::SeqCst);
+    Arc::new(define_provider(
+        provider_descriptor!("second-source-priority"),
+        AsyncConfigurableProvider::success("second-source-priority"),
+    ))
+}
+
+declare_async_provider_inventory! {
+    pub mod same_macro_providers {
+        spec = StringSpec;
+    }
+}
+
+fn same_macro_provider() -> TestProviderDefinition<AsyncConfigurableProvider> {
+    SAME_MACRO_FACTORY_CALLS.fetch_add(1, Ordering::SeqCst);
+    define_provider(
+        provider_descriptor!("same-macro"),
+        AsyncConfigurableProvider::success("same-macro"),
+    )
+}
+
+macro_rules! submit_same_source_providers {
+    () => {
+        submit_async_provider! {
+            inventory_entry = same_macro_providers::Entry;
+            spec = StringSpec;
+            provider = same_macro_provider();
+        }
+        submit_async_provider! {
+            inventory_entry = same_macro_providers::Entry;
+            spec = StringSpec;
+            provider = same_macro_provider();
+        }
+    };
+}
+
+submit_same_source_providers!();
+
+#[test]
+fn test_build_async_registry_rejects_duplicate_sources_before_factory_or_transform() {
+    let source = ProviderRegistrationSource::new("test", "same", "test.rs", 7);
+    let first = AsyncProviderInventoryEntry::<StringSpec>::new(ambiguous_source_factory, source);
+    let second = AsyncProviderInventoryEntry::<StringSpec>::new(second_ambiguous_source_factory, source);
+
+    for entries in [[&first, &second], [&second, &first]] {
+        AMBIGUOUS_SOURCE_FACTORY_CALLS.store(0, Ordering::SeqCst);
+        let transform_calls = Cell::new(0);
+        let result = build_async_registry_with(entries, |provider| {
+            transform_calls.set(transform_calls.get() + 1);
+            provider
+        });
+
+        assert!(result.is_err());
+        assert_eq!(0, AMBIGUOUS_SOURCE_FACTORY_CALLS.load(Ordering::SeqCst));
+        assert_eq!(0, transform_calls.get());
+    }
+}
+
+#[test]
+fn test_build_async_registry_preflights_all_sources_and_selects_smallest_duplicate() {
+    let unique = ProviderRegistrationSource::new("a", "unique", "test.rs", 1);
+    let larger_duplicate = ProviderRegistrationSource::new("c", "same", "test.rs", 1);
+    let smaller_duplicate = ProviderRegistrationSource::new("b", "same", "test.rs", 1);
+    let unique_entry = AsyncProviderInventoryEntry::<StringSpec>::new(source_priority_factory, unique);
+    let c_first = AsyncProviderInventoryEntry::<StringSpec>::new(source_priority_factory, larger_duplicate);
+    let c_second = AsyncProviderInventoryEntry::<StringSpec>::new(second_source_priority_factory, larger_duplicate);
+    let b_first = AsyncProviderInventoryEntry::<StringSpec>::new(source_priority_factory, smaller_duplicate);
+    let b_second = AsyncProviderInventoryEntry::<StringSpec>::new(second_source_priority_factory, smaller_duplicate);
+
+    for entries in [
+        [&unique_entry, &c_first, &c_second, &b_first, &b_second],
+        [&b_second, &b_first, &c_second, &c_first, &unique_entry],
+    ] {
+        SOURCE_PRIORITY_FACTORY_CALLS.store(0, Ordering::SeqCst);
+        let result = build_async_registry_with(entries, |provider| provider);
+        let error = result.expect_err("all duplicate sources must be found before factories run");
+
+        assert!(matches!(error, ProviderInventoryBuildError::AmbiguousSource { .. }));
+        assert_eq!(smaller_duplicate, error.source_location());
+        assert!(error.registration_error().is_none());
+        assert_eq!(0, SOURCE_PRIORITY_FACTORY_CALLS.load(Ordering::SeqCst));
+    }
+}
+
+#[test]
+fn test_build_async_registry_rejects_sources_from_one_outer_macro_expansion() {
+    SAME_MACRO_FACTORY_CALLS.store(0, Ordering::SeqCst);
+    let transform_calls = Cell::new(0);
+
+    let error = same_macro_providers::build_registry_with(|provider| {
+        transform_calls.set(transform_calls.get() + 1);
+        provider
+    })
+    .expect_err("submissions from one outer macro invocation share a source");
+
+    assert!(matches!(error, ProviderInventoryBuildError::AmbiguousSource { .. }));
+    assert!(error.registration_error().is_none());
+    assert_eq!(0, SAME_MACRO_FACTORY_CALLS.load(Ordering::SeqCst));
+    assert_eq!(0, transform_calls.get());
+}
 
 mod macro_path_support {
     pub(crate) use crate::common::string_spec::StringSpec as OrdinarySpec;
@@ -455,7 +588,13 @@ fn test_build_registry_reports_source_for_duplicate_provider_id() {
     );
     assert_eq!(env!("CARGO_PKG_NAME"), source.crate_name());
     assert_eq!(file!(), source.file());
-    assert!(error.registration_error().to_string().contains("duplicate"));
+    assert!(
+        error
+            .registration_error()
+            .expect("duplicate provider ID has a registration error")
+            .to_string()
+            .contains("duplicate")
+    );
 }
 
 /// Verifies that an asynchronous provider factory panic remains observable to

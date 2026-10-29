@@ -150,8 +150,9 @@ macro_rules! declare_sync_provider_inventory {
             ///
             /// # Errors
             ///
-            /// Returns an error that identifies the submitted provider when registration
-            /// conflicts with an earlier discovered provider.
+            /// Returns an error when multiple entries share a declaration source, or
+            /// when a provider conflicts with an earlier discovered provider. Ambiguous
+            /// sources are reported before any factory is run.
             ///
             /// # Panics
             ///
@@ -169,9 +170,10 @@ macro_rules! declare_sync_provider_inventory {
 
             /// Builds a registry after transforming each discovered provider.
             ///
-            /// The transform runs in stable declaration-source order after
-            /// each provider factory and before registration. Service-family
-            /// registries can use it to install validation or other adapters.
+            /// The transform runs in declaration-source order after each provider
+            /// factory and before registration. Repeated sources are rejected before
+            /// factories or transforms run. Service-family registries can use this to
+            /// install validation or other adapters.
             ///
             /// # Parameters
             ///
@@ -185,8 +187,9 @@ macro_rules! declare_sync_provider_inventory {
             ///
             /// # Errors
             ///
-            /// Returns an error identifying the source of a provider whose
-            /// transformed descriptor conflicts with an earlier entry.
+            /// Returns an error for repeated declaration sources or when a transformed
+            /// descriptor conflicts with an earlier entry. Source ambiguity takes
+            /// precedence and is reported before callbacks run.
             ///
             /// # Panics
             ///
@@ -426,8 +429,9 @@ macro_rules! declare_async_provider_inventory {
             ///
             /// # Errors
             ///
-            /// Returns an error that identifies the submitted provider when registration
-            /// conflicts with an earlier discovered provider.
+            /// Returns an error when multiple entries share a declaration source, or
+            /// when a provider conflicts with an earlier discovered provider. Ambiguous
+            /// sources are reported before any factory is run.
             ///
             /// # Panics
             ///
@@ -445,9 +449,10 @@ macro_rules! declare_async_provider_inventory {
 
             /// Builds a registry after transforming each discovered provider.
             ///
-            /// The transform runs in stable declaration-source order after
-            /// each provider factory and before registration. Service-family
-            /// registries can use it to install validation or other adapters.
+            /// The transform runs in declaration-source order after each provider
+            /// factory and before registration. Repeated sources are rejected before
+            /// factories or transforms run. Service-family registries can use this to
+            /// install validation or other adapters.
             /// This method never creates asynchronous services.
             ///
             /// # Parameters
@@ -462,8 +467,9 @@ macro_rules! declare_async_provider_inventory {
             ///
             /// # Errors
             ///
-            /// Returns an error identifying the source of a provider whose
-            /// transformed descriptor conflicts with an earlier entry.
+            /// Returns an error for repeated declaration sources or when a transformed
+            /// descriptor conflicts with an earlier entry. Source ambiguity takes
+            /// precedence and is reported before callbacks run.
             ///
             /// # Panics
             ///

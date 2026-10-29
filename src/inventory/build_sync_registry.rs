@@ -17,9 +17,9 @@ use crate::inventory::SyncProviderInventoryEntry;
 
 /// Builds an unsealed registry from discovered synchronous provider entries.
 ///
-/// Entries are stably ordered by their declaration source before their
-/// factories run, making registration order independent of linker inventory
-/// traversal order.
+/// Entries are ordered by declaration source before their factories run. A
+/// repeated source is rejected before any factory or transform runs; otherwise
+/// registration order is independent of linker inventory traversal order.
 ///
 /// # Type Parameters
 ///
@@ -35,9 +35,10 @@ use crate::inventory::SyncProviderInventoryEntry;
 ///
 /// # Errors
 ///
-/// Returns [`ProviderInventoryBuildError`] with the failing submission source
-/// when a provider violates registry mutation rules. The partially built
-/// registry remains local and is not exposed to the caller.
+/// Returns [`ProviderInventoryBuildError`] when sources are ambiguous or a
+/// provider violates registry mutation rules. Source ambiguity is checked
+/// before any factory runs and takes precedence over registration errors. The
+/// partially built registry remains local and is not exposed to the caller.
 ///
 /// # Panics
 ///
@@ -55,10 +56,10 @@ where
 
 /// Builds an unsealed synchronous registry after transforming each provider.
 ///
-/// Entries are stably ordered by their declaration source before factories and
-/// transforms run. This lets service-family registries install adapters while
-/// retaining the inventory builder's deterministic registration and error
-/// reporting behavior.
+/// Entries are ordered by declaration source before factories and transforms
+/// run. Duplicate sources are rejected before either callback runs. This lets
+/// service-family registries install adapters while retaining deterministic
+/// registration and error reporting behavior.
 ///
 /// # Type Parameters
 ///
@@ -76,8 +77,9 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`ProviderInventoryBuildError`] with the failing submission source
-/// when a transformed provider violates registry mutation rules.
+/// Returns [`ProviderInventoryBuildError`] when sources are ambiguous or a
+/// transformed provider violates registry mutation rules. Source ambiguity is
+/// checked first and takes precedence over registration errors.
 ///
 /// # Panics
 ///
@@ -93,6 +95,9 @@ where
 {
     let mut entries: Vec<_> = entries.into_iter().collect();
     entries.sort_by_key(|entry| entry.source());
+    if let Some(pair) = entries.windows(2).find(|pair| pair[0].source() == pair[1].source()) {
+        return Err(ProviderInventoryBuildError::ambiguous_source(pair[0].source()));
+    }
 
     let registry = ProviderRegistry::default();
     for entry in entries {

@@ -14,6 +14,9 @@ use std::fmt;
 /// Sources sort lexicographically by crate name, module path, and file, then
 /// by numeric line number. Discovery uses that order before invoking provider
 /// factories, so linker inventory traversal cannot choose registration order.
+/// A collection containing the same source more than once is rejected before
+/// any factory runs because the entries cannot be ordered independently of
+/// inventory traversal.
 ///
 /// # Examples
 ///
