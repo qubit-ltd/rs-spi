@@ -2,7 +2,7 @@
 
 [README](../README.md) · [简体中文指南](user_guide.zh_CN.md) · [Design](design.md) · [Ecosystem comparison](ecosystem-comparison.md)
 
-This guide covers `qubit-spi` 0.13 and Rust 1.94+. It is for domain-library authors,
+This guide covers `qubit-spi` 0.14 and Rust 1.94+. It is for domain-library authors,
 provider implementers and application authors who compose them. The goal is for
 `lib-foo` to obtain a greeting service chosen by its application, without depending
 on the concrete provider crate.
@@ -13,6 +13,13 @@ deployment. A direct dependency fixes that choice too early, while hand-written
 selection and fallback can be duplicated across consumers. This guide shows how
 to keep the service contract in the library, make the choice in the application,
 and report provider creation failures through one typed flow.
+
+## Migrating from 0.13 to 0.14
+
+Update `qubit-spi` from `0.13` to `0.14`. The breaking change is that
+`registration_error()` returns `Option<&RegistryMutationError>`: `Some` means a
+registration conflict, while `None` means an ambiguous source prevented
+factories from running. Handle both outcomes rather than unwrapping.
 
 ## The Three Stages
 
@@ -187,7 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 To run these files, create a Cargo workspace with members `lib-greeter`, `lib-foo`,
 `lib-friendly-greeter` and `app`. Give each package version `0.1.0`, edition `2024`,
-and add `qubit-spi = "0.13"` to each package's dependencies. The workspace root is:
+and add `qubit-spi = "0.14"` to each package's dependencies. The workspace root is:
 
 ```toml
 [workspace]
@@ -386,7 +393,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Enable `qubit-spi = { version = "0.13", features = ["inventory"] }` in each
+Enable `qubit-spi = { version = "0.14", features = ["inventory"] }` in each
 participating crate. The workspace members and local dependencies are the same
 as above. Run `cargo run -p app`; it prints `Hello, Rust!`.
 
@@ -448,7 +455,7 @@ Providers must classify errors deliberately: reporting every error as absence ca
 hide broken configuration behind an apparently successful fallback.
 
 The next standalone binary combines aliases, fallback, captured defaults and
-structured errors. Add `qubit-spi = "0.13"` and put this block
+structured errors. Add `qubit-spi = "0.14"` and put this block
 in `src/main.rs`. Run `cargo run`; success means all assertions pass without stdout.
 
 <!-- spi-example: guide-sync; file: app/src/main.rs -->
@@ -646,10 +653,12 @@ a provider. Panics before a leaf returns a future or while polling propagate;
 ## Runtime Ownership and Limits
 
 Registry clones share registrations and default changes. Sync and async
-registries remain independent. Metadata is captured once per registration attempt,
-before taking the write lock. Conflicts are checked after that callback returns;
-a failed attempt inserts none of its own selectors. Reentrant changes made by
-metadata callbacks remain, even if the callback later panics. Factories, formatting callbacks
+registries remain independent. A registration attempt checks sealing before
+sampling metadata; only attempts that pass this precheck invoke the callback,
+at most once. The callback runs outside the write lock, after which sealing and
+conflicts are checked again under that lock. A failed attempt inserts none of
+its own selectors. Reentrant changes made by metadata callbacks remain, even if
+the callback later panics. Factories, formatting callbacks
 and rejected-provider destruction run outside catalog locks.
 
 IDs and descriptors are owned snapshots in successful registration order;
@@ -691,8 +700,9 @@ facade around the registry as shown by the explicit registration example. Consul
 the [design](design.md) for lock, snapshot and performance decisions, and the
 [ecosystem comparison](ecosystem-comparison.md) for scope and trade-offs against related approaches.
 
-From this repository, run `python3 scripts/check-documentation.py` to compile and
-run every marked Rust block independently for each language. Then run
-`./.infra/bin/align-ci.sh` and `SPI_PACKAGE_ALLOW_DIRTY=1 ./.infra/bin/ci-check.sh` while reviewing local
-uncommitted changes; a clean CI checkout uses `./.infra/bin/ci-check.sh` without that opt-in.
+The standard CI runs the project contract checks. Locally, run
+`./.infra/bin/project-ci-check.sh` for the same checks. When validating uncommitted
+changes, set `SPI_PACKAGE_ALLOW_DIRTY=1`; it only passes `--allow-dirty` to the
+package archive check. Unset, empty or `0` values keep strict checking, and other
+values fail before any check runs. Run `./.infra/bin/align-ci.sh` first to format.
 [README](../README.md)

@@ -85,15 +85,21 @@ where
     ///
     /// `Ok(())` after successful registration.
     ///
-    /// Registration snapshots the descriptor returned by
-    /// [`crate::ProviderMetadata::descriptor`] before acquiring the Registry's
-    /// write lock and before validating selector conflicts.
+    /// Registration checks sealing before calling the descriptor callback,
+    /// then snapshots the descriptor returned by
+    /// [`crate::ProviderMetadata::descriptor`] outside the Registry's write
+    /// lock. The callback runs at most once for an attempt that passes the
+    /// initial seal check; registration rechecks sealing under the write lock
+    /// before validating selector conflicts.
     ///
     /// # Errors
     ///
-    /// Returns [`RegistryMutationError`] without inserting this provider when
-    /// its canonical ID or any alias is already registered. Reentrant
-    /// changes made by the metadata callback are not rolled back.
+    /// Returns [`RegistryMutationError::Sealed`] without calling the metadata
+    /// callback when the Registry is already sealed, or if it becomes sealed
+    /// while the callback runs. Returns [`RegistryMutationError`] for a
+    /// duplicate canonical ID or alias without inserting this provider or any
+    /// of its selectors. Reentrant changes made by the metadata callback are
+    /// not rolled back.
     ///
     /// # Panics
     ///
@@ -119,15 +125,21 @@ where
     ///
     /// `Ok(())` after successful registration.
     ///
-    /// Registration snapshots the descriptor returned by
-    /// [`crate::ProviderMetadata::descriptor`] before acquiring the Registry's
-    /// write lock and before validating selector conflicts.
+    /// Registration checks sealing before calling the descriptor callback,
+    /// then snapshots the descriptor returned by
+    /// [`crate::ProviderMetadata::descriptor`] outside the Registry's write
+    /// lock. The callback runs at most once for an attempt that passes the
+    /// initial seal check; registration rechecks sealing under the write lock
+    /// before validating selector conflicts.
     ///
     /// # Errors
     ///
-    /// Returns [`RegistryMutationError`] without inserting this provider when
-    /// its canonical ID or any alias is already registered. Reentrant
-    /// changes made by the metadata callback are not rolled back.
+    /// Returns [`RegistryMutationError::Sealed`] without calling the metadata
+    /// callback when the Registry is already sealed, or if it becomes sealed
+    /// while the callback runs. Returns [`RegistryMutationError`] for a
+    /// duplicate canonical ID or alias without inserting this provider or any
+    /// of its selectors. Reentrant changes made by the metadata callback are
+    /// not rolled back.
     ///
     /// # Panics
     ///

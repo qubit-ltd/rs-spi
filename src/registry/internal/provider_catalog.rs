@@ -60,9 +60,12 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`RegistryMutationError`] without inserting this provider when
-    /// any selector is already registered. Reentrant callback changes
-    /// remain.
+    /// Returns [`RegistryMutationError::Sealed`] before calling the descriptor
+    /// callback when the catalog is already sealed. The callback runs outside
+    /// the write lock and is followed by a second seal check under that lock;
+    /// concurrent or reentrant sealing therefore rejects the outer
+    /// registration. Reentrant callback changes remain. Duplicate selectors
+    /// reject the provider without inserting any of its selectors.
     ///
     /// # Panics
     ///

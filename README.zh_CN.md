@@ -16,10 +16,15 @@ Qubit SPI 为库提供类型化的服务边界，由应用注册服务提供者�
 
 ```toml
 [dependencies]
-qubit-spi = "0.13"
+qubit-spi = "0.14"
 ```
 
 需要 Rust 1.94 或更高版本。默认 feature 集为空。
+
+从 0.13 升级到 0.14 时，请更新依赖版本并处理 `registration_error()` 的两种结果。
+0.14 中，该方法返回 `Option<&RegistryMutationError>`：
+`Some` 表示注册冲突，`None` 表示阻止工厂运行的来源歧义。调用方应分别处理这两种情况，
+不要直接解包。
 
 ## 示例：应用选择 Greeter 实现
 
@@ -233,7 +238,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-参与的 crate 启用 `qubit-spi = { version = "0.13", features = ["inventory"] }`。
+参与的 crate 启用 `qubit-spi = { version = "0.14", features = ["inventory"] }`。
 [用户指南中的完整可运行版本](doc/user_guide.zh_CN.md#链接期发现简化同一个-greeter-示例)
 列出了全部文件，并说明构建冲突的处理方式。
 

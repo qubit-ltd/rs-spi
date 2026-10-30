@@ -2,7 +2,7 @@
 
 [中文版](design.zh_CN.md) · [User Guide](user_guide.md) · [README](../README.md)
 
-This document describes the 0.13 API and its implementation contracts. It is for
+This document describes the 0.14 API and its implementation contracts. It is for
 maintainers and domain-crate authors. The user guide contains runnable integration
 examples; this document records why registration, selection and creation remain
 separate and what future changes must preserve.
@@ -38,9 +38,10 @@ Collections are typed and isolated by service family. An entry submitted to the
 collection declared for `GreeterSpec`, for example, cannot be read while
 building a registry for a different spec. Building iterates discovered entries,
 calls each zero-argument factory, and registers the resulting provider through
-the ordinary atomic registration path. Only a registration conflict (canonical
-ID or alias ownership) is returned as a `ProviderInventoryBuildError` with the
-submission source location; no partially built registry is returned. Factories
+the ordinary atomic registration path. An ambiguous source or registration
+conflict (canonical ID or alias ownership) is returned as a
+`ProviderInventoryBuildError` with the submission source location; no partially
+built registry is returned. Factories
 do not return `Result`, and factory or `descriptor()` panics propagate unchanged
 rather than being converted into inventory build errors.
 

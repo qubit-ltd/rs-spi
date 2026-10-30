@@ -6,6 +6,10 @@ English
 
 This document uses `qubit-spi` 0.13.0 as its baseline and compares its responsibilities and trade-offs with several related Rust patterns and libraries. The comparison concerns capability scope and integration models; it is not a benchmark and does not imply that the approaches are interchangeable. External APIs and support may change over time; consult each project's current documentation.
 
+This is a historical comparison baseline, not current installation guidance. For
+current 0.14 usage and the 0.13-to-0.14 migration, see the
+[user guide](user_guide.md#migrating-from-013-to-014).
+
 ## Project positioning
 
 `qubit-spi` provides a typed service-provider registry and resolution mechanism for statically linked Rust applications. An application registers candidate providers, selects candidates by name, an explicit chain, or automatic ordering, and then invokes factories with configuration to create a service. It separates candidate selection from creation-failure fallback policy and provides corresponding APIs for synchronous and asynchronous services.
@@ -53,4 +57,5 @@ When adopting `qubit-spi`, account for the fact that a service family shares one
 - [English README](../README.md)
 - [English user guide](user_guide.md)
 - [English design notes](design.md)
+- [Current 0.14 usage and migration](user_guide.md#migrating-from-013-to-014)
 - [Rust API documentation](https://docs.rs/qubit-spi/0.13.0/qubit_spi/)

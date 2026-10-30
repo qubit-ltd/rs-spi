@@ -2,7 +2,7 @@
 
 [English](design.md) · [用户指南](user_guide.zh_CN.md) · [README](../README.zh_CN.md)
 
-本文说明 0.13 API 的架构与实现契约，面向维护者和领域 crate 作者。可运行的集成
+本文说明 0.14 API 的架构与实现契约，面向维护者和领域 crate 作者。可运行的集成
 示例见用户指南；本文重点说明为什么要分开注册、选择和创建，以及后续修改必须
 保留的行为。
 
@@ -30,8 +30,8 @@
 
 collection 由服务族类型约束并彼此隔离。例如，提交到 `GreeterSpec` collection 的
 条目不能在构建另一种 spec 的注册表时被读取。构建时会逐个遍历发现的条目，调用每个
-零参数工厂，再沿用普通注册的原子路径注册所得服务提供者。只有注册冲突（规范 ID 或
-别名归属）才会返回带提交源代码位置的 `ProviderInventoryBuildError`，且不会返回部分
+零参数工厂，再沿用普通注册的原子路径注册所得服务提供者。来源歧义或注册冲突（规范 ID
+或别名归属）会返回带提交源代码位置的 `ProviderInventoryBuildError`，且不会返回部分
 构建的注册表。工厂不返回 `Result`；工厂或 `descriptor()` 的 panic 原样传播，不会被
 转换为 inventory 构建错误。
 

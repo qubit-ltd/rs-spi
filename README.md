@@ -19,10 +19,16 @@ while its application installs the implementation appropriate to its deployment.
 
 ```toml
 [dependencies]
-qubit-spi = "0.13"
+qubit-spi = "0.14"
 ```
 
 Requires Rust 1.94 or later. The default feature set is empty.
+
+For the 0.13 to 0.14 migration, update the dependency requirement and handle
+both branches of the `registration_error()` result. In 0.14,
+`registration_error()` returns `Option<&RegistryMutationError>`.
+`Some` describes a registration conflict; `None` describes an ambiguous source
+that prevented factories from running. Handle both cases instead of unwrapping.
 
 ## Example: An App-Selected Greeter
 
@@ -241,7 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Enable `qubit-spi = { version = "0.13", features = ["inventory"] }` in the
+Enable `qubit-spi = { version = "0.14", features = ["inventory"] }` in the
 participating crates. The [complete runnable version](doc/user_guide.md#link-time-discovery-for-the-same-greeter)
 shows all files and explains how to handle inventory conflicts.
 

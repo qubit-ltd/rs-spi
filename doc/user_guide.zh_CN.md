@@ -2,7 +2,7 @@
 
 [README](../README.zh_CN.md) · [English User Guide](user_guide.md) · [设计说明](design.zh_CN.md) · [生态对比](ecosystem-comparison.zh_CN.md)
 
-本指南适用于 `qubit-spi` 0.13，需要 Rust 1.94 或更高版本。领域库作者、服务提供者
+本指南适用于 `qubit-spi` 0.14，需要 Rust 1.94 或更高版本。领域库作者、服务提供者
 实现者和应用开发者可以沿同一个示例完成集成：`lib-foo` 使用应用选定的问候服务，
 但不依赖具体的服务提供者 crate。
 
@@ -10,6 +10,12 @@
 哪个后端适合当前部署。直接依赖后端会过早固定选择；由各消费方手写选择和回退，又容易
 造成重复并让失败处理不一致。本指南将演示如何让库定义服务契约、由应用选择实现，并用
 统一的类型化流程处理服务提供者的创建失败。
+
+## 从 0.13 迁移到 0.14
+
+将 `qubit-spi` 依赖从 `0.13` 更新为 `0.14`。破坏性变化是
+`registration_error()` 改为返回 `Option<&RegistryMutationError>`：`Some` 表示注册冲突，
+`None` 表示来源歧义导致工厂尚未运行。调用方应处理两种结果，不要直接解包。
 
 ## 三个独立阶段
 
@@ -183,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 运行上述代码时，新建 Cargo workspace，包含 `lib-greeter`、`lib-foo`、`lib-friendly-greeter` 和
 `app` 四个成员。每个包使用版本 `0.1.0`、edition `2024`，并在依赖中加入
-`qubit-spi = "0.13"`。workspace 根目录的 `Cargo.toml` 为：
+`qubit-spi = "0.14"`。workspace 根目录的 `Cargo.toml` 为：
 
 ```toml
 [workspace]
@@ -376,7 +382,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-参与的 crate 均启用 `qubit-spi = { version = "0.13", features = ["inventory"] }`。
+参与的 crate 均启用 `qubit-spi = { version = "0.14", features = ["inventory"] }`。
 workspace 成员和本地依赖与前例相同。运行 `cargo run -p app`，输出为
 `Hello, Rust!`。
 
@@ -427,7 +433,7 @@ workspace 成员和本地依赖与前例相同。运行 `cargo run -p app`，输
 表示接受请求后的初始化失败。错误分类需要由服务提供者认真判断：如果把所有错误
 都当成缺席，回退成功可能掩盖真正的配置问题。
 
-下面是独立的二进制示例，覆盖别名、回退、默认快照和结构化诊断。添加 `qubit-spi = "0.13"` 依赖，将代码放入 `src/main.rs`，运行 `cargo run`；全部断言通过且没有标准
+下面是独立的二进制示例，覆盖别名、回退、默认快照和结构化诊断。添加 `qubit-spi = "0.14"` 依赖，将代码放入 `src/main.rs`，运行 `cargo run`；全部断言通过且没有标准
 输出即表示成功。
 
 <!-- spi-example: guide-sync; file: app/src/main.rs -->
@@ -620,9 +626,10 @@ Send 限制。`Config` 可以是非定长类型。同步 `create()` 要求 `Conf
 
 ## 运行时所有权与边界
 
-注册表的克隆共享注册内容与默认选择，同步和异步注册表彼此独立。每次注册尝试只
-采样一次元数据，且在取得写锁之前执行；回调返回后才检查冲突。失败的注册尝试不会插入
-自身的任何选择标识。元数据回调重入后产生的变更会保留，即使回调随后发生 panic
+注册表的克隆共享注册内容与默认选择，同步和异步注册表彼此独立。注册尝试先检查封存状态，
+只有通过预检的尝试才会调用元数据回调，且最多调用一次。回调在写锁外执行，随后在写锁内
+再次检查封存状态和冲突。失败的注册尝试不会插入自身的任何选择标识。元数据回调重入后产生
+的变更会保留，即使回调随后发生 panic
 也不会回滚。工厂、格式化回调和被拒绝服务提供者的析构都在注册表锁外执行。
 
 ID 和描述符快照按成功注册的顺序返回，自动候选则按独立的优先级顺序排列。
@@ -657,8 +664,8 @@ SPI 不保证每次输出都对应新分配的底层资源。服务创建成功�
 [设计说明](design.zh_CN.md) 解释锁、快照和性能决策；
 [生态对比](ecosystem-comparison.zh_CN.md) 说明本 crate 与相关方案的职责和取舍。
 
-在本仓库运行 `python3 scripts/check-documentation.py`，会按语言分别编译和运行
-全部带标记的 Rust 代码块。随后执行 `./.infra/bin/align-ci.sh`；验证本地未提交变更时运行
-`SPI_PACKAGE_ALLOW_DIRTY=1 ./.infra/bin/ci-check.sh`，干净的 CI checkout 直接运行
-`./.infra/bin/ci-check.sh`，不设置该变量。
+标准 CI 会运行项目合同检查。本地运行 `./.infra/bin/project-ci-check.sh` 也会执行相同检查；
+验证未提交改动时可设置 `SPI_PACKAGE_ALLOW_DIRTY=1`，它只会把 `--allow-dirty` 传给发布包检查。
+未设置、空值或 `0` 时仍严格检查；其他值会在检查前报错。格式化先运行
+`./.infra/bin/align-ci.sh`。
 [README](../README.zh_CN.md)
