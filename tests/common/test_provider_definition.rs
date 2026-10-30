@@ -55,6 +55,7 @@ where
 }
 
 /// Wraps a provider fixture with its registration descriptor.
+#[must_use]
 pub(crate) fn define_provider<P>(descriptor: ProviderDescriptor, provider: P) -> TestProviderDefinition<P> {
     TestProviderDefinition { descriptor, provider }
 }

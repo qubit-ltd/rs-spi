@@ -36,7 +36,7 @@ fn test_registry_mutation_error_exposes_its_variant_and_conflict_details() {
         ))
         .expect_err("duplicate alias should be rejected");
 
-    assert!(matches!(&error, RegistryMutationError::DuplicateSelector { .. },));
+    assert!(matches!(&error, RegistryMutationError::DuplicateSelector { .. }));
     assert_eq!(Some("en"), error.selector());
     assert_eq!(Some("english"), error.existing_provider());
     assert_eq!(Some("spanish"), error.provider());

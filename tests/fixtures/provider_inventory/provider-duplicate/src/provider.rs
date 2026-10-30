@@ -7,37 +7,13 @@
 // =============================================================================
 //! Duplicate provider implementation and inventory submission.
 
-use std::convert::Infallible;
-
 use service_contract::FixtureSpec;
 use service_contract::sync_providers::Entry;
-use spi::ProviderDescriptor;
-use spi::ProviderMetadata;
-use spi::ServiceProvider;
-use spi::error::ProviderFailure;
-use spi::provider_descriptor;
 use spi::submit_sync_provider;
 
-/// Provider that conflicts with alpha during registry construction.
-///
-/// This fixture registers the same provider key as the alpha fixture so the
-/// inventory tests can verify duplicate-key rejection.
-struct DuplicateProvider;
+mod internal;
 
-impl ProviderMetadata for DuplicateProvider {
-    /// Returns the duplicate alpha registration descriptor.
-    fn descriptor(&self) -> ProviderDescriptor {
-        provider_descriptor!("alpha")
-    }
-}
-
-impl ServiceProvider<FixtureSpec> for DuplicateProvider {
-    /// Creates an unreachable fixture output because registration must fail
-    /// first.
-    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<Infallible>> {
-        Ok("duplicate".to_owned())
-    }
-}
+use internal::DuplicateProvider;
 
 submit_sync_provider! {
     inventory_entry = Entry;

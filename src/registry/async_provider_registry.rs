@@ -146,6 +146,7 @@ where
     /// Propagates a panic raised while obtaining the provider descriptor. The
     /// attempted registration is not applied. Changes made by reentrant
     /// metadata callbacks are not rolled back.
+    #[inline]
     pub fn register_shared(&self, provider: Arc<dyn AsyncProviderDefinition<S>>) -> Result<(), RegistryMutationError> {
         self.providers.register_shared(provider)
     }
@@ -175,6 +176,7 @@ where
     ///
     /// Returns [`RegistryMutationError::Sealed`] when the registry rejects
     /// further configuration changes.
+    #[inline]
     pub fn set_default_selection(&self, selection: ProviderSelection) -> Result<(), RegistryMutationError> {
         self.providers.set_default_selection(selection)
     }
@@ -214,6 +216,7 @@ where
     ///
     /// Returns [`ProviderResolutionError`] when the selection cannot be
     /// resolved to a nonempty candidate snapshot.
+    #[inline]
     pub fn resolve_selected(
         &self,
         selection: &ProviderSelection,
@@ -239,6 +242,7 @@ where
     /// # Errors
     ///
     /// Returns the same errors as [`Self::resolve_selected`].
+    #[inline]
     #[must_use = "the captured selection and resolver must be inspected"]
     pub fn resolve_default_snapshot(
         &self,
@@ -264,6 +268,7 @@ where
     ///
     /// Returns [`ProviderResolutionError`] if the captured default selects no
     /// candidates or requires an unknown selector.
+    #[inline]
     pub fn resolve(&self) -> Result<AsyncResolvingServiceProvider<S>, ProviderResolutionError> {
         let (_, result) = self.resolve_default_snapshot();
         result

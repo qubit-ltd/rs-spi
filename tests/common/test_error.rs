@@ -30,6 +30,7 @@ impl TestError {
     ///
     /// The human-readable reason supplied by the fixture.
     #[must_use]
+    #[inline]
     pub(crate) fn reason(&self) -> &str {
         &self.reason
     }

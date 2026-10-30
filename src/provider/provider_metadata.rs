@@ -34,6 +34,5 @@ pub trait ProviderMetadata: Send + Sync + 'static {
     ///
     /// A descriptor snapshot containing the canonical ID, aliases, and
     /// automatic-selection priority.
-    #[must_use]
     fn descriptor(&self) -> ProviderDescriptor;
 }

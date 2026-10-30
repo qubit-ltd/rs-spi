@@ -36,6 +36,10 @@ impl ProviderMetadata for BetaProvider {
 impl ServiceProvider<FixtureSpec> for BetaProvider {
     /// Creates the beta fixture service output.
     ///
+    /// # Parameters
+    ///
+    /// * `config` - Fixture configuration; beta's fixed output does not depend on it.
+    ///
     /// # Returns
     ///
     /// The string `beta` on success.

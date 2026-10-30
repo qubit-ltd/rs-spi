@@ -31,6 +31,7 @@ use crate::error::ProviderSelectorError;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[must_use]
 pub struct ProviderDescriptor {
     /// Canonical identifier unique within one Registry and service family.
     id: ProviderId,
@@ -51,7 +52,6 @@ impl ProviderDescriptor {
     ///
     /// A descriptor with no aliases and priority zero.
     #[inline]
-    #[must_use]
     pub fn new(id: ProviderId) -> Self {
         Self {
             id,
@@ -79,7 +79,6 @@ impl ProviderDescriptor {
     /// duplicate selector. The public macro validates these conditions at
     /// compile time.
     #[doc(hidden)]
-    #[must_use]
     pub fn __from_static_literals(id: &str, aliases: &[&str], priority: i32) -> Self {
         Self::new(ProviderId::new(id).expect("provider_descriptor! validates static literals at compile time"))
             .with_aliases(aliases.iter().copied())
@@ -160,7 +159,6 @@ impl ProviderDescriptor {
     ///
     /// This descriptor with the replacement priority.
     #[inline]
-    #[must_use]
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self

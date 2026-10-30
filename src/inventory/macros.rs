@@ -157,8 +157,7 @@ macro_rules! declare_sync_provider_inventory {
             /// # Panics
             ///
             /// Propagates panics raised by provider factories or descriptor callbacks.
-            pub fn build_registry(
-            ) -> Result<
+            pub fn build_registry() -> Result<
                 $crate::ProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {
@@ -443,8 +442,7 @@ macro_rules! declare_async_provider_inventory {
             /// # Panics
             ///
             /// Propagates panics raised by provider factories or descriptor callbacks.
-            pub fn build_registry(
-            ) -> Result<
+            pub fn build_registry() -> Result<
                 $crate::AsyncProviderRegistry<$spec>,
                 $crate::error::ProviderInventoryBuildError,
             > {

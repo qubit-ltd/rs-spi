@@ -36,6 +36,7 @@ use crate::selection::ProviderSelectionRepr;
 /// # Type Parameters
 ///
 /// * `P` - Possibly unsized provider metadata contract stored by the catalog.
+#[must_use = "the catalog handle must be retained to use the provider catalog"]
 pub(crate) struct ProviderCatalog<P: ?Sized> {
     /// Synchronized provider entries and lookup indexes.
     inner: Arc<RwLock<RegistryInner<P>>>,

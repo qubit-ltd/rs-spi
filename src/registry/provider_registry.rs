@@ -180,14 +180,6 @@ where
         self.providers.set_default_selection(selection)
     }
 
-    /// Seals this registry against further mutation.
-    ///
-    /// Existing registrations remain available for reads and resolution.
-    #[inline]
-    pub fn seal(&self) {
-        self.providers.seal();
-    }
-
     /// Returns whether this registry is sealed.
     ///
     /// # Returns
@@ -197,6 +189,14 @@ where
     #[must_use]
     pub fn is_sealed(&self) -> bool {
         self.providers.is_sealed()
+    }
+
+    /// Seals this registry against further mutation.
+    ///
+    /// Existing registrations remain available for reads and resolution.
+    #[inline]
+    pub fn seal(&self) {
+        self.providers.seal();
     }
 
     /// Resolves an explicit selection into a synchronous candidate snapshot.

@@ -7,13 +7,13 @@
 // =============================================================================
 //! Provider selection targets and fallback policies.
 
-mod fallback_policy;
+mod fallback;
 mod internal;
 mod missing_provider_policy;
 mod provider_selection;
 mod provider_selection_target_ref;
 
-pub use fallback_policy::FallbackPolicy;
+pub use fallback::FallbackPolicy;
 pub(crate) use internal::ProviderSelectionRepr;
 pub use missing_provider_policy::MissingProviderPolicy;
 pub use provider_selection::ProviderSelection;

@@ -8,14 +8,14 @@
 //! Provider registration, resolution, and creation fallback facades.
 
 mod async_provider_registry;
-mod async_resolving_service_provider;
+mod async_resolver;
 mod internal;
 mod provider_creation_termination;
 mod provider_registry;
 mod resolving_service_provider;
 
 pub use async_provider_registry::AsyncProviderRegistry;
-pub use async_resolving_service_provider::AsyncResolvingServiceProvider;
+pub use async_resolver::AsyncResolvingServiceProvider;
 pub use provider_creation_termination::ProviderCreationTermination;
 pub use provider_registry::ProviderRegistry;
 pub use resolving_service_provider::ResolvingServiceProvider;

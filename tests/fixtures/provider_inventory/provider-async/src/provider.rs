@@ -7,60 +7,13 @@
 // =============================================================================
 //! Asynchronous provider implementation and inventory submission.
 
-use std::convert::Infallible;
-
 use service_contract::FixtureSpec;
 use service_contract::async_providers::Entry;
-use spi::AsyncServiceProvider;
-use spi::ProviderDescriptor;
-use spi::ProviderFuture;
-use spi::ProviderMetadata;
-use spi::error::ProviderFailure;
-use spi::provider_descriptor;
 use spi::submit_async_provider;
 
-/// Provider that supplies the fixed output used by the asynchronous inventory
-/// fixture.
-struct AsyncProvider;
+mod async_provider;
 
-impl ProviderMetadata for AsyncProvider {
-    /// Describes the asynchronous fixture provider for inventory registration.
-    ///
-    /// # Returns
-    ///
-    /// A descriptor with the fixture's stable `async` identifier.
-    fn descriptor(&self) -> ProviderDescriptor {
-        provider_descriptor!("async")
-    }
-}
-
-impl AsyncServiceProvider<FixtureSpec> for AsyncProvider {
-    /// Creates the fixed asynchronous fixture output.
-    ///
-    /// # Type Parameters
-    ///
-    /// * `'a` - Lifetime shared by the provider, configuration, and future.
-    ///
-    /// # Parameters
-    ///
-    /// * `_config` - Fixture configuration, which does not affect the fixed
-    ///   output.
-    ///
-    /// # Returns
-    ///
-    /// A future that resolves to the literal `async` output.
-    ///
-    /// # Errors
-    ///
-    /// This fixture cannot produce a provider failure because its error type
-    /// is `Infallible`.
-    fn create_configured<'a>(
-        &'a self,
-        _config: &'a String,
-    ) -> ProviderFuture<'a, Result<String, ProviderFailure<Infallible>>> {
-        Box::pin(async { Ok("async".to_owned()) })
-    }
-}
+use self::async_provider::AsyncProvider;
 
 submit_async_provider! {
     inventory_entry = Entry;

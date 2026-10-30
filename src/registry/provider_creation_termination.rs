@@ -12,15 +12,20 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// use qubit_spi::ProviderCreationTermination;
+/// use qubit_spi::ProviderDescriptor;
+/// use qubit_spi::ProviderId;
+/// use qubit_spi::ProviderMetadata;
+/// use qubit_spi::ServiceProvider;
+/// use qubit_spi::ServiceSpec;
+/// use qubit_spi::SyncServiceSpec;
+/// use qubit_spi::error::ProviderFailure;
 /// struct Spec;
 /// impl ServiceSpec for Spec {
 ///     type Config = String;
 ///     type Error = std::io::Error;
 /// }
 /// impl SyncServiceSpec for Spec { type Output = String; }
-/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
-/// use qubit_spi::error::ProviderFailure;
 /// struct Echo;
 /// impl ProviderMetadata for Echo {
 ///     fn descriptor(&self) -> ProviderDescriptor {
@@ -36,11 +41,12 @@
 /// registry.register(Echo)?;
 /// let error = registry.resolve()?.create_configured(&"offline".to_owned()).expect_err("provider is unavailable");
 /// // A failed single-candidate selection is exhausted even with no fallback.
-/// assert_eq!(qubit_spi::ProviderCreationTermination::Exhausted, error.termination());
+/// assert_eq!(ProviderCreationTermination::Exhausted, error.termination());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum ProviderCreationTermination {
     /// Every candidate admitted by the selection was attempted.
     Exhausted,

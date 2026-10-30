@@ -13,6 +13,7 @@ use crate::ProviderSelectionTargetRef;
 use crate::ProviderSelector;
 use crate::error::ProviderSelectionBuildError;
 use crate::selection::ProviderSelectionRepr;
+use crate::selection::internal::parse_chain_selectors;
 
 /// Validated request for the providers a resolver may try.
 ///
@@ -228,19 +229,10 @@ impl ProviderSelection {
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
     {
-        let mut selectors = Vec::new();
-        for (selector_index, value) in values.into_iter().enumerate() {
-            let input = value.as_ref();
-            let selector = ProviderSelector::parse(input)
-                .map_err(|source| ProviderSelectionBuildError::invalid_selector(Some(selector_index), source))?;
-            selectors.push(selector);
-        }
-        if selectors.is_empty() {
-            return Err(ProviderSelectionBuildError::empty_chain());
-        }
+        let selectors = parse_chain_selectors(values)?;
         Ok(Self {
             target: ProviderSelectionRepr::Chain {
-                selectors: selectors.into_boxed_slice(),
+                selectors,
                 missing_policy,
             },
             fallback_policy: FallbackPolicy::OnAbsence,

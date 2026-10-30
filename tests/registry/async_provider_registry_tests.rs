@@ -7,7 +7,11 @@
 // =============================================================================
 
 use std::fmt::Write;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::sync::Arc;
+use std::sync::Barrier;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -18,6 +22,7 @@ use qubit_spi::AsyncProviderDefinition;
 use qubit_spi::AsyncProviderRegistry;
 use qubit_spi::AsyncServiceProvider;
 use qubit_spi::FallbackPolicy;
+use qubit_spi::ProviderCreationTermination;
 use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderSelection;
@@ -28,6 +33,7 @@ use crate::common::async_configurable_provider::AsyncConfigurableProvider;
 use crate::common::blocking_writer::BlockingWriter;
 use crate::common::registry_contract_provider::RegistryContractProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::subprocess_case;
 use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
@@ -151,7 +157,7 @@ fn test_async_registry_seal_is_shared_by_clones() {
 
 #[test]
 fn test_async_registry_descriptor_seal_rejects_shared_registration_after_callback() {
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -163,7 +169,7 @@ fn test_async_registry_descriptor_seal_rejects_shared_registration_after_callbac
         }),
         on_drop: None,
     };
-    let provider: Arc<dyn qubit_spi::AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
+    let provider: Arc<dyn AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
 
     let error = registry
         .register_shared(provider)
@@ -198,7 +204,7 @@ fn test_async_registry_sealed_shared_registration_skips_descriptor() {
         }),
         on_drop: None,
     };
-    let provider: Arc<dyn qubit_spi::AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
+    let provider: Arc<dyn AsyncProviderDefinition<StringSpec>> = Arc::new(provider);
 
     let error = registry
         .register_shared(provider)
@@ -326,7 +332,7 @@ fn test_async_registry_default_snapshot_keeps_failed_resolution() {
 /// Verifies asynchronous Registry Debug retains one metadata snapshot.
 #[test]
 fn test_async_registry_debug_uses_one_metadata_snapshot() {
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -378,11 +384,6 @@ pub(crate) fn register_provider<P>(
 /// selectors.
 #[test]
 fn test_descriptor_is_sampled_once_and_owned_by_registry() {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     let calls = Arc::new(AtomicUsize::new(0));
     let changed = Arc::new(AtomicBool::new(false));
@@ -427,11 +428,7 @@ fn test_descriptor_is_sampled_once_and_owned_by_registry() {
 /// Metadata and rejected-provider destruction must run outside catalog locks.
 #[test]
 fn test_descriptor_and_rejected_drop_can_reenter_registry() {
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -473,10 +470,6 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
 /// registration.
 #[test]
 fn test_descriptor_panic_does_not_mutate_or_poison_registry() {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     let before_ids = registry.provider_ids();
     let before_descriptors = registry.descriptors();
@@ -501,14 +494,9 @@ fn test_descriptor_panic_does_not_mutate_or_poison_registry() {
 /// changes.
 #[test]
 fn test_default_snapshot_is_consistent_during_concurrent_updates() {
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
-    use std::sync::Barrier;
-
-    use qubit_spi::ProviderCreationTermination;
-
-    use crate::common::test_error::TestProviderFailure;
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     registry
         .register(define_provider(
@@ -575,8 +563,7 @@ fn test_default_snapshot_is_consistent_during_concurrent_updates() {
 /// Registration reentered from metadata wins before the outer conflict check.
 #[test]
 fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
-    use crate::common::registry_contract_provider::RegistryContractProvider;
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
@@ -612,11 +599,7 @@ fn test_reentrant_metadata_registration_is_visible_to_outer_validation() {
 /// registration.
 #[test]
 fn test_descriptor_panic_preserves_reentrant_registration() {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use crate::common::registry_contract_provider::RegistryContractProvider;
-    if !crate::common::subprocess_case::enter() {
+    if !subprocess_case::enter() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();

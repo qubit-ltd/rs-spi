@@ -13,6 +13,7 @@ use std::panic::catch_unwind;
 use std::panic::resume_unwind;
 use std::sync::Barrier;
 use std::thread;
+use std::time::Duration;
 use std::time::Instant;
 
 use criterion::BenchmarkId;
@@ -371,7 +372,7 @@ fn benchmark_concurrent_registration(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("concurrent_registration");
     group.bench_function("32_writes_128_reads", |bencher| {
         bencher.iter_custom(|iterations| {
-            let mut elapsed = std::time::Duration::ZERO;
+            let mut elapsed = Duration::ZERO;
             for _ in 0..iterations {
                 let registry = build_registry(1, 0);
                 let ready = Barrier::new(3);

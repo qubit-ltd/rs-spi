@@ -7,6 +7,8 @@
 // =============================================================================
 //! Private invariant-preserving storage for provider selections.
 
+mod provider_selection;
 mod provider_selection_repr;
 
+pub(super) use provider_selection::parse_chain_selectors;
 pub(crate) use provider_selection_repr::ProviderSelectionRepr;

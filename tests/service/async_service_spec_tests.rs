@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::io::Error;
+
 use qubit_spi::AsyncServiceSpec;
 use qubit_spi::ServiceSpec;
 
@@ -14,7 +16,7 @@ struct AsyncByteCountSpec;
 
 impl ServiceSpec for AsyncByteCountSpec {
     type Config = [u8];
-    type Error = std::io::Error;
+    type Error = Error;
 }
 
 impl AsyncServiceSpec for AsyncByteCountSpec {

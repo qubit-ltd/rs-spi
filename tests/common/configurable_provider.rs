@@ -37,6 +37,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// A successful provider fixture.
+    #[inline]
     pub(crate) fn success(output: impl Into<Box<str>>) -> Self {
         Self {
             output: Some(output.into()),
@@ -52,6 +53,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// A successful echo provider fixture.
+    #[inline]
     pub(crate) fn echo() -> Self {
         Self {
             output: None,
@@ -71,6 +73,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// A failing provider fixture.
+    #[inline]
     pub(crate) fn failure(error: ProviderFailure<TestError>) -> Self {
         Self {
             output: None,
@@ -90,6 +93,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// This provider fixture with call recording enabled.
+    #[inline]
     pub(crate) fn with_calls(mut self, calls: Arc<AtomicUsize>) -> Self {
         self.calls = Some(calls);
         self
@@ -104,6 +108,7 @@ impl ConfigurableProvider {
     /// # Returns
     ///
     /// This provider fixture with configuration recording enabled.
+    #[inline]
     pub(crate) fn with_seen_config(mut self, seen_config: Arc<Mutex<Option<String>>>) -> Self {
         self.seen_config = Some(seen_config);
         self

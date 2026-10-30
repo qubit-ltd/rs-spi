@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Policies controlling fallback after provider creation failures.
+//! Policy controlling fallback after provider creation failures.
 
 use crate::error::ProviderFailureKind;
 

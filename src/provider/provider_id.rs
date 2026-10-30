@@ -90,8 +90,8 @@ impl ProviderId {
     /// # Returns
     ///
     /// The validated canonical token.
-    #[inline]
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         let Self(value) = self;
         value

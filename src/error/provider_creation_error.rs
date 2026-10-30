@@ -22,15 +22,21 @@ use crate::ProviderCreationTermination;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_spi::{ServiceSpec, SyncServiceSpec};
+/// use qubit_spi::ServiceSpec;
+/// use qubit_spi::SyncServiceSpec;
+/// use qubit_spi::ProviderDescriptor;
+/// use qubit_spi::ProviderId;
+/// use qubit_spi::ProviderMetadata;
+/// use qubit_spi::ServiceProvider;
+/// use qubit_spi::error::ProviderFailure;
 /// struct Spec;
 /// impl ServiceSpec for Spec {
 ///     type Config = String;
 ///     type Error = std::io::Error;
 /// }
-/// impl SyncServiceSpec for Spec { type Output = String; }
-/// use qubit_spi::{ProviderDescriptor, ProviderId, ProviderMetadata, ServiceProvider};
-/// use qubit_spi::error::ProviderFailure;
+/// impl SyncServiceSpec for Spec {
+///     type Output = String;
+/// }
 /// struct Echo;
 /// impl ProviderMetadata for Echo {
 ///     fn descriptor(&self) -> ProviderDescriptor {
@@ -38,13 +44,19 @@ use crate::ProviderCreationTermination;
 ///     }
 /// }
 /// impl ServiceProvider<Spec> for Echo {
-///     fn create_configured(&self, config: &String) -> Result<String, ProviderFailure<std::io::Error>> {
+///     fn create_configured(
+///         &self,
+///         config: &String,
+///     ) -> Result<String, ProviderFailure<std::io::Error>> {
 ///         Err(ProviderFailure::unavailable(std::io::Error::other(config.clone())))
 ///     }
 /// }
 /// let registry = qubit_spi::ProviderRegistry::<Spec>::default();
 /// registry.register(Echo)?;
-/// let error = registry.resolve()?.create_configured(&"offline".to_owned()).expect_err("provider is unavailable");
+/// let error = registry
+///     .resolve()?
+///     .create_configured(&"offline".to_owned())
+///     .expect_err("provider is unavailable");
 /// assert!(error.is_absence());
 /// assert_eq!(1, error.attempts().len());
 /// assert_eq!("echo", error.decisive_attempt().provider_id().as_str());
@@ -179,7 +191,6 @@ impl<E> ProviderCreationError<E> {
     ///
     /// The ordered attempts and the reason traversal ended.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (Box<[ProviderAttemptFailure<E>]>, ProviderCreationTermination) {
         (self.attempts, self.termination)
     }

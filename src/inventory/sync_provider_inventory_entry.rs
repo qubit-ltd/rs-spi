@@ -17,6 +17,10 @@ use crate::inventory::ProviderRegistrationSource;
 ///
 /// This type supports macro expansion only; application code should use a
 /// service family's generated inventory module instead.
+///
+/// # Type Parameters
+///
+/// * `S` - Synchronous service family implemented by the discovered provider.
 pub struct SyncProviderInventoryEntry<S>
 where
     S: SyncServiceSpec,
