@@ -13,10 +13,12 @@ use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderRegistry;
 use qubit_spi::ProviderSelection;
+use qubit_spi::error::ProviderFailure;
 use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::string_spec::StringSpec;
+use crate::common::test_error::TestError;
 use crate::common::test_error::TestProviderFailure;
 use crate::common::test_provider_definition::define_provider;
 
@@ -29,7 +31,7 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
             ProviderDescriptor::new(ProviderId::new("remote").expect("test provider ID should be valid")),
             ConfigurableProvider::failure(TestProviderFailure::unavailable_with_source(
                 "runtime is absent",
-                std::io::Error::other("ENOENT"),
+                std::io::Error::new(std::io::ErrorKind::NotFound, "runtime unavailable"),
             )),
         ))
         .expect("test provider should register");
@@ -45,8 +47,20 @@ fn test_provider_attempt_failure_exposes_public_diagnostics() {
     assert_eq!("runtime is absent", attempt.failure().error().reason());
     assert!(attempt.to_string().contains("remote"));
     assert!(attempt.to_string().contains("runtime is absent"));
-    assert!(Error::source(attempt).is_some());
-    assert!(Error::source(attempt).and_then(Error::source).is_some());
+    let classified = Error::source(attempt)
+        .and_then(|cause| cause.downcast_ref::<ProviderFailure<TestError>>())
+        .expect("attempt source must be the classified failure");
+    assert_eq!(ProviderFailureKind::Unavailable, classified.kind());
+    let domain = Error::source(classified)
+        .and_then(|cause| cause.downcast_ref::<TestError>())
+        .expect("classified failure must retain the domain error");
+    assert_eq!("runtime is absent", domain.reason());
+    let io_cause = Error::source(domain)
+        .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+        .expect("domain error must retain its IO cause");
+    assert_eq!(std::io::ErrorKind::NotFound, io_cause.kind());
+    assert_eq!("runtime unavailable", io_cause.to_string());
+    assert!(Error::source(io_cause).is_none());
 }
 
 /// Verifies aggregate and attempt diagnostics transfer their owned parts

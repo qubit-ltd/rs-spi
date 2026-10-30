@@ -15,7 +15,9 @@ use qubit_spi::ProviderDescriptor;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderRegistry;
 use qubit_spi::ProviderSelection;
+use qubit_spi::error::ProviderAttemptFailure;
 use qubit_spi::error::ProviderFailure;
+use qubit_spi::error::ProviderFailureKind;
 
 use crate::common::configurable_provider::ConfigurableProvider;
 use crate::common::failing_writer::FailingWriter;
@@ -32,13 +34,19 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
         &registry,
         "first",
         20,
-        TestProviderFailure::unavailable("first unavailable"),
+        TestProviderFailure::unavailable_with_source(
+            "first unavailable",
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "first cause"),
+        ),
     );
     register_failure(
         &registry,
         "second",
         10,
-        TestProviderFailure::unsupported("second unsupported"),
+        TestProviderFailure::unavailable_with_source(
+            "second unavailable",
+            std::io::Error::new(std::io::ErrorKind::NotFound, "second cause"),
+        ),
     );
     let selection = ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError);
 
@@ -50,26 +58,26 @@ fn test_exhausted_creation_error_exposes_ordered_ambiguous_diagnostics() {
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
     assert!(error.is_absence(), "absence failures should exhaust the fallback chain");
-    assert_eq!(
-        "second",
-        error
-            .attempts()
-            .last()
-            .expect("aggregate should have a terminal attempt")
-            .provider_id()
-            .as_str()
-    );
-    assert!(
-        std::ptr::eq(
-            error.attempts().last().expect("aggregate should have a final attempt"),
-            error.decisive_attempt(),
-        ),
-        "the final attempt should be the decisive failure",
-    );
-    assert!(
-        Error::source(&error).is_some(),
-        "the aggregate should expose its source"
-    );
+    let source = Error::source(&error).expect("aggregate must expose a source");
+    let attempt = source
+        .downcast_ref::<ProviderAttemptFailure<TestError>>()
+        .expect("aggregate source must be a provider attempt");
+    assert!(std::ptr::eq(error.decisive_attempt(), attempt));
+    assert_eq!("second", attempt.provider_id().as_str());
+    let classified = Error::source(attempt)
+        .and_then(|cause| cause.downcast_ref::<ProviderFailure<TestError>>())
+        .expect("attempt source must retain the classified failure");
+    assert_eq!(ProviderFailureKind::Unavailable, classified.kind());
+    let domain = Error::source(classified)
+        .and_then(|cause| cause.downcast_ref::<TestError>())
+        .expect("classified failure must retain the domain error");
+    assert_eq!("second unavailable", domain.reason());
+    let io_cause = Error::source(domain)
+        .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+        .expect("domain error must retain its IO cause");
+    assert_eq!(std::io::ErrorKind::NotFound, io_cause.kind());
+    assert_eq!("second cause", io_cause.to_string());
+    assert!(Error::source(io_cause).is_none());
     let display = error.to_string();
     assert!(
         display.contains("no provider succeeded after 2 attempt(s)"),
@@ -115,10 +123,11 @@ fn test_policy_stopped_creation_error_exposes_decisive_source() {
         "invalid configuration should not be classified as absence"
     );
     assert_eq!("invalid", error.decisive_attempt().provider_id().as_str());
-    assert!(
-        Error::source(&error).is_some(),
-        "the stopped error should expose its source"
-    );
+    let source = Error::source(&error).expect("stopped error should expose its source");
+    let attempt = source
+        .downcast_ref::<ProviderAttemptFailure<TestError>>()
+        .expect("stopped aggregate source should be a provider attempt");
+    assert!(std::ptr::eq(error.decisive_attempt(), attempt));
     let mut display = String::new();
     write!(&mut display, "{error}").expect("display formatting should succeed");
     assert!(
@@ -141,17 +150,11 @@ fn test_singleton_exhaustion_exposes_decisive_source() {
         .expect_err("selected provider should fail");
 
     assert_eq!(ProviderCreationTermination::Exhausted, error.termination(),);
-    assert!(
-        std::ptr::eq(
-            error.attempts().last().expect("aggregate should have a final attempt"),
-            error.decisive_attempt(),
-        ),
-        "the singleton attempt should be the decisive failure",
-    );
-    assert!(
-        Error::source(&error).is_some(),
-        "the exhausted error should expose its source"
-    );
+    let source = Error::source(&error).expect("singleton aggregate should expose its source");
+    let attempt = source
+        .downcast_ref::<ProviderAttemptFailure<TestError>>()
+        .expect("singleton aggregate source should be a provider attempt");
+    assert!(std::ptr::eq(error.decisive_attempt(), attempt));
 }
 
 /// Verifies that aggregate diagnostics propagate formatter failures.

@@ -6,8 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-#![allow(unused_must_use)]
-
 use std::fmt::Write;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -120,7 +118,9 @@ fn test_async_registry_exposes_synchronous_catalog_snapshots() {
         .expect("shared provider should register");
     let clone = registry.clone();
     let selection = ProviderSelection::named("shared").expect("static selection should be valid");
-    clone.set_default_selection(selection.clone());
+    clone
+        .set_default_selection(selection.clone())
+        .expect("an unsealed registry should accept its default selection");
 
     assert!(!registry.is_empty());
     assert_eq!(1, registry.len());
@@ -151,6 +151,9 @@ fn test_async_registry_seal_is_shared_by_clones() {
 
 #[test]
 fn test_async_registry_descriptor_seal_rejects_shared_registration_after_callback() {
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     let callback_registry = registry.clone();
     let provider = RegistryContractProvider {
@@ -256,7 +259,9 @@ fn test_async_registry_resolvers_remain_usable_after_seal() {
 fn test_async_registry_default_snapshot_keeps_successful_resolution() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
     register_provider(&registry, "first", &[], 0, AsyncConfigurableProvider::success("first"));
-    registry.set_default_selection(ProviderSelection::auto());
+    registry
+        .set_default_selection(ProviderSelection::auto())
+        .expect("an unsealed registry should accept its default selection");
 
     let (selection, snapshot) = registry.resolve_default_snapshot();
     let snapshot = snapshot.expect("default snapshot should resolve");
@@ -292,7 +297,9 @@ fn test_async_registry_default_snapshot_keeps_successful_resolution() {
 #[test]
 fn test_async_registry_default_snapshot_keeps_failed_resolution() {
     let registry = AsyncProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
 
     let (selection, result) = registry.resolve_default_snapshot();
     assert_eq!(
@@ -323,7 +330,9 @@ fn test_async_registry_debug_uses_one_metadata_snapshot() {
         return;
     }
     let registry = AsyncProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
     let formatting_registry = registry.clone();
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
@@ -334,7 +343,9 @@ fn test_async_registry_debug_uses_one_metadata_snapshot() {
     });
 
     entered_rx.recv().expect("formatter should reach the descriptors field");
-    registry.set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
     release_tx
         .send(())
         .expect("formatter should remain blocked until released");
@@ -429,7 +440,9 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
         .register(RegistryContractProvider {
             metadata: Box::new(move || {
                 assert!(reentrant.is_empty());
-                reentrant.set_default_selection(ProviderSelection::auto());
+                reentrant
+                    .set_default_selection(ProviderSelection::auto())
+                    .expect("an unsealed registry should accept its default selection");
                 ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))
             }),
             on_drop: None,
@@ -443,7 +456,9 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
     let result = registry.register(RegistryContractProvider {
         metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))),
         on_drop: Some(Box::new(move || {
-            reentrant.set_default_selection(ProviderSelection::auto());
+            reentrant
+                .set_default_selection(ProviderSelection::auto())
+                .expect("an unsealed registry should accept its default selection");
             assert_eq!(1, reentrant.descriptors().len());
             observed_drops.fetch_add(1, Ordering::SeqCst);
         })),
@@ -517,13 +532,17 @@ fn test_default_snapshot_is_consistent_during_concurrent_updates() {
             .expect("valid selection")
             .with_fallback_policy(FallbackPolicy::Never),
     ];
-    registry.set_default_selection(selections[0].clone());
+    registry
+        .set_default_selection(selections[0].clone())
+        .expect("an unsealed registry should accept its default selection");
     let barrier = Barrier::new(2);
     thread::scope(|scope| {
         scope.spawn(|| {
             for iteration in 0..512 {
                 barrier.wait();
-                registry.set_default_selection(selections[iteration % selections.len()].clone());
+                registry
+                    .set_default_selection(selections[iteration % selections.len()].clone())
+                    .expect("an unsealed registry should accept its default selection");
                 barrier.wait();
             }
         });

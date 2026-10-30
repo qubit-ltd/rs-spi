@@ -6,8 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-#![allow(unused_must_use)]
-
 use std::fmt::Write;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
@@ -172,6 +170,9 @@ fn test_registry_seal_is_idempotent_and_shared_by_clones() {
 
 #[test]
 fn test_registry_descriptor_seal_rejects_registration_after_callback() {
+    if !crate::common::subprocess_case::enter() {
+        return;
+    }
     let registry = ProviderRegistry::<StringSpec>::default();
     let callback_registry = registry.clone();
     let provider = RegistryContractProvider {
@@ -281,7 +282,9 @@ fn test_registry_uses_and_updates_default_selection() {
     let selection = ProviderSelection::named("english")
         .expect("test selector should be valid")
         .with_fallback_policy(FallbackPolicy::OnAnyError);
-    registry.set_default_selection(selection.clone());
+    registry
+        .set_default_selection(selection.clone())
+        .expect("an unsealed registry should accept its default selection");
 
     assert_eq!(selection, registry.default_selection());
 }
@@ -296,7 +299,9 @@ fn test_registry_resolves_configured_default_and_formats_snapshot() {
             ConfigurableProvider::success("hello"),
         ))
         .expect("test provider should register");
-    registry.set_default_selection(ProviderSelection::named("english").expect("test selector should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("english").expect("test selector should be valid"))
+        .expect("an unsealed registry should accept its default selection");
 
     let output = registry
         .resolve()
@@ -322,7 +327,9 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
             ConfigurableProvider::success("first"),
         ))
         .expect("first provider should register");
-    registry.set_default_selection(ProviderSelection::auto());
+    registry
+        .set_default_selection(ProviderSelection::auto())
+        .expect("an unsealed registry should accept its default selection");
 
     let (selection, snapshot) = registry.resolve_default_snapshot();
     let snapshot = snapshot.expect("default snapshot should resolve");
@@ -355,7 +362,9 @@ fn test_registry_default_snapshot_keeps_successful_resolution() {
 #[test]
 fn test_registry_default_snapshot_keeps_failed_resolution() {
     let registry = ProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("missing").expect("test selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
 
     let (selection, result) = registry.resolve_default_snapshot();
     assert_eq!(ProviderSelection::named("missing").unwrap(), selection);
@@ -382,7 +391,9 @@ fn test_registry_debug_uses_one_metadata_snapshot() {
         return;
     }
     let registry = ProviderRegistry::<StringSpec>::default();
-    registry.set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("before").expect("static selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
     let formatting_registry = registry.clone();
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
@@ -393,7 +404,9 @@ fn test_registry_debug_uses_one_metadata_snapshot() {
     });
 
     entered_rx.recv().expect("formatter should reach the descriptors field");
-    registry.set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"));
+    registry
+        .set_default_selection(ProviderSelection::named("after").expect("static selection should be valid"))
+        .expect("an unsealed registry should accept its default selection");
     release_tx
         .send(())
         .expect("formatter should remain blocked until released");
@@ -535,7 +548,9 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
         .register(RegistryContractProvider {
             metadata: Box::new(move || {
                 assert!(reentrant.is_empty());
-                reentrant.set_default_selection(ProviderSelection::auto());
+                reentrant
+                    .set_default_selection(ProviderSelection::auto())
+                    .expect("an unsealed registry should accept its default selection");
                 ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))
             }),
             on_drop: None,
@@ -549,7 +564,9 @@ fn test_descriptor_and_rejected_drop_can_reenter_registry() {
     let result = registry.register(RegistryContractProvider {
         metadata: Box::new(|| ProviderDescriptor::new(ProviderId::new("original").expect("valid ID"))),
         on_drop: Some(Box::new(move || {
-            reentrant.set_default_selection(ProviderSelection::auto());
+            reentrant
+                .set_default_selection(ProviderSelection::auto())
+                .expect("an unsealed registry should accept its default selection");
             assert_eq!(1, reentrant.descriptors().len());
             observed_drops.fetch_add(1, Ordering::SeqCst);
         })),
@@ -614,13 +631,17 @@ fn test_default_snapshot_is_consistent_during_concurrent_updates() {
             .expect("valid selection")
             .with_fallback_policy(FallbackPolicy::Never),
     ];
-    registry.set_default_selection(selections[0].clone());
+    registry
+        .set_default_selection(selections[0].clone())
+        .expect("an unsealed registry should accept its default selection");
     let barrier = Barrier::new(2);
     thread::scope(|scope| {
         scope.spawn(|| {
             for iteration in 0..512 {
                 barrier.wait();
-                registry.set_default_selection(selections[iteration % selections.len()].clone());
+                registry
+                    .set_default_selection(selections[iteration % selections.len()].clone())
+                    .expect("an unsealed registry should accept its default selection");
                 barrier.wait();
             }
         });

@@ -31,6 +31,7 @@ use qubit_spi::ProviderFuture;
 use qubit_spi::ProviderId;
 use qubit_spi::ProviderMetadata;
 use qubit_spi::ProviderSelection;
+use qubit_spi::error::ProviderAttemptFailure;
 use qubit_spi::error::ProviderFailure;
 use qubit_spi::error::ProviderFailureKind;
 
@@ -173,6 +174,64 @@ fn test_async_resolver_retains_attempt_order_and_sources() {
             .as_slice(),
     );
     assert!(Error::source(&error).is_some());
+}
+
+/// Verifies asynchronous aggregate errors preserve the decisive source chain.
+#[test]
+fn test_async_creation_error_preserves_decisive_source_chain() {
+    let registry = AsyncProviderRegistry::<StringSpec>::default();
+    for (id, priority, reason, kind, message) in [
+        (
+            "first",
+            20,
+            "first unavailable",
+            std::io::ErrorKind::PermissionDenied,
+            "first cause",
+        ),
+        (
+            "second",
+            10,
+            "second unavailable",
+            std::io::ErrorKind::NotFound,
+            "second cause",
+        ),
+    ] {
+        register_provider(
+            &registry,
+            id,
+            &[],
+            priority,
+            AsyncConfigurableProvider::failure(TestProviderFailure::unavailable_with_source(
+                reason,
+                std::io::Error::new(kind, message),
+            )),
+        );
+    }
+    let resolver = registry
+        .resolve_selected(&ProviderSelection::auto().with_fallback_policy(FallbackPolicy::OnAnyError))
+        .expect("automatic selection should resolve");
+    let error = block_on(resolver.create()).expect_err("every asynchronous provider should fail");
+
+    let source = Error::source(&error).expect("aggregate must expose a source");
+    let attempt = source
+        .downcast_ref::<ProviderAttemptFailure<TestError>>()
+        .expect("aggregate source must be a provider attempt");
+    assert!(std::ptr::eq(error.decisive_attempt(), attempt));
+    assert_eq!("second", attempt.provider_id().as_str());
+    let classified = Error::source(attempt)
+        .and_then(|cause| cause.downcast_ref::<ProviderFailure<TestError>>())
+        .expect("attempt source must retain the classified failure");
+    assert_eq!(ProviderFailureKind::Unavailable, classified.kind());
+    let domain = Error::source(classified)
+        .and_then(|cause| cause.downcast_ref::<TestError>())
+        .expect("classified failure must retain the domain error");
+    assert_eq!("second unavailable", domain.reason());
+    let io_cause = Error::source(domain)
+        .and_then(|cause| cause.downcast_ref::<std::io::Error>())
+        .expect("domain error must retain its IO cause");
+    assert_eq!(std::io::ErrorKind::NotFound, io_cause.kind());
+    assert_eq!("second cause", io_cause.to_string());
+    assert!(Error::source(io_cause).is_none());
 }
 
 /// Verifies that resolved asynchronous candidates form a stable snapshot.
