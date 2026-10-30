@@ -381,22 +381,33 @@ fn benchmark_concurrent_registration(criterion: &mut Criterion) {
                     scope.spawn(|| {
                         ready.wait();
                         start.wait();
-                        for index in 1..=32 {
-                            registry
-                                .register(BenchmarkProvider {
-                                    descriptor: provider_descriptor(index, 0),
-                                })
-                                .expect("bounded unique registration succeeds");
-                        }
+                        let outcome = catch_unwind(AssertUnwindSafe(|| {
+                            for index in 1..=32 {
+                                registry
+                                    .register(BenchmarkProvider {
+                                        descriptor: provider_descriptor(index, 0),
+                                    })
+                                    .expect("bounded unique registration succeeds");
+                            }
+                        }));
                         completed.wait();
+                        if let Err(payload) = outcome {
+                            resume_unwind(payload);
+                        }
                     });
                     scope.spawn(|| {
                         ready.wait();
                         start.wait();
-                        for _ in 0..128 {
-                            let _ = black_box(registry.resolve_default_snapshot());
-                        }
+                        let outcome = catch_unwind(AssertUnwindSafe(|| {
+                            for _ in 0..128 {
+                                let (_, resolver) = registry.resolve_default_snapshot();
+                                black_box(resolver.expect("benchmark registry default should resolve"));
+                            }
+                        }));
                         completed.wait();
+                        if let Err(payload) = outcome {
+                            resume_unwind(payload);
+                        }
                     });
                     ready.wait();
                     let began = Instant::now();

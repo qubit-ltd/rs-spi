@@ -7,18 +7,28 @@
 // =============================================================================
 //! Subprocess support for the cross-crate inventory fixture.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 static TARGET_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+const FIXTURE_BINARIES: [&str; 5] = [
+    "linked_sync",
+    "unlinked_beta",
+    "duplicate_sync",
+    "linked_async",
+    "renamed_spi",
+];
+static FIXTURE_OUTPUTS: OnceLock<BTreeMap<&'static str, Output>> = OnceLock::new();
 
-/// Runs one fixture binary with a target directory isolated from its sources.
+/// Runs one fixture binary from a shared, isolated Cargo build batch.
 ///
 /// # Parameters
 ///
@@ -32,14 +42,29 @@ static TARGET_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 ///
 /// Panics when the fixture location cannot be resolved or Cargo cannot start.
 pub(crate) fn run(binary: &str) -> Output {
+    assert!(FIXTURE_BINARIES.contains(&binary), "unknown fixture binary: {binary}");
+    FIXTURE_OUTPUTS
+        .get_or_init(run_all)
+        .get(binary)
+        .expect("the fixture batch must contain every declared binary")
+        .clone()
+}
+
+/// Runs all fixture binaries sequentially with one reusable temporary target.
+fn run_all() -> BTreeMap<&'static str, Output> {
     let fixture_root = fixture_root();
-    let target = TemporaryTargetDir::new(binary);
-    Command::new("cargo")
-        .args(["run", "--quiet", "--offline", "--bin", binary])
-        .current_dir(&fixture_root)
-        .env("CARGO_TARGET_DIR", target.path())
-        .output()
-        .expect("fixture Cargo process must start")
+    let target = TemporaryTargetDir::new("batch");
+    let mut outputs = BTreeMap::new();
+    for binary in FIXTURE_BINARIES {
+        let output = Command::new("cargo")
+            .args(["run", "--quiet", "--offline", "--locked", "--bin", binary])
+            .current_dir(&fixture_root)
+            .env("CARGO_TARGET_DIR", target.path())
+            .output()
+            .expect("fixture Cargo process must start");
+        outputs.insert(binary, output);
+    }
+    outputs
 }
 
 /// Returns the root directory of the fixture workspace.

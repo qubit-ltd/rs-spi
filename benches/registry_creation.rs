@@ -12,6 +12,9 @@
 use std::future::poll_fn;
 use std::hint::black_box;
 use std::io::Error;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::panic::resume_unwind;
 use std::sync::Barrier;
 use std::task::Poll;
 use std::thread;
@@ -172,24 +175,37 @@ fn benchmark_concurrent_read_write(criterion: &mut Criterion) {
                 scope.spawn(|| {
                     ready.wait();
                     start.wait();
-                    for index in 0..iterations {
-                        let _ = registry.set_default_selection(ProviderSelection::auto().with_fallback_policy(
-                            if index % 2 == 0 {
-                                FallbackPolicy::Never
-                            } else {
-                                FallbackPolicy::OnAnyError
-                            },
-                        ));
-                    }
+                    let outcome = catch_unwind(AssertUnwindSafe(|| {
+                        for index in 0..iterations {
+                            registry
+                                .set_default_selection(ProviderSelection::auto().with_fallback_policy(
+                                    if index % 2 == 0 {
+                                        FallbackPolicy::Never
+                                    } else {
+                                        FallbackPolicy::OnAnyError
+                                    },
+                                ))
+                                .expect("unsealed benchmark registry accepts its selection");
+                        }
+                    }));
                     completed.wait();
+                    if let Err(payload) = outcome {
+                        resume_unwind(payload);
+                    }
                 });
                 scope.spawn(|| {
                     ready.wait();
                     start.wait();
-                    for _ in 0..iterations {
-                        let _ = black_box(registry.resolve_default_snapshot());
-                    }
+                    let outcome = catch_unwind(AssertUnwindSafe(|| {
+                        for _ in 0..iterations {
+                            let (_, resolver) = registry.resolve_default_snapshot();
+                            black_box(resolver.expect("benchmark registry default should resolve"));
+                        }
+                    }));
                     completed.wait();
+                    if let Err(payload) = outcome {
+                        resume_unwind(payload);
+                    }
                 });
                 ready.wait();
                 let began = Instant::now();
