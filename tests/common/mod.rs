@@ -15,6 +15,7 @@ pub(crate) mod external_string_spec;
 pub(crate) mod failing_writer;
 #[cfg(feature = "inventory")]
 pub(crate) mod inventory_fixture;
+pub(crate) mod provider_input_model;
 pub(crate) mod self_described_provider;
 pub(crate) mod string_spec;
 pub(crate) mod test_error;

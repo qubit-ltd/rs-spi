@@ -19,6 +19,9 @@ use qubit_spi::ProviderSelection;
 use qubit_spi::ProviderSelectionTargetRef;
 use qubit_spi::ProviderSelector;
 
+#[path = "../../tests/common/provider_input_model.rs"]
+mod provider_input_model;
+
 /// Canonical provider ID reserved for descriptor fuzz fixtures.
 const FUZZ_PROVIDER_ID: &str = "fuzz-provider";
 /// Maximum number of alias or chain fields derived from one input.
@@ -32,6 +35,17 @@ const MAX_INPUT_BYTES: usize = 4096;
 ///
 /// * `input` - Complete UTF-8 fuzzer input.
 fn assert_identity_invariants(input: &str) {
+    assert_eq!(
+        provider_input_model::canonical_token(input),
+        ProviderId::new(input).is_ok()
+    );
+    assert_eq!(
+        provider_input_model::selector(input),
+        ProviderSelector::parse(input)
+            .ok()
+            .map(|selector| selector.as_str().to_owned())
+    );
+
     if let Ok(id) = ProviderId::new(input) {
         assert_eq!(input, id.as_str());
         let selector = ProviderSelector::parse(id.as_str()).expect("a canonical provider ID must parse as a selector");
@@ -62,7 +76,17 @@ fn assert_identity_invariants(input: &str) {
 /// * `inputs` - Bounded raw alias fields in caller-supplied order.
 fn assert_descriptor_invariants(inputs: &[&str]) {
     let provider_id = ProviderId::new(FUZZ_PROVIDER_ID).expect("the fixed fuzz provider ID must be canonical");
-    let Ok(descriptor) = ProviderDescriptor::new(provider_id).with_aliases(inputs.iter().copied()) else {
+    let result = ProviderDescriptor::new(provider_id).with_aliases(inputs.iter().copied());
+    let expected = provider_input_model::aliases(FUZZ_PROVIDER_ID, inputs);
+    let actual = result.as_ref().ok().map(|descriptor| {
+        descriptor
+            .aliases()
+            .iter()
+            .map(|alias| alias.as_str().to_owned())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(expected, actual);
+    let Ok(descriptor) = result else {
         return;
     };
 
@@ -83,27 +107,31 @@ fn assert_descriptor_invariants(inputs: &[&str]) {
 ///
 /// * `inputs` - Bounded raw selector fields in caller-supplied order.
 fn assert_chain_invariants(inputs: &[&str]) {
-    let selection = ProviderSelection::chain(inputs.iter().copied());
-    let expected = inputs
-        .iter()
-        .map(|input| ProviderSelector::parse(input))
-        .collect::<Result<Vec<_>, _>>();
-    let Ok(expected) = expected else {
-        assert!(selection.is_err());
-        return;
+    let expected = if inputs.is_empty() {
+        None
+    } else {
+        inputs
+            .iter()
+            .map(|input| provider_input_model::selector(input))
+            .collect::<Option<Vec<_>>>()
     };
-    if expected.is_empty() {
-        assert!(selection.is_err());
-        return;
-    }
-
-    let selection = selection.expect("a nonempty list of valid selectors must form a chain");
-    match selection.target() {
-        ProviderSelectionTargetRef::Chain {
-            selectors,
-            missing_policy: MissingProviderPolicy::Reject,
-        } => assert_eq!(expected.as_slice(), selectors),
-        _ => panic!("a strict chain must retain a strict-chain target"),
+    let selection = ProviderSelection::chain(inputs.iter().copied());
+    match (expected, selection) {
+        (Some(expected), Ok(selection)) => match selection.target() {
+            ProviderSelectionTargetRef::Chain {
+                selectors,
+                missing_policy: MissingProviderPolicy::Reject,
+            } => assert_eq!(
+                expected,
+                selectors
+                    .iter()
+                    .map(|selector| selector.as_str().to_owned())
+                    .collect::<Vec<_>>()
+            ),
+            _ => panic!("strict chain must retain its target and policy"),
+        },
+        (None, Err(_)) => {}
+        _ => panic!("chain acceptance disagrees with independent model"),
     }
 }
 

@@ -9,5 +9,6 @@
 
 mod provider_descriptor_tests;
 mod provider_id_tests;
+mod provider_input_model_tests;
 mod provider_metadata_tests;
 mod provider_selector_tests;
