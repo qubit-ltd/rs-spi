@@ -394,7 +394,11 @@ workspace 成员和本地依赖与前例相同。运行 `cargo run -p app`，输
 发现顺序不决定优先级或默认选择；这一机制也不会在运行时加载共享库。
 
 条目按注册来源排序。同一 service-family collection 内的来源位置必须唯一；重复来源会在
-任何工厂执行前失败。如果多个提交来自同一次宏展开，请将它们拆到不同行或具名子模块。
+任何工厂执行前失败。同一次外层宏展开中的多个提交可能获得相同来源位置。仅在宏定义
+内部换行不能消除歧义。请在不同调用行直接提交，或让每个外层宏仅生成一个提交并在不同行
+调用。不同具名模块可通过 `module_path` 区分来源；同一 collection 内的来源仍须唯一。参见
+[同步](../tests/inventory/sync_inventory_tests.rs)与
+[异步](../tests/inventory/async_inventory_tests.rs) inventory 测试中的正反例。
 `registration_error()` 对注册冲突返回 `Some`，对歧义来源返回 `None`，调用方必须处理两类错误。
 
 ## 选择、配置与诊断

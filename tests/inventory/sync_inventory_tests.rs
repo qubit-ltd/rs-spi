@@ -163,6 +163,37 @@ fn test_build_sync_registry_rejects_sources_from_one_outer_macro_expansion() {
     assert_eq!(0, transform_calls.get());
 }
 
+declare_sync_provider_inventory! {
+    pub mod distinct_call_site_providers { spec = StringSpec; }
+}
+
+submit_sync_provider! {
+    inventory_entry = distinct_call_site_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("separate-alpha"), ConfigurableProvider::success("alpha"));
+}
+
+submit_sync_provider! {
+    inventory_entry = distinct_call_site_providers::Entry;
+    spec = StringSpec;
+    provider = define_provider(provider_descriptor!("separate-beta"), ConfigurableProvider::success("beta"));
+}
+
+#[test]
+fn test_build_registry_accepts_distinct_direct_submission_sites() {
+    let registry = distinct_call_site_providers::build_registry().expect("distinct sources and IDs");
+    assert_eq!(2, registry.len());
+    for (id, expected) in [("separate-alpha", "alpha"), ("separate-beta", "beta")] {
+        let selection = ProviderSelection::named(id).expect("valid selector");
+        let output = registry
+            .resolve_selected(&selection)
+            .expect("registered provider")
+            .create()
+            .expect("successful creation");
+        assert_eq!(expected, output);
+    }
+}
+
 mod macro_path_support {
     pub(crate) use crate::common::string_spec::StringSpec as OrdinarySpec;
 }

@@ -193,8 +193,13 @@ intentional. Neither candidate introduced a production dependency or runtime fea
   [inventory integration tests](../tests/inventory/), not by this scenario.
 - Inventory entries are sorted by source location, which must be unique within
   each service-family collection. Duplicate locations fail before any factory
-  runs. Split submissions across source lines or named modules so their source
-  keys differ. `ProviderInventoryBuildError::registration_error()` returns
+  runs. Multiple submissions produced by one outer macro invocation may share
+  its source location. Placing submissions on different lines inside the macro
+  definition does not resolve the ambiguity. Submit directly on distinct
+  invocation lines, or make each outer macro invocation emit one submission and
+  invoke it on separate lines. Distinct named modules can distinguish
+  `module_path`; sources must still be unique within each collection.
+  `ProviderInventoryBuildError::registration_error()` returns
   `Some` for registration conflicts and `None` for ambiguous sources; callers
   must handle both cases. The return type is `Option` so this breaking API
   change can represent both inventory ambiguity and registration conflicts.

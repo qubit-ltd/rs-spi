@@ -408,8 +408,15 @@ mechanism does not load shared libraries at runtime.
 
 Entries are sorted by their registration source. Each source location must be
 unique within a service-family collection; duplicate locations fail before any
-factory runs. If multiple submissions originate from one macro expansion, split
-them across source lines or named modules. `registration_error()` returns
+factory runs. Multiple submissions produced by one outer macro invocation may
+share its source location. Placing submissions on different lines inside the
+macro definition does not resolve the ambiguity. Submit directly on distinct
+invocation lines, or make each outer macro invocation emit one submission and
+invoke it on separate lines. Distinct named modules can distinguish
+`module_path`; sources must still be unique within each collection. See the
+[synchronous](../tests/inventory/sync_inventory_tests.rs) and
+[asynchronous](../tests/inventory/async_inventory_tests.rs) inventory tests for
+positive and negative examples. `registration_error()` returns
 `Some` for a registration conflict and `None` for an ambiguous source, so
 callers must handle both error kinds.
 

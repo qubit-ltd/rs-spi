@@ -218,6 +218,13 @@ macro_rules! declare_sync_provider_inventory {
 /// registry. It must not capture local state because it is compiled into a
 /// zero-argument factory.
 ///
+/// Multiple submissions produced by one outer macro invocation may share its
+/// source location. Placing submissions on different lines inside the macro
+/// definition does not resolve the ambiguity. Submit directly on distinct
+/// invocation lines, or make each outer macro invocation emit one submission
+/// and invoke it on separate lines. Distinct named modules can distinguish
+/// `module_path`; sources must still be unique within each collection.
+///
 /// # Examples
 ///
 /// ```
@@ -498,6 +505,13 @@ macro_rules! declare_async_provider_inventory {
 /// registry. It must not capture local state because it is compiled into a
 /// regular zero-argument factory function. Service creation remains deferred
 /// until application code awaits the returned resolver future.
+///
+/// Multiple submissions produced by one outer macro invocation may share its
+/// source location. Placing submissions on different lines inside the macro
+/// definition does not resolve the ambiguity. Submit directly on distinct
+/// invocation lines, or make each outer macro invocation emit one submission
+/// and invoke it on separate lines. Distinct named modules can distinguish
+/// `module_path`; sources must still be unique within each collection.
 ///
 /// # Examples
 ///

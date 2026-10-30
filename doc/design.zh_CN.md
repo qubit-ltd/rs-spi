@@ -150,7 +150,9 @@ SPI 不缓存输出，也不保证新分配。创建成功后的服务操作错�
   [注册表集成测试](../tests/registry/) 与 [inventory 集成测试](../tests/inventory/)
   验证，不属于该文档场景的执行步骤。
 - inventory 条目按来源位置排序，同一 service-family collection 内来源必须唯一。
-  重复来源会在任何工厂执行前失败。可将提交拆到不同行，或放入具名子模块以区分来源键。
+  重复来源会在任何工厂执行前失败。同一次外层宏展开中的多个提交可能获得相同来源位置。
+  仅在宏定义内部换行不能消除歧义。请在不同调用行直接提交，或让每个外层宏仅生成一个
+  提交并在不同行调用。不同具名模块可通过 `module_path` 区分来源；同一 collection 内的来源仍须唯一。
   `ProviderInventoryBuildError::registration_error()` 对注册冲突返回 `Some`，对歧义来源
   返回 `None`；调用方必须处理两种情况。其返回类型改为 `Option`，这是用于表达两类错误的
   破坏性 API 变更。
