@@ -21,7 +21,7 @@ use super::super::FixtureSpec;
 ///
 /// This fixture registers the same provider key as the alpha fixture so the
 /// inventory tests can verify duplicate-key rejection.
-pub(super) struct DuplicateProvider;
+pub(in crate::provider) struct DuplicateProvider;
 
 impl ProviderMetadata for DuplicateProvider {
     /// Returns the duplicate alpha registration descriptor.
