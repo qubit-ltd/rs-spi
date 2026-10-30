@@ -159,17 +159,35 @@ contention resets a bounded registry each batch and excludes thread startup/join
 Alias fixtures prepare source strings before timing; error construction remains
 part of the corresponding creation workload.
 
-An `Arc<[RegistryEntry<P>]>` candidate representation was evaluated in three runs.
-It greatly reduced 8/64-candidate clone cost, but repeatedly regressed named,
-automatic and successful creation paths beyond the selected 5% adoption threshold.
-The boxed representation was retained. This is a measured tradeoff, not a claim
-that shared slices are universally slower. A future proposal should repeat both
-clone and resolution/creation workloads on its target environment.
+The current candidate storage is a boxed slice, so clone cost grows with the
+number of candidates. Historical performance comparisons are not currently
+available with reproducible candidate revisions, environment details and
+per-run results. The previous claims about three runs, a 5% threshold, and
+specific shared-slice regressions therefore cannot be verified and are not
+retained as quantitative conclusions. Future comparisons should measure
+candidate cloning, named and automatic resolution, and creation paths, while
+recording both revisions, the environment, commands and per-run results.
 
-Lazy alias parsing was adopted after separate tests and three benchmark runs. It
-removes the copied raw-string vector, preserves normalized order and diagnostics,
-and stops consuming after the first error. This iterator-consumption behavior is
-intentional. Neither candidate introduced a production dependency or runtime feature.
+The current lazy alias parser does not collect the raw strings into a vector
+and stops consuming input at the first error; these behaviors are verifiable
+from the source and tests, but do not establish a measured performance gain.
+Current implementation benchmarks can be rerun with:
+
+```bash
+rustc -Vv
+cargo bench --locked --bench registry_resolution -- named_resolution
+cargo bench --locked --bench registry_resolution -- auto_resolution
+cargo bench --locked --bench registry_resolution -- resolver_clone
+cargo bench --locked --bench registry_resolution -- alias_parsing
+cargo bench --locked --bench registry_creation -- creation_success
+```
+
+These commands measure the current implementation and do not reproduce the
+missing historical comparison. A future comparison needs identifiable
+candidate revisions in a consistent environment.
+
+The adapter approach used with `build_registry_with` is demonstrated in the
+[link-time discovery guide](user_guide.md#link-time-discovery-for-the-same-greeter).
 
 ## Validation and Maintenance
 

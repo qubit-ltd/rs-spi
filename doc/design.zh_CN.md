@@ -127,14 +127,27 @@ SPI 不缓存输出，也不保证新分配。创建成功后的服务操作错�
 全部失败、Ready/Pending 异步创建和读写争用。注册争用每批使用新的有界注册表，
 计时排除线程启动和 join。别名源字符串在计时前准备；错误构造仍计入相应创建负载。
 
-曾用三轮基准评估 `Arc<[RegistryEntry<P>]>`。它显著降低了 8/64 个候选的克隆成本，
-但具名、自动解析和成功创建路径反复超过选定的 5% 退化门槛，因此保留装箱切片。
-这是一项基于测量的取舍，不代表共享切片在所有环境都更慢。后续若重新提出方案，
-应在目标环境同时比较克隆与解析、创建负载。
+当前候选项存储使用装箱切片，因此克隆成本随候选数量增长。目前没有包含可复核候选
+版本、运行环境和逐轮结果的历史性能对比。此前关于“三轮实验”、“5% 门槛”以及
+共享切片在特定路径退化的说法因此无法核实，不再作为量化结论保留。未来比较应测量
+候选克隆、具名和自动解析以及创建路径，并记录两个版本、环境、命令和逐轮结果。
 
-别名惰性解析经过独立测试和三轮基准后采用。它去掉复制原始字符串的中间向量，
-保留归一化顺序和诊断，并在第一个错误处停止消费输入；这一迭代行为变化是明确的
-设计选择。两项候选都没有引入生产依赖或运行时 feature。
+当前惰性别名解析不会将原始字符串收集到向量中，并在首个错误处停止消费输入；这些
+行为可以从源码和测试核对，但不能据此证明性能收益。可用以下命令复测当前实现：
+
+```bash
+rustc -Vv
+cargo bench --locked --bench registry_resolution -- named_resolution
+cargo bench --locked --bench registry_resolution -- auto_resolution
+cargo bench --locked --bench registry_resolution -- resolver_clone
+cargo bench --locked --bench registry_resolution -- alias_parsing
+cargo bench --locked --bench registry_creation -- creation_success
+```
+
+这些命令测量当前实现，不能复现缺失的历史对比。未来比较需要在一致环境中取得可识别
+的候选版本。
+
+`build_registry_with` 的适配器用法见[链接期发现指南](user_guide.zh_CN.md#链接期发现简化同一个-greeter-示例)。
 
 ## 验证与维护
 
