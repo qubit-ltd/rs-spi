@@ -283,6 +283,42 @@ qubit_spi::declare_sync_provider_inventory! {
         spec = crate::GreeterSpec;
     }
 }
+
+/// 为显式注册和发现到的提供者安装相同的领域校验。
+pub fn adapt_greeter_provider(
+    provider: Arc<dyn qubit_spi::ProviderDefinition<GreeterSpec>>,
+) -> Arc<dyn qubit_spi::ProviderDefinition<GreeterSpec>> {
+    Arc::new(ValidatingGreeterProvider {
+        descriptor: provider.descriptor(),
+        provider,
+    })
+}
+
+struct ValidatingGreeterProvider {
+    descriptor: qubit_spi::ProviderDescriptor,
+    provider: Arc<dyn qubit_spi::ProviderDefinition<GreeterSpec>>,
+}
+
+impl qubit_spi::ProviderMetadata for ValidatingGreeterProvider {
+    fn descriptor(&self) -> qubit_spi::ProviderDescriptor {
+        self.descriptor.clone()
+    }
+}
+
+impl qubit_spi::ServiceProvider<GreeterSpec> for ValidatingGreeterProvider {
+    fn create_configured(
+        &self,
+        config: &GreeterConfig,
+    ) -> Result<Arc<dyn Greeter>, qubit_spi::error::ProviderFailure<GreeterError>> {
+        if config.prefix.trim().is_empty() {
+            return Err(qubit_spi::error::ProviderFailure::invalid_configuration(
+                GreeterError,
+            ));
+        }
+        self.provider.create_configured(config)
+    }
+}
+
 ```
 
 ### 2. 消费方：保持原样
@@ -371,14 +407,42 @@ use lib_friendly_greeter as _;
 // app/src/main.rs
 mod greeter_providers;
 
+use std::sync::Arc;
+
 use lib_foo::foo;
-use lib_greeter::providers;
-use qubit_spi::ProviderSelection;
+use lib_friendly_greeter::FriendlyGreeterProvider;
+use lib_greeter::{adapt_greeter_provider, providers, GreeterConfig, GreeterSpec};
+use qubit_spi::error::ProviderFailureKind;
+use qubit_spi::{ProviderRegistry, ProviderSelection};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = providers::build_registry()?;
-    registry.set_default_selection(ProviderSelection::named("friendly")?)?;
-    foo(&registry)
+    let explicit = ProviderRegistry::<GreeterSpec>::default();
+    explicit.register_shared(adapt_greeter_provider(
+        Arc::new(FriendlyGreeterProvider),
+    ))?;
+    let discovered = providers::build_registry_with(adapt_greeter_provider)?;
+    let valid = GreeterConfig::default();
+    let invalid = GreeterConfig { prefix: "   ".to_owned() };
+
+    for registry in [&explicit, &discovered] {
+        registry.set_default_selection(ProviderSelection::named("friendly")?)?;
+        let resolver = registry.resolve()?;
+        let output = resolver.create_configured(&valid)?;
+        assert_eq!("Hello, Rust!", output.greet("Rust"));
+        let error = match resolver.create_configured(&invalid) {
+            Ok(_) => return Err(std::io::Error::other(
+                "expected blank prefix to be rejected",
+            ).into()),
+            Err(error) => error,
+        };
+        assert_eq!(1, error.attempts().len());
+        assert_eq!("friendly", error.decisive_attempt().provider_id().as_str());
+        assert_eq!(
+            ProviderFailureKind::InvalidConfiguration,
+            error.decisive_attempt().failure().kind(),
+        );
+    }
+    foo(&discovered)
 }
 ```
 
@@ -386,7 +450,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 workspace 成员和本地依赖与前例相同。运行 `cargo run -p app`，输出为
 `Hello, Rust!`。
 
-`build_registry()` 会将收集点冲突作为错误返回。应用通过 `?` 传递启动错误，
+显式注册和发现注册表都使用 `adapt_greeter_provider`，因此空前缀校验归属于
+服务族 crate，并同时作用于两条路径。合法配置会产生 `Hello, Rust!`；非法配置由
+`friendly` 提供者以 `InvalidConfiguration` 拒绝。原先未使用适配器的示例输出仍相同。
+
+`build_registry_with` 会同步地对每个发现到的提供者应用 transform，然后构建注册表。
+transform 接收并返回 `Arc<dyn ProviderDefinition<GreeterSpec>>`，自身不返回
+`Result`。校验错误会在之后调用 `create_configured` 时以 `ProviderFailure` 返回。
+异步 inventory 的 transform 同样同步执行；只有提供者创建是异步的。
+
+`build_registry_with()` 会将收集点冲突作为错误返回。应用通过 `?` 传递启动错误，
 再把构建好的注册表交给消费方。
 
 `build_registry()` 遇到 ID 或别名冲突时不会返回部分注册表。它返回的是未封存
