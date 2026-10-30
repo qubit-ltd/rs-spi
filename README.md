@@ -199,6 +199,7 @@ one registry from the providers it links.
 
 In `lib-greeter/src/lib.rs`, declare the collection:
 
+<!-- spi-example: readme-inventory; file: lib-greeter/src/lib.rs -->
 ```rust
 qubit_spi::declare_sync_provider_inventory! {
     pub mod providers {
@@ -209,6 +210,7 @@ qubit_spi::declare_sync_provider_inventory! {
 
 In `lib-friendly-greeter/src/lib.rs`, submit its factory:
 
+<!-- spi-example: readme-inventory; file: lib-friendly-greeter/src/lib.rs -->
 ```rust
 qubit_spi::submit_sync_provider! {
     inventory_entry = lib_greeter::providers::Entry;
@@ -219,6 +221,7 @@ qubit_spi::submit_sync_provider! {
 
 List provider crates in `app/src/greeter_providers.rs`:
 
+<!-- spi-example: readme-inventory; file: app/src/greeter_providers.rs -->
 ```rust
 use lib_friendly_greeter as _;
 ```
@@ -232,6 +235,7 @@ alone does not guarantee that an otherwise unused provider crate is linked.
 In `app/src/main.rs`, include that file and build the registry. This replaces
 the explicit `register` call from the first example:
 
+<!-- spi-example: readme-inventory; file: app/src/main.rs -->
 ```rust
 // app/src/main.rs
 mod greeter_providers;

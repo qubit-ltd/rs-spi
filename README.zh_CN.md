@@ -192,6 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 在 `lib-greeter/src/lib.rs` 中声明收集点：
 
+<!-- spi-example: readme-inventory; file: lib-greeter/src/lib.rs -->
 ```rust
 qubit_spi::declare_sync_provider_inventory! {
     pub mod providers {
@@ -202,6 +203,7 @@ qubit_spi::declare_sync_provider_inventory! {
 
 在 `lib-friendly-greeter/src/lib.rs` 中提交工厂：
 
+<!-- spi-example: readme-inventory; file: lib-friendly-greeter/src/lib.rs -->
 ```rust
 qubit_spi::submit_sync_provider! {
     inventory_entry = lib_greeter::providers::Entry;
@@ -212,6 +214,7 @@ qubit_spi::submit_sync_provider! {
 
 在 `app/src/greeter_providers.rs` 中列出要链接的提供者 crate：
 
+<!-- spi-example: readme-inventory; file: app/src/greeter_providers.rs -->
 ```rust
 use lib_friendly_greeter as _;
 ```
@@ -223,6 +226,7 @@ use lib_friendly_greeter as _;
 
 在 `app/src/main.rs` 中引入该文件并构建注册表，替代显式注册示例中的 `register` 调用：
 
+<!-- spi-example: readme-inventory; file: app/src/main.rs -->
 ```rust
 // app/src/main.rs
 mod greeter_providers;
