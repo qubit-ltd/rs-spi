@@ -38,9 +38,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test validation tools
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-      - name: Check bilingual examples
-        run: python3 scripts/check-documentation.py
-      - name: Check release archive
-        run: python3 scripts/check-package.py
+      - name: Run project CI checks
+        run: ./.infra/bin/project-ci-check.sh
