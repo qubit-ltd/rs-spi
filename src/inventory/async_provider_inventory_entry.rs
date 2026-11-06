@@ -17,6 +17,11 @@ use crate::inventory::ProviderRegistrationSource;
 ///
 /// This type supports macro expansion only; application code should use a
 /// service family's generated inventory module instead.
+///
+/// # Type Parameters
+///
+/// * `S` - Asynchronous service family whose provider definition is created by
+///   this entry. Its configuration type must implement `Sync`.
 pub struct AsyncProviderInventoryEntry<S>
 where
     S: AsyncServiceSpec,
