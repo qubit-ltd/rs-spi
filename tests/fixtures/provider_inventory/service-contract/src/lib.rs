@@ -9,11 +9,10 @@
 
 //! Service-family contract used by the cross-crate provider fixture.
 
-use spi::declare_async_provider_inventory;
-use spi::declare_sync_provider_inventory;
-
 /// Service family re-exported for provider crates and consumer binaries.
 pub use service_model::FixtureSpec;
+use spi::declare_async_provider_inventory;
+use spi::declare_sync_provider_inventory;
 
 declare_sync_provider_inventory! {
     pub mod sync_providers {

@@ -33,10 +33,7 @@ impl ProviderMetadata for DuplicateProvider {
 impl ServiceProvider<FixtureSpec> for DuplicateProvider {
     /// Creates an unreachable fixture output because registration must fail
     /// first.
-    fn create_configured(
-        &self,
-        _config: &String,
-    ) -> Result<String, ProviderFailure<Infallible>> {
+    fn create_configured(&self, _config: &String) -> Result<String, ProviderFailure<Infallible>> {
         Ok("duplicate".to_owned())
     }
 }

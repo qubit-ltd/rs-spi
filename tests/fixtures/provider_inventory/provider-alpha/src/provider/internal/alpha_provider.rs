@@ -37,7 +37,8 @@ impl ServiceProvider<FixtureSpec> for AlphaProvider {
     ///
     /// # Parameters
     ///
-    /// * `config` - Fixture configuration; this provider deliberately ignores it.
+    /// * `config` - Fixture configuration; this provider deliberately ignores
+    ///   it.
     ///
     /// # Returns
     ///

@@ -14,9 +14,7 @@ use spi::ProviderSelection;
 fn main() {
     let registry = build_registry().expect("alpha should register");
     let resolver = registry
-        .resolve_selected(
-            &ProviderSelection::named("alpha").expect("alpha selector should be valid"),
-        )
+        .resolve_selected(&ProviderSelection::named("alpha").expect("alpha selector should be valid"))
         .expect("alpha should resolve");
     println!("{}", resolver.create().expect("alpha should create"));
 }

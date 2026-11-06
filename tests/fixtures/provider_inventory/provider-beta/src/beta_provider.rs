@@ -38,7 +38,8 @@ impl ServiceProvider<FixtureSpec> for BetaProvider {
     ///
     /// # Parameters
     ///
-    /// * `config` - Fixture configuration; beta's fixed output does not depend on it.
+    /// * `config` - Fixture configuration; beta's fixed output does not depend
+    ///   on it.
     ///
     /// # Returns
     ///
