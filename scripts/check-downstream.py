@@ -7,6 +7,7 @@ import hashlib
 import glob
 import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -237,22 +238,152 @@ class CommandResult:
     log: str
     log_path: str = ""
     stdout: str = ""
+    process_group: int | None = None
+    cleanup_status: str = "not-started"
+    cleanup_error: str | None = None
+
+
+def _require_posix_process_groups():
+    if os.name != "posix" or not hasattr(os, "killpg") or not hasattr(signal, "SIGKILL"):
+        raise RuntimeError("downstream validation requires POSIX process-group support")
+    if not Path("/proc").is_dir():
+        try:
+            _process_group_states_from_ps()
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            raise RuntimeError(
+                "downstream validation requires /proc or a working POSIX ps process listing"
+            ) from exc
+
+
+def _require_command_cleanup(result, phase):
+    status = getattr(result, "cleanup_status", "complete")
+    # Injected runners used by tests and callers do not own subprocess groups.
+    if status == "not-started" and getattr(result, "process_group", None) is None:
+        status = "complete"
+    if status != "complete":
+        raise ValueError(
+            f"{phase} process cleanup failed for {getattr(result, 'args', '<unknown command>')} "
+            f"(see {getattr(result, 'log_path', '<unknown log>')}): "
+            f"{getattr(result, 'cleanup_error', None)}"
+        )
+
+
+def _process_group_states_from_ps():
+    """Return (process-group ID, state) rows from the POSIX ps utility."""
+    ps = shutil.which("ps")
+    if not ps:
+        raise RuntimeError("cannot verify process-group cleanup: /proc and ps are unavailable")
+    completed = subprocess.run([ps, "-e", "-o", "pgid=,state="], capture_output=True,
+                               text=True, timeout=5, check=True)
+    rows = []
+    for line in completed.stdout.splitlines():
+        fields = line.split(maxsplit=1)
+        if len(fields) != 2:
+            continue
+        try:
+            group = int(fields[0])
+        except ValueError:
+            continue
+        rows.append((group, fields[1].lstrip()))
+    if not rows:
+        raise RuntimeError("ps returned no parseable process-group states")
+    return rows
+
+
+def _group_has_live_members_from_ps(pgid):
+    # Other POSIX systems may also retain zombie-only groups. Use the system
+    # process listing to distinguish those from members that can still run.
+    return any(group == pgid and not state.startswith("Z")
+               for group, state in _process_group_states_from_ps())
+
+
+def _group_exists(pgid):
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        raise
+    # Linux can retain a process group containing only zombies. They cannot
+    # execute, so treat that state as clean after the direct child is reaped.
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        for entry in proc_root.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat = (entry / "stat").read_text()
+                fields = stat[stat.rfind(")") + 2:].split()
+                state, group = fields[0], int(fields[2])
+                if group == pgid and state != "Z":
+                    return True
+            except (OSError, ValueError, IndexError):
+                continue
+        return False
+    return _group_has_live_members_from_ps(pgid)
+
+
+def _cleanup_process_group(proc, pgid):
+    """Stop all remaining members, reap the root, and confirm no live member remains."""
+    try:
+        if _group_exists(pgid):
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline and _group_exists(pgid):
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+            if _group_exists(pgid):
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        proc.wait(timeout=2.0)
+        deadline = time.monotonic() + 2.0
+        while _group_exists(pgid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if _group_exists(pgid):
+            raise RuntimeError(f"process group {pgid} still has running members")
+        return "complete", None
+    except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+        return "failed", str(exc)
 
 
 def _run(argv, cwd, env, timeout, log_path):
+    _require_posix_process_groups()
     start = time.monotonic()
-    try:
-        proc = subprocess.run(argv, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, timeout=timeout, check=False)
-        stdout, stderr, code, timed_out = proc.stdout, proc.stderr, proc.returncode, False
-    except subprocess.TimeoutExpired as exc:
-        stdout, stderr = exc.stdout or "", exc.stderr or ""
-        if isinstance(stdout, bytes): stdout = stdout.decode("utf-8", "replace")
-        if isinstance(stderr, bytes): stderr = stderr.decode("utf-8", "replace")
-        code, timed_out = None, True
+    stdout = stderr = ""
+    code = None
+    timed_out = False
+    pgid = None
+    cleanup_status, cleanup_error = "not-started", None
+    proc = None
+    execution_error = None
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
+        proc = subprocess.Popen(argv, cwd=cwd, env=env, stdout=stdout_file, stderr=stderr_file,
+                                start_new_session=True)
+        pgid = proc.pid
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+        except BaseException as exc:
+            execution_error = exc
+        finally:
+            cleanup_status, cleanup_error = _cleanup_process_group(proc, pgid)
+        stdout_file.seek(0); stderr_file.seek(0)
+        stdout = stdout_file.read().decode("utf-8", "replace")
+        stderr = stderr_file.read().decode("utf-8", "replace")
     output = stdout + ("\n" if stdout and stderr else "") + stderr
-    Path(log_path).write_text(output, encoding="utf-8", errors="replace")
-    return CommandResult(list(argv), str(cwd), code, timed_out, time.monotonic() - start, output, str(log_path), stdout)
+    log_path.write_text(output, encoding="utf-8", errors="replace")
+    if execution_error is not None:
+        raise execution_error
+    return CommandResult(list(argv), str(cwd), None if timed_out else code, timed_out,
+                         time.monotonic() - start, output, str(log_path), stdout,
+                         pgid, cleanup_status, cleanup_error)
 
 
 def _head_dirty(root: Path):
@@ -289,6 +420,7 @@ def _tree_hash(root: Path):
 
 
 def run(workspace_root: Path, spi_root: Path, report: Path, command_runner=None) -> int:
+    _require_posix_process_groups()
     workspace_root, spi_root = workspace_root.resolve(strict=True), spi_root.resolve(strict=False)
     consumers = [workspace_root / name for name in CONSUMERS]
     report = report.resolve(strict=False)
@@ -399,6 +531,8 @@ sys.exit(proc.returncode)
             wrapper.chmod(0o755)
             original_path = env.get("PATH", os.defpath)
             env["PATH"] = str(wrapper_dir) + os.pathsep + original_path
+            env["CARGO"] = str(wrapper.resolve())
+            env["RS_SPI_CARGO_WRAPPER"] = str(wrapper.resolve())
             env["RS_SPI_REAL_CARGO"] = real_cargo
             env["RS_SPI_PATCH_CONFIG"] = f"patch.crates-io.qubit-spi.path={json.dumps(str(spi_copy))}"
             env["RS_SPI_EXPECTED_MANIFEST"] = str((spi_copy / "Cargo.toml").resolve())
@@ -420,8 +554,12 @@ sys.exit(proc.returncode)
                     common = ["cargo"]
                     meta_argv = common + override + ["metadata", "--format-version", "1", "--manifest-path", str(root / "Cargo.toml"), *feature_args]
                     mr = runner(meta_argv, root, env, 180, log / "metadata.log")
-                    item = {"argv": mr.args, "cwd": mr.cwd, "returncode": mr.returncode, "timed_out": mr.timed_out, "elapsed_seconds": mr.elapsed, "log_path": mr.log_path}
+                    item = {"argv": mr.args, "cwd": mr.cwd, "returncode": mr.returncode, "timed_out": mr.timed_out, "elapsed_seconds": mr.elapsed, "log_path": mr.log_path,
+                            "process_group": getattr(mr, "process_group", None),
+                            "cleanup_status": getattr(mr, "cleanup_status", "complete"),
+                            "cleanup_error": getattr(mr, "cleanup_error", None)}
                     result["commands"].append(item); mode_report["metadata"] = item
+                    _require_command_cleanup(mr, f"metadata {name}/{mode}")
                     if mr.returncode != 0 or mr.timed_out:
                         raise ValueError(f"metadata failed for {name}/{mode} (see {mr.log_path})")
                     try:
@@ -435,8 +573,12 @@ sys.exit(proc.returncode)
                     lock_hash = hashlib.sha256(lockfile.read_bytes()).hexdigest() if lockfile.exists() else None
                     test_argv = common + override + ["test", "--locked", "--manifest-path", str(root / "Cargo.toml"), *feature_args]
                     tr = runner(test_argv, root, env, 1800, log / "test.log")
-                    item = {"argv": tr.args, "cwd": tr.cwd, "returncode": tr.returncode, "timed_out": tr.timed_out, "elapsed_seconds": tr.elapsed, "log_path": tr.log_path}
+                    item = {"argv": tr.args, "cwd": tr.cwd, "returncode": tr.returncode, "timed_out": tr.timed_out, "elapsed_seconds": tr.elapsed, "log_path": tr.log_path,
+                            "process_group": getattr(tr, "process_group", None),
+                            "cleanup_status": getattr(tr, "cleanup_status", "complete"),
+                            "cleanup_error": getattr(tr, "cleanup_error", None)}
                     result["commands"].append(item); mode_report["test"] = item
+                    _require_command_cleanup(tr, f"test {name}/{mode}")
                     if actual_fixture_record.exists():
                         for line in actual_fixture_record.read_text(encoding="utf-8").splitlines():
                             record = json.loads(line)

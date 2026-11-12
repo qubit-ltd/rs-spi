@@ -14,6 +14,10 @@ that ordinary checks do not require sibling repositories.
   bundled ONNX Runtime by default; its build may download the runtime binaries.
 - Enough temporary disk space for source snapshots, Cargo logs and build
   artifacts. Build artifacts share a temporary target directory.
+- The validation tool requires POSIX process-group support and `/proc` or `ps`
+  to verify that command groups have stopped. This is a limit of the external
+  validation tool; it does not change the platforms supported by the
+  `qubit-spi` crate.
 
 ## Run
 
@@ -31,6 +35,16 @@ the tool runs dependency metadata resolution and tests with default features and
 with all features. It injects a Cargo configuration override so `qubit-spi`
 resolves to the supplied `--spi-root`, then checks the resolved package graph's
 manifest path and source. Tests run with `--locked` against the snapshot lockfile.
+
+Cargo launched through `PATH`, the compile-time `CARGO` executable path, or the
+runtime `CARGO` environment variable is routed through the validation wrapper.
+The wrapper records nested fixture Cargo commands and checks their resolved SPI
+source. This does not intercept programs that use another hard-coded Cargo
+path. Each top-level metadata command has a 180-second budget and each test
+command has a 1,800-second budget. On completion, failure or timeout, the tool
+terminates and reaps remaining members of that command's process group; cleanup
+may take up to a further two seconds before escalation. A cleanup failure makes
+validation fail and preserves the diagnostic report and snapshot.
 
 The tool copies each consumer, `rs-spi`, and the recursively discovered local
 path dependency closure to a temporary directory outside every input repository.

@@ -4,6 +4,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -184,16 +185,34 @@ edition = "2021"
                     f'[package]\nname="{name}-fixture"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n[features]\nfixture-feature=[]\n')
                 (fixture / "src").mkdir()
                 (fixture / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
+                (fixture / "build.rs").write_text('''
+fn main() {
+    println!("cargo:rustc-env=CARGO={}", std::env::var("RS_SPI_CARGO_WRAPPER").unwrap());
+}
+''')
                 (fixture / "tests").mkdir()
+                grandchild = fixture / "tests/grandchild"
+                (grandchild / "src").mkdir(parents=True)
+                (grandchild / "Cargo.toml").write_text(
+                    f'[package]\nname="{name}-grandchild"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n')
+                (grandchild / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
                 (fixture / "tests/nested.rs").write_text('''
 use std::{process::Command, env};
 #[test]
 fn spawned_cargo_resolves_snapshot_spi() {
     let manifest = format!("{}/Cargo.toml", env!("CARGO_MANIFEST_DIR"));
-    let output = Command::new("cargo").args(["metadata", "--format-version", "1", "--manifest-path", &manifest, "--no-default-features", "--features", "fixture-feature"]).output().unwrap();
+    let grandchild = format!("{}/tests/grandchild/Cargo.toml", env!("CARGO_MANIFEST_DIR"));
+    // Cargo resets runtime CARGO to its own executable; bind the fixture's
+    // compile-time wrapper path back into the runtime variable before lookup.
+    env::set_var("CARGO", env!("CARGO"));
+    let runtime_cargo = env::var_os("CARGO").expect("CARGO must be set by the checker");
+    assert!(runtime_cargo.to_string_lossy().contains("cargo-wrapper"), "unexpected CARGO: {:?}", runtime_cargo);
+    for cargo in ["cargo".to_string(), env!("CARGO").to_string(), runtime_cargo.to_string_lossy().into_owned()] {
+        let output = Command::new(cargo).args(["metadata", "--format-version", "1", "--manifest-path", &manifest, "--no-default-features", "--features", "fixture-feature"]).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+    let output = Command::new("cargo").args(["metadata", "--format-version", "1", "--manifest-path", &grandchild]).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    let expected = env::var("RS_SPI_EXPECTED_MANIFEST").unwrap();
-    assert!(String::from_utf8_lossy(&output.stdout).contains(&expected));
 }
 ''')
                 (root / "tests/launch_fixture.rs").write_text(f'''
@@ -206,14 +225,29 @@ fn launch_nested_fixture() {{
 }}
 ''')
             report = base / "report.json"
-            result = check.run(workspace, spi, report)
+            with mock.patch.dict("os.environ", {"CARGO": "/caller/preexisting/cargo"}):
+                result = check.run(workspace, spi, report)
             document = json.loads(report.read_text())
             self.assertEqual(result, 0, document["errors"])
             for consumer in document["consumers"]:
                 for mode in consumer["modes"]:
-                    self.assertTrue(mode["executed_fixtures"], consumer["name"] + "/" + mode["mode"])
-                    self.assertTrue(all(item["source"] is None for item in mode["executed_fixtures"]))
-            nested_commands = [c for c in document["commands"] if "/tests/fixture" in c["cwd"]]
+                    fixtures = mode["executed_fixtures"]
+                    self.assertTrue(all(item["source"] is None for item in fixtures))
+                    self.assertTrue(all(item["spi_manifest_path"] == str(
+                        (Path(document["temporary_directory"]) / "snapshot/rs-spi/Cargo.toml").resolve())
+                        for item in fixtures))
+                    manifests = [item["manifest_path"] for item in fixtures]
+                    self.assertEqual(len(set(manifests)), 2, (consumer["name"], mode["mode"], manifests))
+                    self.assertTrue(any("/tests/grandchild/" in path for path in manifests))
+                    fixture_manifest = str(Path(document["temporary_directory"]) / "snapshot" /
+                                           consumer["name"] / "tests/fixture/Cargo.toml")
+                    grandchild_manifest = str(Path(document["temporary_directory"]) / "snapshot" /
+                                              consumer["name"] / "tests/fixture/tests/grandchild/Cargo.toml")
+                    self.assertEqual(manifests.count(fixture_manifest), 4, manifests)
+                    self.assertEqual(manifests.count(grandchild_manifest), 1, manifests)
+            nested_commands = [c for c in document["commands"] if any(
+                "/tests/fixture/" in arg or "/tests/grandchild/" in arg
+                for arg in c["argv"])]
             self.assertTrue(nested_commands)
             for command in nested_commands:
                 self.assertIn("argv", command)
@@ -223,8 +257,15 @@ fn launch_nested_fixture() {{
                 self.assertTrue(Path(command["log_path"]).is_absolute())
             metadata_preflights = [c for c in nested_commands if c["argv"] and "metadata" in c["argv"]]
             self.assertTrue(metadata_preflights)
-            self.assertTrue(all("--no-default-features" in c["argv"] for c in metadata_preflights))
-            self.assertTrue(all("--features" in c["argv"] and "fixture-feature" in c["argv"] for c in metadata_preflights))
+            explicit_fixture_preflights = [c for c in metadata_preflights if any(
+                "/tests/fixture/Cargo.toml" in arg for arg in c["argv"])
+                and "--no-default-features" in c["argv"]]
+            # Across four consumers and two modes, each of three explicit
+            # launches has one preflight and one Cargo record. Recursive wrapper
+            # retries would increase this count.
+            self.assertEqual(len(explicit_fixture_preflights), 48)
+            self.assertTrue(all("--features" in c["argv"] and "fixture-feature" in c["argv"]
+                                for c in explicit_fixture_preflights))
 
     def test_cli_contract_and_report_redacts_environment(self):
         with tempfile.TemporaryDirectory() as temp:

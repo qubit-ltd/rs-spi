@@ -13,6 +13,8 @@
   Runtime；其构建可能会下载运行库二进制文件。
 - 临时源码快照、Cargo 日志和构建产物所需的磁盘空间。构建产物共用一个临时
   target 目录。
+- 验证工具要求 POSIX 进程组能力，并要求 `/proc` 或 `ps` 来确认命令组已停止。
+  这是外部验证工具的限制，不改变 `qubit-spi` crate 支持的平台。
 
 ## 运行
 
@@ -29,6 +31,13 @@ python3 scripts/check-downstream.py \
 和全部 feature 执行依赖元数据解析及测试。它注入 Cargo 配置覆盖，使
 `qubit-spi` 指向 `--spi-root`，再核对解析图中的包 manifest 路径和来源。测试以
 快照中的 lockfile 和 `--locked` 运行。
+
+通过 `PATH`、编译期 `CARGO` 可执行文件路径或运行期 `CARGO` 环境变量启动的
+Cargo 都会经过验证 wrapper。wrapper 会记录嵌套 fixture Cargo 命令并检查其解析到的
+SPI 来源；它不会拦截使用其他硬编码 Cargo 路径的程序。每条顶层 metadata 命令的
+预算为 180 秒，每条 test 命令为 1,800 秒。命令结束、失败或超时后，工具会终止并
+回收该命令进程组中的剩余进程；升级强制终止前最多再等待两秒。进程组清理失败会使
+验证失败，并保留诊断报告和快照。
 
 工具会将消费者、`rs-spi` 以及递归发现的本地路径依赖闭包复制到所有输入仓库
 之外的临时目录。快照包含已有的已修改和未跟踪文件，并记录输入 revision、dirty
