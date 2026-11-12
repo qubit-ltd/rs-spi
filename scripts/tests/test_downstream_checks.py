@@ -135,6 +135,7 @@ edition = "2021"
                 root.mkdir()
                 (root / "Cargo.toml").write_text(
                     f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\n')
+                (root / "rust-toolchain.toml").write_text('[toolchain]\nchannel="1.94.0"\n')
             mime = workspace / "rs-mime"
             subprocess.run(["git", "init", "-q", str(mime)], check=True)
             subprocess.run(["git", "-C", str(mime), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
@@ -170,6 +171,7 @@ edition = "2021"
             spi = workspace / "rs-spi"
             spi.mkdir(parents=True)
             (spi / "Cargo.toml").write_text('[package]\nname="qubit-spi"\nversion="0.1.0"\nedition="2021"\n')
+            (spi / "rust-toolchain.toml").write_text('[toolchain]\nchannel="1.94.0"\n')
             (spi / "src").mkdir()
             (spi / "src/lib.rs").write_text("pub fn marker() {}\n")
             for name in check.CONSUMERS:
@@ -179,35 +181,39 @@ edition = "2021"
                 fixture.mkdir(parents=True)
                 (root / "Cargo.toml").write_text(
                     f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n')
+                (root / "rust-toolchain.toml").write_text('[toolchain]\nchannel="1.94.0"\n')
                 (root / "src").mkdir()
                 (root / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
                 (fixture / "Cargo.toml").write_text(
                     f'[package]\nname="{name}-fixture"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n[features]\nfixture-feature=[]\n')
                 (fixture / "src").mkdir()
                 (fixture / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
-                (fixture / "build.rs").write_text('''
-fn main() {
-    println!("cargo:rustc-env=CARGO={}", std::env::var("RS_SPI_CARGO_WRAPPER").unwrap());
-}
-''')
                 (fixture / "tests").mkdir()
+                (fixture / "tests/path_entry").mkdir()
+                (fixture / "tests/compile_entry").mkdir()
+                (fixture / "tests/runtime_entry").mkdir()
+                for entry in ("path_entry", "compile_entry", "runtime_entry"):
+                    entry_root = fixture / "tests" / entry
+                    (entry_root / "Cargo.toml").write_text(
+                        f'[package]\nname="{name}-{entry}"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n[features]\nfixture-feature=[]\n')
+                    (entry_root / "src").mkdir()
+                    (entry_root / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
                 grandchild = fixture / "tests/grandchild"
                 (grandchild / "src").mkdir(parents=True)
                 (grandchild / "Cargo.toml").write_text(
                     f'[package]\nname="{name}-grandchild"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nqubit-spi="0.1.0"\n')
                 (grandchild / "src/lib.rs").write_text("pub fn use_spi() { qubit_spi::marker(); }\n")
                 (fixture / "tests/nested.rs").write_text('''
-use std::{process::Command, env};
+use std::{process::Command, env, ffi::OsString};
 #[test]
 fn spawned_cargo_resolves_snapshot_spi() {
-    let manifest = format!("{}/Cargo.toml", env!("CARGO_MANIFEST_DIR"));
+    let root = env!("CARGO_MANIFEST_DIR");
+    let manifests = ["path_entry", "compile_entry", "runtime_entry"]
+        .map(|name| format!("{root}/tests/{name}/Cargo.toml"));
     let grandchild = format!("{}/tests/grandchild/Cargo.toml", env!("CARGO_MANIFEST_DIR"));
-    // Cargo resets runtime CARGO to its own executable; bind the fixture's
-    // compile-time wrapper path back into the runtime variable before lookup.
-    env::set_var("CARGO", env!("CARGO"));
-    let runtime_cargo = env::var_os("CARGO").expect("CARGO must be set by the checker");
-    assert!(runtime_cargo.to_string_lossy().contains("cargo-wrapper"), "unexpected CARGO: {:?}", runtime_cargo);
-    for cargo in ["cargo".to_string(), env!("CARGO").to_string(), runtime_cargo.to_string_lossy().into_owned()] {
+    let runtime_cargo = env::var_os("CARGO").expect("Cargo provides CARGO");
+    let calls = [OsString::from("cargo"), OsString::from(env!("CARGO")), runtime_cargo];
+    for (cargo, manifest) in calls.into_iter().zip(manifests) {
         let output = Command::new(cargo).args(["metadata", "--format-version", "1", "--manifest-path", &manifest, "--no-default-features", "--features", "fixture-feature"]).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     }
@@ -237,13 +243,18 @@ fn launch_nested_fixture() {{
                         (Path(document["temporary_directory"]) / "snapshot/rs-spi/Cargo.toml").resolve())
                         for item in fixtures))
                     manifests = [item["manifest_path"] for item in fixtures]
-                    self.assertEqual(len(set(manifests)), 2, (consumer["name"], mode["mode"], manifests))
+                    self.assertEqual(len(set(manifests)), 5, (consumer["name"], mode["mode"], manifests))
                     self.assertTrue(any("/tests/grandchild/" in path for path in manifests))
                     fixture_manifest = str(Path(document["temporary_directory"]) / "snapshot" /
                                            consumer["name"] / "tests/fixture/Cargo.toml")
                     grandchild_manifest = str(Path(document["temporary_directory"]) / "snapshot" /
                                               consumer["name"] / "tests/fixture/tests/grandchild/Cargo.toml")
-                    self.assertEqual(manifests.count(fixture_manifest), 4, manifests)
+                    self.assertEqual(manifests.count(fixture_manifest), 1, manifests)
+                    entry_counts = {entry: manifests.count(str(Path(document["temporary_directory"]) / "snapshot" /
+                                                                consumer["name"] / "tests" / "fixture" / "tests" /
+                                                                entry / "Cargo.toml"))
+                                    for entry in ("path_entry", "compile_entry", "runtime_entry")}
+                    self.assertEqual(entry_counts, {"path_entry": 1, "compile_entry": 1, "runtime_entry": 1}, manifests)
                     self.assertEqual(manifests.count(grandchild_manifest), 1, manifests)
             nested_commands = [c for c in document["commands"] if any(
                 "/tests/fixture/" in arg or "/tests/grandchild/" in arg
@@ -258,7 +269,8 @@ fn launch_nested_fixture() {{
             metadata_preflights = [c for c in nested_commands if c["argv"] and "metadata" in c["argv"]]
             self.assertTrue(metadata_preflights)
             explicit_fixture_preflights = [c for c in metadata_preflights if any(
-                "/tests/fixture/Cargo.toml" in arg for arg in c["argv"])
+                f"/tests/{entry}/Cargo.toml" in arg
+                for entry in ("path_entry", "compile_entry", "runtime_entry") for arg in c["argv"])
                 and "--no-default-features" in c["argv"]]
             # Across four consumers and two modes, each of three explicit
             # launches has one preflight and one Cargo record. Recursive wrapper
@@ -276,6 +288,7 @@ fn launch_nested_fixture() {{
                 (workspace / name).mkdir()
                 (workspace / name / "Cargo.toml").write_text(
                     f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\n')
+                (workspace / name / "rust-toolchain.toml").write_text('[toolchain]\nchannel="1.94.0"\n')
             report = base / "report.json"
             temp_root = base / "snapshot parent ' quote"
             temp_root.mkdir()
@@ -284,7 +297,14 @@ fn launch_nested_fixture() {{
             calls = []
             def runner(argv, cwd, env, timeout, log_path):
                 calls.append(list(argv))
-                if "metadata" in argv:
+                Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+                if "cargo-entry-probe" in " ".join(argv):
+                    Path(env["RS_SPI_PROBE_RECORD"]).write_text("".join(json.dumps({
+                        "stage": "cargo-entry-probe", "entry": entry, "argv": ["--version"],
+                        "cwd": cwd, "returncode": 0, "elapsed_seconds": 0.001}) + "\n"
+                        for entry, cwd in json.loads(env["RS_SPI_PROBE_ENTRY_CWDS"]).items()))
+                    output = "probe ok"
+                elif "metadata" in argv:
                     spi_path = argv[argv.index("--config") + 1].split("=", 1)[1].strip('"')
                     data = {"packages": [
                         {"id": "app", "name": "app", "manifest_path": str(Path(cwd) / "Cargo.toml"), "source": None},
@@ -303,13 +323,15 @@ fn launch_nested_fixture() {{
                                    command_runner=runner)
             finally:
                 check.tempfile.tempdir = previous_tempdir
-            self.assertEqual(result, 0)
+            self.assertEqual(result, 0, json.loads(report.read_text()).get("errors"))
             doc = json.loads(report.read_text())
             self.assertEqual(doc["version"], 1)
             self.assertTrue(doc["success"])
+            self.assertEqual([record["entry"] for record in doc["cargo_entry_probe"]["records"]],
+                             ["path", "compile_time", "runtime"])
             self.assertNotIn("OPENAI_API_KEY", report.read_text())
             meta = [c for c in calls if "metadata" in c]
-            tests = [c for c in calls if "test" in c]
+            tests = [c for c in calls if "test" in c and "cargo-entry-probe" not in " ".join(c)]
             self.assertEqual(len(meta), 8)
             self.assertEqual(len(tests), 8)
             self.assertTrue(all("--config" in c for c in meta + tests))

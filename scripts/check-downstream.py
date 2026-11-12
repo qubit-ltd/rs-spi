@@ -419,6 +419,48 @@ def _tree_hash(root: Path):
     return h.hexdigest(), file_records
 
 
+def prepare_cargo_driver(toolchain: str, directory: Path, env: dict) -> Path:
+    """Copy the selected toolchain's native Cargo to a non-cargo executable name."""
+    if not toolchain or toolchain.startswith("-"):
+        raise ValueError(f"invalid Cargo toolchain: {toolchain!r}")
+    try:
+        native = subprocess.run(["rustup", "which", "--toolchain", toolchain, "cargo"], env=env,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                timeout=30, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot resolve native Cargo for toolchain {toolchain}: {exc}") from exc
+    source = Path(native)
+    if not source.is_file() or source.is_symlink():
+        raise ValueError(f"rustup did not resolve a native Cargo file: {source}")
+    try:
+        version = subprocess.run([str(source), "--version"], env=env, text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 timeout=30, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"native Cargo cannot run: {source}: {exc}") from exc
+    expected = f"cargo {toolchain} "
+    if not version.startswith(expected):
+        raise ValueError(f"native Cargo version mismatch: expected {expected.strip()}, got {version!r}")
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    destination = Path(directory) / "rs-spi-cargo-driver"
+    try:
+        shutil.copy2(source, destination)
+        destination.chmod(source.stat().st_mode)
+        copied_version = subprocess.run([str(destination), "--version"], env=env, text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        timeout=30, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot prepare native Cargo driver at {destination}: {exc}") from exc
+    if copied_version != version:
+        raise ValueError(f"copied Cargo driver version mismatch: {copied_version!r} != {version!r}")
+    metadata = {"toolchain": toolchain, "original_path": str(source.resolve()), "version": version,
+                "original_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "driver_path": str(destination.resolve()),
+                "driver_sha256": hashlib.sha256(destination.read_bytes()).hexdigest()}
+    destination.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    return destination.resolve()
+
+
 def run(workspace_root: Path, spi_root: Path, report: Path, command_runner=None) -> int:
     _require_posix_process_groups()
     workspace_root, spi_root = workspace_root.resolve(strict=True), spi_root.resolve(strict=False)
@@ -460,18 +502,27 @@ def run(workspace_root: Path, spi_root: Path, report: Path, command_runner=None)
                 "[patch.crates-io]\nqubit-spi = { path = " + json.dumps(str(spi_copy)) + " }\n", encoding="utf-8")
             env = {k: v for k, v in os.environ.items() if k not in {"CARGO_HOME", "CARGO_TARGET_DIR"}}
             env.update({"CARGO_HOME": str(cargo_home), "CARGO_TARGET_DIR": str(target_dir)})
+            for source in [spi_root, *consumers]:
+                toolchain_file = source / "rust-toolchain.toml"
+                if not toolchain_file.is_file():
+                    raise ValueError(f"missing rust-toolchain.toml: {toolchain_file}")
+                configured = tomllib.loads(toolchain_file.read_text(encoding="utf-8")).get("toolchain", {}).get("channel")
+                if configured != "1.94.0":
+                    raise ValueError(f"unsupported toolchain in {toolchain_file}: expected 1.94.0, got {configured!r}")
+            env["RUSTUP_TOOLCHAIN"] = "1.94.0"
+            driver = prepare_cargo_driver("1.94.0", tmp, env)
+            driver_info = json.loads(driver.with_suffix(".json").read_text(encoding="utf-8"))
+            result["toolchain"] = {"cargo": driver_info["version"], "cargo_driver": driver_info,
+                                   "rustc": None}
             versions = {}
-            for tool, args in (("cargo", ["cargo", "--version"]), ("rustc", ["rustc", "--version"])):
+            for tool, args in (("rustc", ["rustc", "--version"]),):
                 try:
                     version = subprocess.run(args, cwd=snap, env=env, text=True, stdout=subprocess.PIPE,
                                              stderr=subprocess.STDOUT, timeout=30, check=True).stdout.strip()
                 except (OSError, subprocess.SubprocessError) as exc:
                     raise ValueError(f"cannot record {tool} version: {exc}") from exc
                 versions[tool] = version
-            result["toolchain"] = versions
-            real_cargo = shutil.which("cargo", path=env.get("PATH"))
-            if not real_cargo:
-                raise ValueError("cargo executable not found in PATH")
+            result["toolchain"]["rustc"] = versions["rustc"]
             wrapper_dir = tmp / "cargo-wrapper"
             wrapper_dir.mkdir()
             wrapper = wrapper_dir / "cargo"
@@ -479,9 +530,17 @@ def run(workspace_root: Path, spi_root: Path, report: Path, command_runner=None)
 import json, os, pathlib, subprocess, sys, time, hashlib
 real = os.environ['RS_SPI_REAL_CARGO']
 args = sys.argv[1:]
+if args in (['--version'], ['-V']) and os.environ.get('RS_SPI_PROBE_RECORD'):
+    started = time.monotonic()
+    proc = subprocess.run([real, *args], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    probe_cwds = json.loads(os.environ['RS_SPI_PROBE_ENTRY_CWDS'])
+    entry = next((name for name, cwd in probe_cwds.items() if pathlib.Path(cwd).resolve() == pathlib.Path.cwd().resolve()), None)
+    with open(os.environ['RS_SPI_PROBE_RECORD'], 'a', encoding='utf-8') as f:
+        f.write(json.dumps({'stage':os.environ['RS_SPI_PROBE_STAGE'],'entry':entry,'argv':args,'cwd':os.getcwd(),'returncode':proc.returncode,'elapsed_seconds':time.monotonic()-started})+'\\n')
+    sys.stdout.write(proc.stdout); sys.stderr.write(proc.stderr); sys.exit(proc.returncode)
 manifests = json.loads(os.environ['RS_SPI_ROOT_MANIFESTS'])
 manifest = pathlib.Path(args[args.index('--manifest-path') + 1]).resolve() if '--manifest-path' in args else (pathlib.Path.cwd() / 'Cargo.toml').resolve()
-nested = manifest.exists() and str(manifest) not in manifests and not os.environ.get('RS_SPI_BYPASS')
+nested = manifest.exists() and str(manifest) not in manifests and str(manifest) != os.environ.get('RS_SPI_PROBE_MANIFEST') and not os.environ.get('RS_SPI_BYPASS')
 record_path = os.environ['RS_SPI_FIXTURE_RECORD']
 log_dir = os.environ['RS_SPI_FIXTURE_LOGDIR']
 def emit(record):
@@ -533,10 +592,67 @@ sys.exit(proc.returncode)
             env["PATH"] = str(wrapper_dir) + os.pathsep + original_path
             env["CARGO"] = str(wrapper.resolve())
             env["RS_SPI_CARGO_WRAPPER"] = str(wrapper.resolve())
-            env["RS_SPI_REAL_CARGO"] = real_cargo
+            env["RS_SPI_REAL_CARGO"] = str(driver)
             env["RS_SPI_PATCH_CONFIG"] = f"patch.crates-io.qubit-spi.path={json.dumps(str(spi_copy))}"
             env["RS_SPI_EXPECTED_MANIFEST"] = str((spi_copy / "Cargo.toml").resolve())
             runner = command_runner or _run
+            probe_root = tmp / "cargo-entry-probe"
+            (probe_root / "src").mkdir(parents=True)
+            (probe_root / "Cargo.toml").write_text(
+                '[package]\nname="cargo-entry-probe"\nversion="0.1.0"\nedition="2021"\n', encoding="utf-8")
+            (probe_root / "src/lib.rs").write_text(r'''#[cfg(test)]
+mod tests {
+    use std::{env, ffi::OsString, fs, path::PathBuf, process::Command};
+    #[test]
+    fn all_cargo_entries_reach_wrapper() {
+        let wrapper = env::var("RS_SPI_CARGO_WRAPPER").unwrap();
+        let compile_time = env!("CARGO");
+        let runtime = env::var_os("CARGO").expect("Cargo supplies runtime CARGO");
+        assert_eq!(compile_time, wrapper);
+        assert_eq!(runtime, OsString::from(&wrapper));
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let entries = [
+            ("path", OsString::from("cargo")),
+            ("compile_time", OsString::from(compile_time)),
+            ("runtime", runtime),
+        ];
+        for (entry, cargo) in entries {
+            let cwd = root.join("probe-cwds").join(entry);
+            fs::create_dir_all(&cwd).unwrap();
+            let status = Command::new(cargo).current_dir(cwd).arg("--version").status().unwrap();
+            assert!(status.success());
+        }
+    }
+}
+''', encoding="utf-8")
+            probe_record = tmp / "logs" / "cargo-entry-probe.jsonl"
+            env["RS_SPI_PROBE_RECORD"] = str(probe_record)
+            env["RS_SPI_PROBE_STAGE"] = "cargo-entry-probe"
+            env["RS_SPI_PROBE_MANIFEST"] = str((probe_root / "Cargo.toml").resolve())
+            env["RS_SPI_PROBE_ENTRY_CWDS"] = json.dumps({
+                entry: str((probe_root / "probe-cwds" / entry).resolve())
+                for entry in ("path", "compile_time", "runtime")})
+            env["RS_SPI_ROOT_MANIFESTS"] = json.dumps([str((copied[source] / "Cargo.toml").resolve()) for source in consumers])
+            env["RS_SPI_FIXTURE_RECORD"] = str(tmp / "logs" / "probe-fixtures.jsonl")
+            env["RS_SPI_FIXTURE_LOGDIR"] = str(tmp / "logs")
+            probe_log = tmp / "logs" / "cargo-entry-probe.log"
+            probe = runner(["cargo", "test", "--manifest-path", str(probe_root / "Cargo.toml")],
+                           probe_root, env, 180, probe_log)
+            probe_item = {"argv": probe.args, "cwd": probe.cwd, "returncode": probe.returncode,
+                          "timed_out": probe.timed_out, "elapsed_seconds": probe.elapsed,
+                          "log_path": probe.log_path, "process_group": probe.process_group,
+                          "cleanup_status": probe.cleanup_status, "cleanup_error": probe.cleanup_error}
+            result["commands"].append(probe_item)
+            _require_command_cleanup(probe, "Cargo entry capability probe")
+            records = [json.loads(line) for line in probe_record.read_text(encoding="utf-8").splitlines()] if probe_record.exists() else []
+            result["cargo_entry_probe"] = {"command": probe_item, "records": records,
+                                            "passed": probe.returncode == 0 and not probe.timed_out and
+                                            [r.get("entry") for r in records] == ["path", "compile_time", "runtime"] and
+                                            all(r["stage"] == "cargo-entry-probe" and r["argv"] == ["--version"]
+                                                for r in records) and
+                                            all(r["returncode"] == 0 for r in records)}
+            if probe.returncode != 0 or probe.timed_out or not result["cargo_entry_probe"]["passed"]:
+                raise ValueError(f"Cargo entry capability probe failed (see {probe.log_path})")
             for name, source in zip(CONSUMERS, consumers):
                 root = copied[source]
                 entry = {"name": name, "manifest_path": str(root / "Cargo.toml"), "modes": []}
