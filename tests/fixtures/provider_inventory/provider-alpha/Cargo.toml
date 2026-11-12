@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 service-contract = { path = "../service-contract" }
-spi = { package = "qubit-spi", path = "../../../..", features = ["inventory"] }
+spi = { package = "qubit-spi", path = "../../../../", features = ["inventory"] , version = "^0.14" }

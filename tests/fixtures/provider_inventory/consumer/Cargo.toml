@@ -11,4 +11,4 @@ provider-async = { path = "../provider-async" }
 provider-beta = { path = "../provider-beta" }
 provider-duplicate = { path = "../provider-duplicate" }
 service-contract = { path = "../service-contract" }
-spi = { package = "qubit-spi", path = "../../../..", features = ["inventory"] }
+spi = { package = "qubit-spi", path = "../../../../", features = ["inventory"] , version = "^0.14" }
