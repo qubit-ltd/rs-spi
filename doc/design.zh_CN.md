@@ -156,8 +156,16 @@ cargo bench --locked --bench registry_creation -- creation_success
 - 所有公开具名类型都有可运行 doctest，并保留验证不可用 API 或表示方式的编译失败测试。
 - 独立 fuzz 模型使用线性向量，不复制生产索引，核对完整调用与错误序列、终止原因和
   历史快照。保留命名边界种子，随机探索产物放入临时目录。
-- Markdown 检查按语言独立提取带标记的 Rust 代码，校验完整清单后执行真实 Cargo
-  场景。删除整个场景、忽略代码块或使用过期方法都会失败，不用无关副本替代原文代码。
+- Markdown 检查只扫描 `tests/fixtures/documentation_examples/scenarios.json` 中列出的
+  四份文档：两份 README 和两份用户指南。每个 Rust fence 都必须紧邻一个
+  `spi-example` 标记并进入 Cargo 场景清单，或紧邻一个带非空说明的
+  `spi-example-exempt` 标记。可执行示例只能使用纯 `rust` 标签；豁免片段会输出位置，
+  但不会编译。未分类 fence、格式错误或位置错误的标记、缺失场景及过期方法都会失败。
+  不得用无关副本替代原文示例代码。
+- 可选的下游兼容验证命令见[下游验证说明](downstream-validation.zh_CN.md)及
+  [英文版](downstream-validation.md)。它会在消费者源码仓库之外创建快照，令本地
+  `rs-fs-registry`、`rs-mime`、`rs-magika` 和 `rs-event-bus` 使用指定 checkout 的
+  `qubit-spi`，并验证默认及全部 features。普通项目 CI 不会运行这些消费者。
 - 可执行文档场景 `inventory-greeter` 包含契约、消费者、服务提供者和应用四个 crate，
   验证指南实际展示的链接构建、默认选择与服务创建。运行时补充注册和封存由
   [注册表集成测试](../tests/registry/) 与 [inventory 集成测试](../tests/inventory/)

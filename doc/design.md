@@ -199,10 +199,22 @@ The adapter approach used with `build_registry_with` is demonstrated in the
 - The independent fuzz oracle uses a linear vector rather than production indexes.
   It checks full call/attempt histories, policy termination and historical snapshots.
   Named boundary seeds are retained; random exploration artifacts are temporary.
-- Markdown checks extract marked Rust blocks from each language independently,
-  require the declared inventory, and run real Cargo scenarios. Missing scenarios,
-  ignored fences and stale methods fail validation. Rust examples must not be
+- Markdown checks inspect exactly the four documents named in
+  `tests/fixtures/documentation_examples/scenarios.json`: both READMEs and both
+  user guides. Every Rust fence must have an immediately preceding
+  `spi-example` marker that enters the Cargo scenario inventory, or an
+  `spi-example-exempt` marker with a non-empty explanation. Executable examples
+  must use the plain `rust` tag; exempt fragments are reported but are not
+  compiled. Unclassified Rust fences, malformed or misplaced markers, missing
+  scenarios and stale methods fail validation. Rust examples must not be
   replaced by unrelated duplicate source fixtures.
+- The optional downstream compatibility command is documented in
+  [Downstream validation](downstream-validation.md) and its
+  [Chinese version](downstream-validation.zh_CN.md). It snapshots the local
+  `rs-fs-registry`, `rs-mime`, `rs-magika` and `rs-event-bus` consumers outside
+  their source repositories, overrides `qubit-spi` to the selected checkout,
+  and checks default and all-features builds. This is an explicit validation
+  entry point; the ordinary project CI does not run these consumers.
 - The executable `inventory-greeter` documentation workspace contains four
   crates: the service contract, consumer, provider and application. It verifies
   the linked-provider build, default selection and service creation shown in
