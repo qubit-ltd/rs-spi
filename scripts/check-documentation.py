@@ -9,6 +9,13 @@ import re
 import subprocess
 import tempfile
 
+DOCUMENTATION_TARGETS = (
+    'README.md',
+    'README.zh_CN.md',
+    'doc/user_guide.md',
+    'doc/user_guide.zh_CN.md',
+)
+
 
 @dataclass(frozen=True)
 class ExampleBlock:
@@ -42,33 +49,52 @@ def extract_blocks(text: str, document: str) -> list[ExampleBlock]:
         stripped = line.strip()
         if fence is not None:
             if re.fullmatch(re.escape(fence[0]) + '{' + str(len(fence)) + ',}', stripped):
-                if rust and marker:
-                    scenario, file = marker
-                    blocks.append(ExampleBlock(scenario, validate_relative_file(file), ''.join(code), document, start))
+                if rust and marker and marker[0] == 'example':
+                    _, scenario, file, _ = marker
+                    try:
+                        relative_file = validate_relative_file(file)
+                    except ValueError as error:
+                        raise ValueError(f'{document}:{marker[3]}: {error}') from error
+                    blocks.append(ExampleBlock(scenario, relative_file, ''.join(code), document, start))
+                elif rust and marker and marker[0] == 'exempt':
+                    print(f'{document}:{marker[2]}: exempt Rust fence: {marker[1]}')
                 fence, marker = None, None
             else:
                 code.append(line)
             continue
         match = re.fullmatch(r'<!-- spi-example: ([\w-]+); file: ([^;]+) -->', stripped)
-        if match:
+        exempt = re.fullmatch(r'<!-- spi-example-exempt:(.*?) -->', stripped)
+        reserved_marker = re.match(r'<!--\s*spi-example(?:-exempt)?(?=\s*:|\s*-->)', stripped)
+        if reserved_marker and not (match or exempt):
+            raise ValueError(f'{document}:{number}: malformed example classification marker')
+        if match or exempt:
             if marker:
-                raise ValueError(f'{document}:{number}: unused example marker')
-            marker = match.groups()
+                raise ValueError(f'{document}:{number}: duplicate or conflicting example classification marker')
+            if match:
+                marker = ('example', *match.groups(), number)
+            else:
+                reason = exempt.group(1).strip()
+                if not reason:
+                    raise ValueError(f'{document}:{number}: exemption reason must not be empty')
+                marker = ('exempt', reason, number)
             continue
         opening = re.fullmatch(r'(`{3,}|~{3,})(.*)', stripped)
         if opening:
             fence, language = opening.groups()
             language = language.strip()
             rust = re.match(r'rust(?:\s|,|$)', language) is not None
-            if rust and marker and language != 'rust':
+            if rust and marker and marker[0] == 'example' and language != 'rust':
                 raise ValueError(f'{document}:{number}: marked Rust examples must use the plain rust language tag')
             if marker and not rust:
-                raise ValueError(f'{document}:{number}: example marker requires a Rust fence')
+                raise ValueError(f'{document}:{number}: classification marker requires a Rust fence')
+            if rust and not marker:
+                raise ValueError(f'{document}:{number}: Rust fence must be classified with spi-example or spi-example-exempt')
             code, start = [], number + 1
         elif marker:
             raise ValueError(f'{document}:{number}: marker must immediately precede its Rust fence')
     if fence is not None or marker is not None:
-        raise ValueError(f'{document}: unclosed fence or unused marker')
+        line = marker[-1] if marker else number
+        raise ValueError(f'{document}:{line}: unclosed fence or unused classification marker')
     return blocks
 
 
@@ -147,8 +173,16 @@ def run_scenario(root: Path, blocks: list[ExampleBlock], scenario: dict, workspa
 def check_documentation(root: Path) -> None:
     """Verify the complete bilingual inventory before running its scenarios."""
     manifest = json.loads((root / 'tests/fixtures/documentation_examples/scenarios.json').read_text())
+    documents = manifest.get('documents')
+    if not isinstance(documents, dict) or set(documents) != set(DOCUMENTATION_TARGETS):
+        raise ValueError(f'documentation inventory must cover exactly: {", ".join(DOCUMENTATION_TARGETS)}')
+    for document, expected in documents.items():
+        if (not isinstance(expected, dict) or not expected
+                or any(not isinstance(files, list) or not files for files in expected.values())):
+            raise ValueError(f'{document}: empty example inventory')
     with tempfile.TemporaryDirectory(prefix='spi-documentation-') as temporary:
-        for index, (document, expected) in enumerate(manifest['documents'].items()):
+        for index, document in enumerate(DOCUMENTATION_TARGETS):
+            expected = documents[document]
             file = root / validate_relative_file(document)
             blocks = extract_blocks(file.read_text(encoding='utf-8'), document)
             validate_blocks(blocks, expected, document)

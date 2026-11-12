@@ -26,6 +26,52 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.check.validate_relative_file(value)
 
+    def test_invalid_example_path_reports_document_and_marker_line(self):
+        source = '<!-- spi-example: bad; file: ../escape.rs -->\n```rust\nfn main() {}\n```\n'
+        with self.assertRaisesRegex(ValueError, r'guide\.md:1:.*invalid scenario file'):
+            self.check.extract_blocks(source, 'guide.md')
+
+    def test_documentation_gate_requires_nonempty_inventory_for_four_targets(self):
+        import json
+        import tempfile
+        targets = ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md')
+        with tempfile.TemporaryDirectory(prefix='spi-empty-document-inventory-') as directory:
+            root = Path(directory)
+            for document in targets:
+                file = root / document
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text('')
+            fixture = root / 'tests/fixtures/documentation_examples/scenarios.json'
+            fixture.parent.mkdir(parents=True)
+            fixture.write_text(json.dumps({'documents': {document: {} for document in targets}, 'scenarios': {}}))
+            with self.assertRaisesRegex(ValueError, 'empty example inventory'):
+                self.check.check_documentation(root)
+
+    def test_documentation_gate_scans_exactly_the_four_configured_documents(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        targets = ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md')
+        with tempfile.TemporaryDirectory(prefix='spi-document-scope-') as directory:
+            root = Path(directory)
+            documents = {}
+            for document in targets:
+                file = root / document
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text('```rust\nfn design_only() {}\n```\n' if document.startswith('doc/') else '')
+                documents[document] = {'probe': ['src/main.rs']}
+            (root / 'doc/design.md').write_text('```rust\nnot_scanned()\n```\n')
+            (root / 'doc/design.zh_CN.md').write_text('```rust\nnot_scanned()\n```\n')
+            fixture = root / 'tests/fixtures/documentation_examples/scenarios.json'
+            fixture.parent.mkdir(parents=True)
+            fixture.write_text(json.dumps({'documents': documents, 'scenarios': {'probe': {'manifests': {'Cargo.toml': ''}, 'stdout': ''}}}))
+            scanned = []
+            with patch.object(self.check, 'extract_blocks', side_effect=lambda text, document: scanned.append(document) or []), \
+                    patch.object(self.check, 'validate_blocks'), \
+                    patch.object(self.check, 'run_scenario'):
+                self.check.check_documentation(root)
+            self.assertEqual(list(targets), scanned)
+
     def test_extract_original_text(self):
         source = '<!-- spi-example: quick-start; file: app/src/main.rs -->\n```rust\nfn main() {}\n```\n'
         blocks = self.check.extract_blocks(source, 'README.md')
@@ -44,14 +90,70 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual('#!/usr/bin/env rustx\n' + attribute + 'fn main() {}\n',
                          source(PurePosixPath('app/src/main.rs'), '#!/usr/bin/env rustx\nfn main() {}\n'))
 
-    def test_unmarked_rust_fences_are_not_executable_examples(self):
-        blocks = self.check.extract_blocks('```rust\nfn main() {}\n```\n', 'README.md')
-        self.assertEqual([], blocks)
+    def test_unmarked_rust_fences_are_rejected_with_location(self):
+        with self.assertRaisesRegex(ValueError, r'README\.md:1:.*spi-example'):
+            self.check.extract_blocks('```rust\nfn main() {}\n```\n', 'README.md')
+
+    def test_unclassified_rust_ignore_at_end_of_actual_readme_is_rejected(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'README.md').read_text(encoding='utf-8')
+        bad = '```rust ignore\nfn main() { nonexistent_spi_api(); }\n```\n'
+        with self.assertRaisesRegex(ValueError, r'README\.md:\d+:.*spi-example'):
+            self.check.extract_blocks(source + bad, 'README.md')
+
+    def test_exempt_rust_fences_require_a_reason_and_are_not_returned(self):
+        source = '<!-- spi-example-exempt: illustrative fragment needs surrounding context -->\n~~~rust,ignore\nnot_a_complete_example!();\n~~~~\n'
+        self.assertEqual([], self.check.extract_blocks(source, 'guide.md'))
+        with self.assertRaisesRegex(ValueError, r'guide\.md:1:'):
+            self.check.extract_blocks('<!-- spi-example-exempt:   -->\n```rust\ncode\n```\n', 'guide.md')
+
+    def test_example_and_exemption_markers_cannot_be_combined(self):
+        source = ('<!-- spi-example: quick-start; file: app/src/main.rs -->\n'
+                  '<!-- spi-example-exempt: intentionally incomplete -->\n```rust\nfn main() {}\n```\n')
+        with self.assertRaisesRegex(ValueError, r'README\.md:2:'):
+            self.check.extract_blocks(source, 'README.md')
+
+    def test_reject_unused_or_non_rust_exemption_markers(self):
+        for source in ('<!-- spi-example-exempt: needs context -->\n',
+                       '<!-- spi-example-exempt: needs context -->\n```text\ntext\n```\n'):
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, r'guide\.md:'):
+                self.check.extract_blocks(source, 'guide.md')
+
+    def test_reject_malformed_classification_comments_without_matching_fence(self):
+        malformed = (
+            '<!-- spi-example-exempt -->\n',
+            '<!-- spi-example: bad -->\n',
+            '<!-- spi-example-exempt -->\n```text\ntext\n```\n',
+            '<!-- spi-example: bad -->\n```text\ntext\n```\n',
+        )
+        for source in malformed:
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, r'guide\.md:1:.*marker'):
+                self.check.extract_blocks(source, 'guide.md')
+
+    def test_marker_names_mentioned_in_unrelated_comments_are_ignored(self):
+        source = ('<!-- this paragraph mentions spi-example and spi-example-exempt casually -->\n'
+                  '<!-- spi-example markers are documented here -->\n'
+                  '<!-- spi-example-exempt examples need context -->\n'
+                  '```text\ntext\n```\n')
+        self.assertEqual([], self.check.extract_blocks(source, 'guide.md'))
+
+    def test_unclassified_rust_fences_support_backtick_and_tilde_lengths(self):
+        for fence in ('````', '~~~~~'):
+            source = f'{fence}rust\ncode\n{fence}\n'
+            with self.subTest(fence=fence), self.assertRaisesRegex(ValueError, r'guide\.md:1:'):
+                self.check.extract_blocks(source, 'guide.md')
+
+    def test_unrelated_non_rust_fences_remain_ignored(self):
+        self.assertEqual([], self.check.extract_blocks('```text\nhello\n```\n~~~python\npass\n~~~\n', 'guide.md'))
 
     def test_reject_unclosed_fence_and_unused_marker(self):
         for source in ('```text\nunclosed\n', '<!-- spi-example: a; file: app/src/main.rs -->\n'):
             with self.subTest(source=source), self.assertRaises(ValueError):
                 self.check.extract_blocks(source, 'README.md')
+
+    def test_unused_example_marker_reports_document_and_marker_line(self):
+        with self.assertRaisesRegex(ValueError, r'guide\.md:2:.*unused classification marker'):
+            self.check.extract_blocks('ordinary text\n<!-- spi-example: probe; file: src/main.rs -->\n', 'guide.md')
 
     def test_reject_non_plain_rust_fence_for_marked_examples(self):
         for language in ('rust no_run', 'rust ignore', 'rust,no_run'):
@@ -110,13 +212,14 @@ class DocumentationTests(unittest.TestCase):
     def test_check_documentation_rejects_invalid_base_scenarios_before_cargo(self):
         import json
         import tempfile
+        from unittest.mock import patch
 
         cases = (
-            ({'readme-inventory': []}, {'readme-inventory': {'base_scenario': 'missing'}},
+            ({'readme-inventory': ['src/main.rs']}, {'readme-inventory': {'base_scenario': 'missing'}},
              'invalid base scenario'),
-            ({'readme-inventory': []}, {'readme-inventory': {'base_scenario': 'readme-inventory'}},
+            ({'readme-inventory': ['src/main.rs']}, {'readme-inventory': {'base_scenario': 'readme-inventory'}},
              'invalid base scenario'),
-            ({'readme-inventory': [], 'base-one': [], 'base-two': []}, {
+            ({'readme-inventory': ['src/main.rs'], 'base-one': ['src/main.rs'], 'base-two': ['src/main.rs']}, {
                 'readme-inventory': {'base_scenario': 'base-one'},
                 'base-one': {'base_scenario': 'base-two'},
                 'base-two': {},
@@ -128,12 +231,13 @@ class DocumentationTests(unittest.TestCase):
                 (root / 'README.md').write_text('', encoding='utf-8')
                 fixture = root / 'tests/fixtures/documentation_examples/scenarios.json'
                 fixture.parent.mkdir(parents=True)
-                fixture.write_text(json.dumps({
-                    'documents': {'README.md': documents},
-                    'scenarios': scenarios,
-                }), encoding='utf-8')
-                with self.assertRaisesRegex(ValueError, error):
-                    self.check.check_documentation(root)
+                targets = ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md')
+                all_documents = {document: documents if document == 'README.md' else {'probe': ['src/main.rs']}
+                                 for document in targets}
+                fixture.write_text(json.dumps({'documents': all_documents, 'scenarios': scenarios}), encoding='utf-8')
+                with patch.object(self.check, 'validate_blocks'):
+                    with self.assertRaisesRegex(ValueError, error):
+                        self.check.check_documentation(root)
 
     def test_each_readme_requires_every_inventory_block(self):
         root = Path(__file__).resolve().parents[2]
@@ -145,7 +249,8 @@ class DocumentationTests(unittest.TestCase):
                 with self.subTest(document=document, file=relative):
                     marker = f'<!-- spi-example: readme-inventory; file: {relative} -->\n'
                     self.assertIn(marker, source)
-                    mutated = source.replace(marker, '', 1)
+                    exemption = '<!-- spi-example-exempt: inventory regression probe -->\n'
+                    mutated = source.replace(marker, exemption, 1)
                     blocks = self.check.extract_blocks(mutated, document)
                     with self.assertRaisesRegex(ValueError, 'example inventory mismatch'):
                         self.check.validate_blocks(blocks, {'three-crates': [

@@ -69,9 +69,7 @@
       "guide-async": [
         "app/src/main.rs"
       ]
-    },
-    "doc/design.md": {},
-    "doc/design.zh_CN.md": {}
+    }
   },
   "scenarios": {
     "guide-sync": {
